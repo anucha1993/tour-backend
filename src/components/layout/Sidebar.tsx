@@ -116,11 +116,12 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     href: '/dashboard/gallery',
     icon: ImageIcon,
   },
-  {
-    title: 'รอบเดินทาง',
-    href: '/dashboard/departures',
-    icon: Calendar,
-  },
+  // TODO: สร้างหน้า departures
+  // {
+  //   title: 'รอบเดินทาง',
+  //   href: '/dashboard/departures',
+  //   icon: Calendar,
+  // },
   {
     title: 'ข้อมูลหลัก',
     icon: Database,
@@ -140,11 +141,12 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
         href: '/dashboard/cities',
         icon: Building2,
       },
-      {
-        title: 'สนามบิน',
-        href: '/dashboard/airports',
-        icon: MapPin,
-      },
+      // TODO: สร้างหน้า airports
+      // {
+      //   title: 'สนามบิน',
+      //   href: '/dashboard/airports',
+      //   icon: MapPin,
+      // },
     ],
   },
   {
@@ -152,11 +154,12 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     href: '/dashboard/users',
     icon: Users,
   },
-  {
-    title: 'รายงาน',
-    href: '/dashboard/reports',
-    icon: FileText,
-  },
+  // TODO: สร้างหน้า reports
+  // {
+  //   title: 'รายงาน',
+  //   href: '/dashboard/reports',
+  //   icon: FileText,
+  // },
   {
     title: 'ตั้งค่า',
     icon: Settings,

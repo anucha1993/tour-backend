@@ -951,6 +951,66 @@ export const itinerariesApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // Upload image standalone (returns URL only, for new itineraries)
+  uploadImageOnly: async (file: File, tourId?: number): Promise<ApiResponse<{ url: string; cloudflare_id?: string }>> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (tourId) {
+      formData.append('tour_id', tourId.toString());
+    }
+    
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/itineraries/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    
+    return response.json();
+  },
+
+  // Upload image for existing itinerary (also updates itinerary.images)
+  uploadImage: async (tourId: number, itineraryId: number, file: File): Promise<ApiResponse<{ url: string; cloudflare_id?: string; images: string[] }>> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/tours/${tourId}/itineraries/${itineraryId}/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    
+    return response.json();
+  },
+
+  removeImage: (tourId: number, itineraryId: number, url: string) =>
+    apiRequest<{ images: string[] }>(`/tours/${tourId}/itineraries/${itineraryId}/remove-image`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    }),
+
+  // Delete image from Cloudflare (standalone - for unsaved itineraries)
+  deleteImage: async (url: string): Promise<ApiResponse<null>> => {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/itineraries/delete-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ url }),
+    });
+    return response.json();
+  },
 };
 
 // Promotions API

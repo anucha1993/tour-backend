@@ -79,6 +79,14 @@ interface Wholesaler {
   name: string;
 }
 
+// Tour code lookup result
+interface TourCodeLookup {
+  synced: boolean;
+  tour_id: number | null;
+  tour_code: string | null;
+  sync_status: string | null;
+}
+
 // Country list with Thai names
 const COUNTRY_OPTIONS = [
   { value: '', label: 'ทั้งหมด', labelTh: 'ทั้งหมด' },
@@ -142,6 +150,7 @@ export default function SalesSearchPage() {
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [searchTime, setSearchTime] = useState<number | null>(null);
+  const [tourCodeMap, setTourCodeMap] = useState<Record<string, TourCodeLookup>>({});
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const progressRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -205,6 +214,48 @@ export default function SalesSearchPage() {
     loadFilters();
   }, []);
 
+  // Lookup tour codes from our database by external_id
+  const lookupTourCodes = async (toursData: Tour[]) => {
+    // Build lookup request - use external_id or raw id/ProductId
+    const externalIds = toursData.map(tour => {
+      const extId = tour.external_id || tour._raw?.ProductId || tour._raw?.id || tour._raw?.code;
+      return {
+        wholesaler_id: tour._wholesaler_id,
+        external_id: String(extId),
+      };
+    }).filter(item => item.external_id);
+
+    if (externalIds.length === 0) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/tours/lookup-codes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ external_ids: externalIds }),
+      });
+
+      // Check if response is OK and is JSON
+      if (!response.ok) {
+        console.warn('Tour codes lookup API not available');
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('Tour codes lookup API returned non-JSON response');
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setTourCodeMap(data.data);
+      }
+    } catch {
+      // Silently fail - API may not be deployed yet
+      console.warn('Tour codes lookup failed - API may not be available');
+    }
+  };
+
   const handleSearch = useCallback(async () => {
     // Require wholesaler selection
     if (!filters.wholesaler_id) {
@@ -260,7 +311,7 @@ export default function SalesSearchPage() {
       if (filters.max_price) params.append('max_price', filters.max_price);
       if (filters.min_seats) params.append('min_seats', filters.min_seats);
       if (filters._sort) params.append('_sort', filters._sort);
-      params.append('_limit', '50');
+      params.append('_limit', '500');
       
       // Use specific wholesaler (required)
       const url = `${API_BASE_URL}/integrations/${filters.wholesaler_id}/tours/search`;
@@ -271,6 +322,12 @@ export default function SalesSearchPage() {
       if (data.success) {
         setTours(data.data || []);
         setTotal(data.pagination?.total || 0);
+        
+        // Lookup tour codes for synced tours
+        const toursData = data.data || [];
+        if (toursData.length > 0) {
+          lookupTourCodes(toursData);
+        }
       }
       
       setSearchTime(Date.now() - startTime);
@@ -1010,254 +1067,331 @@ export default function SalesSearchPage() {
             <p className="text-gray-500">กรุณากดปุ่ม &quot;ค้นหา&quot; เพื่อดึงข้อมูลจาก Wholesaler API</p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {tours.map((tour, index) => {
+          <>
+            {/* Tour Table */}
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-2 py-3 text-center font-medium text-gray-700 w-10">#</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-700 w-12">จอง</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">รหัสทัวร์</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">ชื่อทัวร์</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">ระยะเวลา</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">ประเทศ</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">ช่วงเดินทาง</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">สายการบิน</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">ราคาเริ่มต้น</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-700">รอบ/ว่าง</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Wholesaler</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-700">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tours.map((tour, index) => {
+                      const raw = tour._raw;
+                      const lowestPrice = getLowestPrice(tour);
+                      const availablePeriods = getAvailablePeriods(tour);
+                      const isExpanded = expandedTour === index;
+                      const tourKey = `${tour._wholesaler_id}-${raw?.id || raw?.code || index}`;
+
+                      // Get travel date range from periods
+                      const getDateRange = () => {
+                        if (!tour.periods || tour.periods.length === 0) {
+                          if (raw?.scheduleFirstDate && raw?.scheduleLastDate) {
+                            return `${formatMonthYear(raw.scheduleFirstDate)} - ${formatMonthYear(raw.scheduleLastDate)}`;
+                          }
+                          return '-';
+                        }
+                        const dates = tour.periods
+                          .map(p => {
+                            const dateStr = p._raw?.departureDate || p._raw?.DepartureDate || p.departure_date;
+                            if (!dateStr) return null;
+                            const d = new Date(dateStr);
+                            return isNaN(d.getTime()) ? null : d;
+                          })
+                          .filter((d): d is Date => d !== null);
+                        
+                        if (dates.length === 0) return '-';
+                        
+                        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+                        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+                        return `${formatMonthYear(minDate.toISOString())} - ${formatMonthYear(maxDate.toISOString())}`;
+                      };
+
+                      const formatMonthYear = (date: string) => {
+                        return new Date(date).toLocaleDateString('th-TH', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: '2-digit',
+                        });
+                      };
+
+                      const dateRange = getDateRange();
+
+                      // Helper: ดึงค่าจาก unified fields หรือ fallback ไป raw
+                      const getExternalId = () => tour.external_id || raw?.ProductId || raw?.id || raw?.code || '';
+                      const getTourCode = () => tour.wholesaler_tour_code || raw?.ProductCode || raw?.code || '';
+                      const getTourTitle = () => tour.title || raw?.ProductName || raw?.name || '';
+                      const getDays = () => tour.duration_days || raw?.Days || raw?.days || '';
+                      const getNights = () => {
+                        if (tour.duration_nights !== undefined && tour.duration_nights !== null && tour.duration_nights !== '') {
+                          return tour.duration_nights;
+                        }
+                        return raw?.Nights || raw?.nights || '';
+                      };
+                      const getCountry = () => tour.primary_country_id || raw?.CountryName || raw?.countryName || '';
+                      const getAirline = () => raw?.AirlineName || raw?.airlineName || '';
+                      const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || '';
+                      const totalPeriods = tour.periods?.length || raw?.Periods?.length || 0;
+
+                      // Get synced tour code from lookup
+                      const lookupKey = `${tour._wholesaler_id}_${getExternalId()}`;
+                      const syncInfo = tourCodeMap[lookupKey];
+                      const syncedTourCode = syncInfo?.tour_code;
+                      const isSynced = syncInfo?.synced ?? false;
+
+                      return (
+                        <tr 
+                          key={tourKey} 
+                          className="border-b border-gray-100 hover:bg-blue-50/50 transition-colors"
+                        >
+                          {/* ลำดับ */}
+                          <td className="px-2 py-3 text-center">
+                            <span className="text-gray-500 text-sm font-medium">{index + 1}</span>
+                          </td>
+                          
+                          {/* ปุ่มจอง */}
+                          <td className="px-2 py-3 text-center">
+                            <button
+                              onClick={() => alert('ฟีเจอร์จองทัวร์กำลังพัฒนา')}
+                              className="p-2 rounded-lg transition-all bg-orange-100 hover:bg-orange-500 text-orange-500 hover:text-white hover:shadow-md"
+                              title="จองทัวร์"
+                            >
+                              <Plane className="w-5 h-5" />
+                            </button>
+                          </td>
+                          
+                          {/* รหัส */}
+                          <td className="px-4 py-3">
+                            <div className="space-y-1">
+                              {/* Our tour_code (if synced) */}
+                              {isSynced && syncedTourCode ? (
+                                <span className="font-mono text-xs bg-green-100 text-green-700 px-2 py-1 rounded block w-fit" title="รหัสทัวร์ของเรา">
+                                  {syncedTourCode}
+                                </span>
+                              ) : (
+                                <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded block w-fit" title="ยังไม่ sync เข้าระบบ">
+                                  ยังไม่ sync
+                                </span>
+                              )}
+                              {/* Wholesaler code (smaller, gray) */}
+                              <span className="font-mono text-[10px] text-gray-400 block" title="รหัส Wholesaler">
+                                {getTourCode()}
+                              </span>
+                            </div>
+                          </td>
+                          
+                          {/* ชื่อทัวร์ */}
+                          <td className="px-4 py-3 max-w-xs">
+                            <span className="font-medium text-gray-900 line-clamp-2" title={getTourTitle()}>
+                              {getTourTitle()}
+                            </span>
+                          </td>
+                          
+                          {/* ระยะเวลา */}
+                          <td className="px-4 py-3">
+                            <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
+                              {getDays()}วัน {getNights()}คืน
+                            </span>
+                          </td>
+                          
+                          {/* ประเทศ */}
+                          <td className="px-4 py-3">
+                            <span className="flex items-center gap-1 text-gray-700">
+                              <MapPin className="w-3 h-3 text-green-500 flex-shrink-0" />
+                              <span className="truncate max-w-[100px]" title={getCountry()}>
+                                {getCountry() || '-'}
+                              </span>
+                            </span>
+                          </td>
+                          
+                          {/* ช่วงเดินทาง */}
+                          <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
+                            {dateRange}
+                          </td>
+                          
+                          {/* สายการบิน */}
+                          <td className="px-4 py-3">
+                            {getAirline() ? (
+                              <span className="flex items-center gap-1 text-gray-600 text-xs">
+                                <Plane className="w-3 h-3 text-purple-500 flex-shrink-0" />
+                                <span className="truncate max-w-[80px]" title={getAirline()}>
+                                  {getAirline()}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          
+                          {/* ราคาเริ่มต้น */}
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-bold text-blue-600 whitespace-nowrap">
+                              ฿{formatPrice(lowestPrice)}
+                            </span>
+                          </td>
+                          
+                          {/* รอบ/ว่าง */}
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => setExpandedTour(isExpanded ? null : index)}
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              <span className="font-medium">{totalPeriods}</span>
+                              <span className="text-gray-400">/</span>
+                              <span className={availablePeriods.length > 0 ? 'text-emerald-600 font-medium' : 'text-gray-400'}>
+                                {availablePeriods.length}
+                              </span>
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </td>
+                          
+                          {/* Wholesaler */}
+                          <td className="px-4 py-3">
+                            <span className="flex items-center gap-1 text-orange-600 text-xs">
+                              <Building2 className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate max-w-[80px]">{tour._wholesaler_name}</span>
+                            </span>
+                          </td>
+                          
+                          {/* จัดการ */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-1">
+                              {/* Booking button - Mockup */}
+                              <button
+                                onClick={() => handleCopyTour(tour, tourKey)}
+                                className={`p-1.5 rounded transition-colors ${
+                                  copiedTourId === tourKey 
+                                    ? 'text-green-600 bg-green-50' 
+                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                }`}
+                                title="คัดลอกข้อมูลทัวร์"
+                              >
+                                {copiedTourId === tourKey ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                              </button>
+
+                              {getPdfUrl() && (
+                                <a
+                                  href={getPdfUrl()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="ดู PDF"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Periods Modal - Separate from table */}
+            {expandedTour !== null && tours[expandedTour] && (() => {
+              const tour = tours[expandedTour];
               const raw = tour._raw;
-              const lowestPrice = getLowestPrice(tour);
-              const availablePeriods = getAvailablePeriods(tour);
-              const isExpanded = expandedTour === index;
-              const tourKey = `${tour._wholesaler_id}-${raw?.id || raw?.code || index}`;
-
-              // Get travel date range from periods
-              const getDateRange = () => {
-                if (!tour.periods || tour.periods.length === 0) {
-                  if (raw?.scheduleFirstDate && raw?.scheduleLastDate) {
-                    return `${formatMonthYear(raw.scheduleFirstDate)} - ${formatMonthYear(raw.scheduleLastDate)}`;
-                  }
-                  return null;
-                }
-                // Filter out invalid dates
-                const dates = tour.periods
-                  .map(p => {
-                    const dateStr = p._raw?.departureDate || p._raw?.DepartureDate || p.departure_date;
-                    if (!dateStr) return null;
-                    const d = new Date(dateStr);
-                    return isNaN(d.getTime()) ? null : d;
-                  })
-                  .filter((d): d is Date => d !== null);
-                
-                if (dates.length === 0) return null;
-                
-                const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-                const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-                return `${formatMonthYear(minDate.toISOString())} - ${formatMonthYear(maxDate.toISOString())}`;
-              };
-
-              const formatMonthYear = (date: string) => {
-                return new Date(date).toLocaleDateString('th-TH', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: '2-digit',
-                });
-              };
-
-              const dateRange = getDateRange();
-
-              // Helper: ดึงค่าจาก unified fields หรือ fallback ไป raw
               const getTourCode = () => tour.wholesaler_tour_code || raw?.ProductCode || raw?.code || '';
               const getTourTitle = () => tour.title || raw?.ProductName || raw?.name || '';
-              const getDays = () => tour.duration_days || raw?.Days || raw?.days || '';
-              const getNights = () => {
-                // duration_nights อาจเป็น "0" หรือ 0 ซึ่งเป็น falsy แต่ถูกต้อง
-                if (tour.duration_nights !== undefined && tour.duration_nights !== null && tour.duration_nights !== '') {
-                  return tour.duration_nights;
-                }
-                return raw?.Nights || raw?.nights || '';
-              };
-              const getCountry = () => tour.primary_country_id || raw?.CountryName || raw?.countryName || '';
-              const getAirline = () => raw?.AirlineName || raw?.airlineName || '';
-              const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || '';
-
+              
               return (
-                <Card key={tourKey} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
-                  {/* Header with code */}
-                  <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-3 py-1.5">
-                    <span className="text-white text-xs font-mono font-medium">{getTourCode()}</span>
-                  </div>
-                  
-                  <div className="p-3 flex-1 flex flex-col">
-                    {/* Tour Name */}
-                    <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-2 min-h-[2.5rem]">
-                      {getTourTitle()}
-                    </h3>
-
-                    {/* Info */}
-                    <div className="space-y-1.5 text-xs flex-1">
-                      {/* Duration & Country */}
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
-                          {getDays()}D{getNights()}N
-                        </span>
-                        <span className="flex items-center gap-0.5 truncate">
-                          <MapPin className="w-3 h-3 text-green-500 flex-shrink-0" />
-                          {getCountry()}
-                        </span>
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setExpandedTour(null)}>
+                  <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-4 border-b flex items-center justify-between bg-gray-50 border-gray-200">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{getTourCode()}</h3>
+                        <p className="text-sm text-gray-600">{getTourTitle()}</p>
                       </div>
-
-                      {/* Travel Period */}
-                      {dateRange && (
-                        <div className="flex items-center gap-1 text-gray-500">
-                          <Calendar className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{dateRange}</span>
-                        </div>
-                      )}
-
-                      {/* Airline */}
-                      {getAirline() && (
-                        <div className="flex items-center gap-1 text-gray-500">
-                          <Plane className="w-3 h-3 text-purple-500 flex-shrink-0" />
-                          <span className="truncate">{getAirline()}</span>
-                        </div>
-                      )}
-
-                      {/* Wholesaler */}
-                      <div className="flex items-center gap-1">
-                        <Building2 className="w-3 h-3 text-orange-500 flex-shrink-0" />
-                        <span className="text-orange-600 truncate">{tour._wholesaler_name}</span>
-                      </div>
-                    </div>
-
-                    {/* Price */}
-                    <div className="mt-3 pt-2 border-t border-gray-200">
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-xs text-gray-500">เริ่มต้น</span>
-                        <span className="text-lg font-bold text-blue-600">
-                          ฿{formatPrice(lowestPrice)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 gap-1">
-                      <button
-                        onClick={() => setExpandedTour(isExpanded ? null : index)}
-                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-0.5"
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                        {tour.periods?.length || raw?.Periods?.length || 0} รอบ
+                      <button onClick={() => setExpandedTour(null)} className="p-1 hover:bg-gray-200 rounded">
+                        <X className="w-5 h-5" />
                       </button>
-                      
-                      {availablePeriods.length > 0 && (
-                        <span className="text-xs text-emerald-600 flex items-center gap-0.5">
-                          <Users className="w-3 h-3" />
-                          {availablePeriods.length} ว่าง
-                        </span>
+                    </div>
+                    <div className="p-4 overflow-auto max-h-[60vh]">
+                      {tour.periods && tour.periods.length > 0 ? (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-gray-500 border-b border-gray-200">
+                              <th className="pb-2 font-medium">วันเดินทาง</th>
+                              <th className="pb-2 font-medium">ราคาผู้ใหญ่</th>
+                              <th className="pb-2 font-medium">ราคาเด็ก</th>
+                              <th className="pb-2 font-medium">มัดจำ</th>
+                              <th className="pb-2 font-medium">ที่นั่ง</th>
+                              <th className="pb-2 font-medium">สถานะ</th>
+                              <th className="pb-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tour.periods.map((period, pIndex) => {
+                              const pRaw = period._raw;
+                              const departureDate = period.departure_date || pRaw?.PeriodStartDate || pRaw?.DepartureDate || pRaw?.departureDate || '';
+                              const returnDate = period.return_date || pRaw?.PeriodEndDate || pRaw?.ReturnDate || pRaw?.returnDate || '';
+                              const adultPrice = period.price_adult || pRaw?.Price || pRaw?.adultPrice || pRaw?.salePrice || 0;
+                              const childPrice = period.price_child || pRaw?.Price_Child || pRaw?.childPrice || 0;
+                              const deposit = period.deposit || pRaw?.Deposit || pRaw?.deposit || 0;
+                              const available = period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0;
+                              const capacity = period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0;
+                              
+                              return (
+                                <tr key={pIndex} className="border-b border-gray-100 hover:bg-gray-50">
+                                  <td className="py-2">
+                                    <span className="font-medium">{formatDate(departureDate)}</span>
+                                    <span className="text-gray-400 mx-1">→</span>
+                                    <span>{formatDate(returnDate)}</span>
+                                  </td>
+                                  <td className="py-2 font-semibold text-blue-600">
+                                    ฿{formatPrice(adultPrice)}
+                                  </td>
+                                  <td className="py-2">
+                                    ฿{formatPrice(childPrice)}
+                                  </td>
+                                  <td className="py-2">
+                                    ฿{formatPrice(deposit)}
+                                  </td>
+                                  <td className="py-2">
+                                    <span className={available > 5 ? 'text-green-600' : available > 0 ? 'text-orange-600' : 'text-red-600'}>
+                                      {available}/{capacity}
+                                    </span>
+                                  </td>
+                                  <td className="py-2">
+                                    {available > 0 ? (
+                                      <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">ว่าง</span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs">เต็ม</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2">
+                                    <Button size="sm" disabled={available === 0}>จอง</Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-gray-500 text-center py-8">ไม่มีข้อมูลรอบเดินทาง</p>
                       )}
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleCopyTour(tour, tourKey)}
-                          className={`p-1 rounded transition-colors ${
-                            copiedTourId === tourKey 
-                              ? 'text-green-600' 
-                              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                          }`}
-                          title="คัดลอกข้อมูลทัวร์"
-                        >
-                          {copiedTourId === tourKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-
-                        {getPdfUrl() && (
-                          <a
-                            href={getPdfUrl()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-                            title="PDF"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                      </div>
                     </div>
                   </div>
-
-                  {/* Periods Modal/Popup - Show on click */}
-                  {isExpanded && (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setExpandedTour(null)}>
-                      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-4 border-b flex items-center justify-between bg-gray-50 border-gray-200">
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{getTourCode()}</h3>
-                            <p className="text-sm text-gray-600">{getTourTitle()}</p>
-                          </div>
-                          <button onClick={() => setExpandedTour(null)} className="p-1 hover:bg-gray-200 rounded">
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <div className="p-4 overflow-auto max-h-[60vh]">
-                          {tour.periods && tour.periods.length > 0 ? (
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="text-left text-gray-500 border-b border-gray-200">
-                                  <th className="pb-2 font-medium">วันเดินทาง</th>
-                                  <th className="pb-2 font-medium">ราคาผู้ใหญ่</th>
-                                  <th className="pb-2 font-medium">ราคาเด็ก</th>
-                                  <th className="pb-2 font-medium">มัดจำ</th>
-                                  <th className="pb-2 font-medium">ที่นั่ง</th>
-                                  <th className="pb-2 font-medium">สถานะ</th>
-                                  <th className="pb-2"></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {tour.periods.map((period, pIndex) => {
-                                  const pRaw = period._raw;
-                                  // ใช้ unified fields ก่อน แล้ว fallback ไป raw (รองรับทั้ง Zego และอื่นๆ)
-                                  const departureDate = period.departure_date || pRaw?.PeriodStartDate || pRaw?.DepartureDate || pRaw?.departureDate || '';
-                                  const returnDate = period.return_date || pRaw?.PeriodEndDate || pRaw?.ReturnDate || pRaw?.returnDate || '';
-                                  const adultPrice = period.price_adult || pRaw?.Price || pRaw?.adultPrice || pRaw?.salePrice || 0;
-                                  const childPrice = period.price_child || pRaw?.Price_Child || pRaw?.childPrice || 0;
-                                  const deposit = period.deposit || pRaw?.Deposit || pRaw?.deposit || 0;
-                                  const available = period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0;
-                                  const capacity = period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0;
-                                  
-                                  return (
-                                    <tr key={pIndex} className="border-b border-gray-100 hover:bg-gray-50">
-                                      <td className="py-2">
-                                        <span className="font-medium">{formatDate(departureDate)}</span>
-                                        <span className="text-gray-400 mx-1">→</span>
-                                        <span>{formatDate(returnDate)}</span>
-                                      </td>
-                                      <td className="py-2 font-semibold text-blue-600">
-                                        ฿{formatPrice(adultPrice)}
-                                      </td>
-                                      <td className="py-2">
-                                        ฿{formatPrice(childPrice)}
-                                      </td>
-                                      <td className="py-2">
-                                        ฿{formatPrice(deposit)}
-                                      </td>
-                                      <td className="py-2">
-                                        <span className={available > 5 ? 'text-green-600' : available > 0 ? 'text-orange-600' : 'text-red-600'}>
-                                          {available}/{capacity}
-                                        </span>
-                                      </td>
-                                      <td className="py-2">
-                                        {available > 0 ? (
-                                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">ว่าง</span>
-                                        ) : (
-                                          <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs">เต็ม</span>
-                                        )}
-                                      </td>
-                                      <td className="py-2">
-                                        <Button size="sm" disabled={available === 0}>จอง</Button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <p className="text-gray-500 text-center py-8">ไม่มีข้อมูลรอบเดินทาง</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </Card>
+                </div>
               );
-            })}
-          </div>
+            })()}
+          </>
         )}
       </div>
     </div>

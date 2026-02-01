@@ -162,6 +162,7 @@ const emptyPeriodForm: PeriodFormData = {
 // ItineraryEditForm component
 interface ItineraryEditFormProps {
   itinerary: TourItinerary;
+  tourId: number;
   onSave: (itinerary: TourItinerary) => void;
   onCancel: () => void;
   saving: boolean;
@@ -170,10 +171,14 @@ interface ItineraryEditFormProps {
   onAddPlace: (itinerary: TourItinerary, setItinerary: (i: TourItinerary) => void) => void;
   onRemovePlace: (itinerary: TourItinerary, setItinerary: (i: TourItinerary) => void, index: number) => void;
   isNew?: boolean;
+  onUploadImage?: (file: File) => Promise<string | null>;
+  onDeleteImage?: (url: string) => Promise<boolean>;
+  onImagesChange?: (itineraryId: number, images: string[]) => Promise<void>;
 }
 
 function ItineraryEditForm({ 
-  itinerary: initialItinerary, 
+  itinerary: initialItinerary,
+  tourId,
   onSave, 
   onCancel, 
   saving,
@@ -181,9 +186,82 @@ function ItineraryEditForm({
   setPlaceInput,
   onAddPlace,
   onRemovePlace,
-  isNew = false 
+  isNew = false,
+  onUploadImage,
+  onDeleteImage,
+  onImagesChange
 }: ItineraryEditFormProps) {
   const [itinerary, setItinerary] = useState<TourItinerary>(initialItinerary);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [deletingImageIndex, setDeletingImageIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !onUploadImage) return;
+
+    setUploadingImage(true);
+    try {
+      const newImages: string[] = [];
+      for (const file of Array.from(files)) {
+        const url = await onUploadImage(file);
+        if (url) {
+          newImages.push(url);
+        }
+      }
+      
+      if (newImages.length > 0) {
+        const updatedImages = [...itinerary.images, ...newImages];
+        setItinerary(prev => ({
+          ...prev,
+          images: updatedImages
+        }));
+        
+        // Auto save to DB if itinerary already exists
+        if (!isNew && itinerary.id && onImagesChange) {
+          await onImagesChange(itinerary.id, updatedImages);
+        }
+      }
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeImage = async (index: number) => {
+    const url = itinerary.images[index];
+    if (!url) return;
+
+    setDeletingImageIndex(index);
+    try {
+      // Call API to delete from Cloudflare - must succeed before removing from state
+      if (onDeleteImage) {
+        const success = await onDeleteImage(url);
+        if (!success) {
+          alert('ลบรูปจาก Cloudflare ไม่สำเร็จ กรุณาลองใหม่');
+          return;
+        }
+      }
+      // Remove from local state after Cloudflare delete succeeded
+      const updatedImages = itinerary.images.filter((_, i) => i !== index);
+      setItinerary(prev => ({
+        ...prev,
+        images: updatedImages
+      }));
+      
+      // Auto save to DB if itinerary already exists
+      if (!isNew && itinerary.id && onImagesChange) {
+        await onImagesChange(itinerary.id, updatedImages);
+      }
+    } catch (error) {
+      console.error('Failed to delete image:', error);
+      alert('เกิดข้อผิดพลาดในการลบรูป');
+    } finally {
+      setDeletingImageIndex(null);
+    }
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -194,7 +272,7 @@ function ItineraryEditForm({
             type="number"
             value={itinerary.day_number}
             onChange={(e) => setItinerary({ ...itinerary, day_number: parseInt(e.target.value) || 1 })}
-            className="w-8 bg-transparent text-center text-lg font-bold border-none focus:outline-none"
+            className="w-8 bg-transparent text-center  text-lg font-bold border-none focus:outline-none"
             min={1}
           />
         </div>
@@ -203,7 +281,7 @@ function ItineraryEditForm({
           value={itinerary.title}
           onChange={(e) => setItinerary({ ...itinerary, title: e.target.value })}
           placeholder="หัวข้อวัน เช่น สนามบินสุวรรณภูมิ-ศาลเจ้าดาไซฟุ"
-          className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+          className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 border-gray-300 focus:ring-teal-500 focus:border-teal-500"
         />
       </div>
 
@@ -212,7 +290,7 @@ function ItineraryEditForm({
         <label className="block text-sm font-medium text-gray-700 mb-1">สถานที่เที่ยว</label>
         <div className="flex flex-wrap gap-1 mb-2">
           {itinerary.places.map((place, i) => (
-            <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-teal-100 text-teal-700 text-sm rounded-full">
+            <span key={i} className="inline-flex  items-center gap-1 px-2 py-1 bg-teal-100 text-teal-700 text-sm rounded-full">
               {place}
               <button 
                 type="button" 
@@ -236,7 +314,7 @@ function ItineraryEditForm({
               }
             }}
             placeholder="พิมพ์ชื่อสถานที่แล้ว Enter"
-            className="flex-1 px-3 py-2 border rounded-lg text-sm"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
           <Button type="button" variant="outline" size="sm" onClick={() => onAddPlace(itinerary, setItinerary)}>
             <Plus className="w-4 h-4" />
@@ -280,7 +358,7 @@ function ItineraryEditForm({
             value={itinerary.meals_note}
             onChange={(e) => setItinerary({ ...itinerary, meals_note: e.target.value })}
             placeholder="หมายเหตุอาหาร"
-            className="flex-1 px-3 py-1 border rounded-lg text-sm min-w-[150px]"
+            className="flex-1 px-3 py-1 border border-gray-300 rounded-lg text-sm min-w-[150px]"
           />
         </div>
       </div>
@@ -294,7 +372,7 @@ function ItineraryEditForm({
             value={itinerary.accommodation}
             onChange={(e) => setItinerary({ ...itinerary, accommodation: e.target.value })}
             placeholder="ชื่อโรงแรม"
-            className="w-full px-3 py-2 border rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
         </div>
         <div>
@@ -302,7 +380,7 @@ function ItineraryEditForm({
           <select
             value={itinerary.hotel_star || ''}
             onChange={(e) => setItinerary({ ...itinerary, hotel_star: e.target.value ? parseInt(e.target.value) : null })}
-            className="w-full px-3 py-2 border rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           >
             <option value="">ไม่ระบุ</option>
             <option value="3">3 ดาว</option>
@@ -314,18 +392,85 @@ function ItineraryEditForm({
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดกิจกรรม</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 ">รายละเอียดกิจกรรม</label>
         <textarea
           value={itinerary.description}
           onChange={(e) => setItinerary({ ...itinerary, description: e.target.value })}
           placeholder="รายละเอียดกิจกรรมของวันนี้..."
           rows={3}
-          className="w-full px-3 py-2 border rounded-lg text-sm"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
         />
       </div>
 
+      {/* Images Upload */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">รูปภาพประกอบ</label>
+        
+        {/* Uploaded images */}
+        {itinerary.images.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs text-gray-500 mb-1">รูปที่อัปโหลดแล้ว:</p>
+            <div className="flex flex-wrap gap-2">
+              {itinerary.images.map((url, index) => (
+                <div key={index} className="relative group">
+                  <img 
+                    src={url} 
+                    alt={`Day ${itinerary.day_number} image ${index + 1}`}
+                    className={`w-20 h-20 object-cover rounded-lg border-2 ${deletingImageIndex === index ? 'opacity-50 border-red-300' : 'border-green-300'}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    disabled={deletingImageIndex === index}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                  >
+                    {deletingImageIndex === index ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <X className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Select file button */}
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingImage}
+          >
+            {uploadingImage ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+            ) : (
+              <ImageIcon className="w-4 h-4 mr-1" />
+            )}
+            {uploadingImage ? 'กำลังอัปโหลด...' : 'เลือกรูปภาพ'}
+          </Button>
+          {uploadingImage && (
+            <span className="text-xs text-teal-600">กำลังอัปโหลด...</span>
+          )}
+          <span className="text-xs text-gray-500">
+            รองรับ JPG, PNG (สูงสุด 5MB ต่อไฟล์)
+          </span>
+        </div>
+      </div>
+
       {/* Actions */}
-      <div className="flex items-center justify-end gap-2 pt-2 border-t">
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-300">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
           ยกเลิก
         </Button>
@@ -2987,6 +3132,50 @@ export default function EditTourPage() {
     </div>
   );
 
+  // Upload image for itinerary and return URL
+  const handleUploadItineraryImage = async (file: File): Promise<string | null> => {
+    try {
+      const response = await itinerariesApi.uploadImageOnly(file, tour?.id);
+      
+      if (response.success && response.data) {
+        return response.data.url;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to upload itinerary image:', error);
+      return null;
+    }
+  };
+
+  // Delete image from Cloudflare
+  const handleDeleteItineraryImage = async (url: string): Promise<boolean> => {
+    try {
+      const response = await itinerariesApi.deleteImage(url);
+      if (!response.success) {
+        console.error('Failed to delete itinerary image:', response.message);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to delete itinerary image:', error);
+      return false;
+    }
+  };
+
+  // Auto save images to DB when changed (for existing itineraries)
+  const handleItineraryImagesChange = async (itineraryId: number, images: string[]): Promise<void> => {
+    if (!tour?.id) return;
+    try {
+      await itinerariesApi.update(tour.id, itineraryId, { images });
+      // Update local state
+      setItineraries(prev => prev.map(i => 
+        i.id === itineraryId ? { ...i, images } : i
+      ));
+    } catch (error) {
+      console.error('Failed to save itinerary images:', error);
+    }
+  };
+
   // Itinerary CRUD handlers
   const handleSaveItinerary = async (itinerary: TourItinerary, isNew: boolean) => {
     if (!tour?.id) return;
@@ -3076,7 +3265,7 @@ export default function EditTourPage() {
   };
 
   const renderItineraryTab = () => (
-    <div className="space-y-4">
+    <div className="space-y-4 ">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -3123,11 +3312,12 @@ export default function EditTourPage() {
         <div className="space-y-4">
           {/* Existing Itineraries */}
           {itineraries.map((itinerary) => (
-            <div key={itinerary.id} className="border rounded-lg overflow-hidden">
+            <div key={itinerary.id} className="border border-gray-200 rounded-lg overflow-hidden">
               {editingItineraryId === itinerary.id ? (
                 /* Edit Mode */
                 <ItineraryEditForm
                   itinerary={itinerary}
+                  tourId={tour?.id || 0}
                   onSave={(updated) => handleSaveItinerary(updated, false)}
                   onCancel={() => setEditingItineraryId(null)}
                   saving={savingItinerary}
@@ -3135,6 +3325,9 @@ export default function EditTourPage() {
                   setPlaceInput={setPlaceInput}
                   onAddPlace={handleAddPlace}
                   onRemovePlace={handleRemovePlace}
+                  onUploadImage={handleUploadItineraryImage}
+                  onDeleteImage={handleDeleteItineraryImage}
+                  onImagesChange={handleItineraryImagesChange}
                 />
               ) : (
                 /* View Mode */
@@ -3204,6 +3397,7 @@ export default function EditTourPage() {
             <div className="border border-teal-200 rounded-lg overflow-hidden bg-teal-50">
               <ItineraryEditForm
                 itinerary={newItinerary}
+                tourId={tour?.id || 0}
                 onSave={(updated) => handleSaveItinerary(updated, true)}
                 onCancel={() => setShowNewItineraryRow(false)}
                 saving={savingItinerary}
@@ -3211,6 +3405,8 @@ export default function EditTourPage() {
                 setPlaceInput={setPlaceInput}
                 onAddPlace={handleAddPlace}
                 onRemovePlace={handleRemovePlace}
+                onUploadImage={handleUploadItineraryImage}
+                onDeleteImage={handleDeleteItineraryImage}
                 isNew
               />
             </div>
