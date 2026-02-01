@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const LARAVEL_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const LARAVEL_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.asia/api';
 
 export async function POST(
   request: NextRequest,
@@ -12,7 +12,7 @@ export async function POST(
 
     // Forward to Laravel API
     const response = await fetch(
-      `${LARAVEL_API_URL}/api/wholesalers/${wholesalerId}/sync/tour`,
+      `${LARAVEL_API_URL}/wholesalers/${wholesalerId}/sync/tour`,
       {
         method: 'POST',
         headers: {

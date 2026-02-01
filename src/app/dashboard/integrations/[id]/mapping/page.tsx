@@ -550,7 +550,7 @@ export default function IntegrationMappingPage() {
         }
       } catch (error) {
         console.error('Failed to fetch sample data:', error);
-        setApiError(`ไม่สามารถเชื่อมต่อ Backend ได้\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}\n\nกรุณาตรวจสอบว่า Laravel API รันอยู่ที่ http://localhost:8000`);
+        setApiError(`ไม่สามารถเชื่อมต่อ Backend ได้\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}\n\nกรุณาตรวจสอบการเชื่อมต่อ API`);
       } finally {
         setLoadingApiData(false);
       }

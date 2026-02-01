@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Button } from '@/components/ui';
+import { API_BASE_URL } from '@/lib/api';
 import { 
   Search, 
   Filter, 
@@ -187,7 +188,7 @@ export default function SalesSearchPage() {
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/tours/search/filters');
+        const response = await fetch(`${API_BASE_URL}/tours/search/filters`);
         const data = await response.json();
         if (data.wholesalers && data.wholesalers.length > 0) {
           setWholesalers(data.wholesalers);
@@ -262,7 +263,7 @@ export default function SalesSearchPage() {
       params.append('_limit', '50');
       
       // Use specific wholesaler (required)
-      const url = `http://localhost:8000/api/integrations/${filters.wholesaler_id}/tours/search`;
+      const url = `${API_BASE_URL}/integrations/${filters.wholesaler_id}/tours/search`;
       
       const response = await fetch(`${url}?${params.toString()}`);
       const data = await response.json();
