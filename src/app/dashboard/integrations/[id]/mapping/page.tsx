@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
-import { integrationsApi } from '@/lib/api';
+import { integrationsApi, API_BASE_URL } from '@/lib/api';
 import { 
   ArrowLeft,Save,Zap,Loader2,X,
   Check,
@@ -1090,7 +1090,7 @@ export default function IntegrationMappingPage() {
 
       // ส่งตรงไป backend ด้วย fetch เพราะ format ต่างจาก type definition
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      const response = await fetch(`http://127.0.0.1:8000/api/integrations/${params.id}/mappings`, {
+      const response = await fetch(`${API_BASE_URL}/integrations/${params.id}/mappings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1147,7 +1147,7 @@ export default function IntegrationMappingPage() {
 
       // ใช้ fetch โดยตรงเพื่อส่ง enabled_fields และ mappings
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      const response = await fetch(`http://127.0.0.1:8000/api/integrations/${params.id}/test-mapping`, {
+      const response = await fetch(`${API_BASE_URL}/integrations/${params.id}/test-mapping`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
