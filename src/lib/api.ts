@@ -1186,6 +1186,10 @@ export interface WholesalerApiConfig {
   pdf_footer_image?: string | null;
   pdf_header_height?: number | null;
   pdf_footer_height?: number | null;
+  // Notification Settings
+  notifications_enabled?: boolean;
+  notification_emails?: string[];
+  notification_types?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -1513,6 +1517,12 @@ export const integrationsApi = {
   removeFooter: (id: number) =>
     apiRequest<{ success: boolean; message: string }>(`/integrations/${id}/footer`, {
       method: 'DELETE',
+    }),
+
+  // Test notification
+  testNotification: (id: number) =>
+    apiRequest<{ success: boolean; message: string }>(`/integrations/${id}/test-notification`, {
+      method: 'POST',
     }),
 };
 

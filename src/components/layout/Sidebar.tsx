@@ -32,6 +32,7 @@ import {
   Flame,
   Search,
   ShoppingCart,
+  Mail,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -168,6 +169,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
         title: 'Aggregation',
         href: '/dashboard/settings/aggregation',
         icon: Settings,
+      },
+      {
+        title: 'SMTP',
+        href: '/dashboard/settings/smtp',
+        icon: Mail,
       },
     ],
   },

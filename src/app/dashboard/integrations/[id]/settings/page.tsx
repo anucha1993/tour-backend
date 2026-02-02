@@ -73,6 +73,7 @@ const defaultFormData = {
   webhook_secret: '',
   notifications_enabled: true,
   notification_emails: [] as string[],
+  notification_types: ['sync_error', 'api_error', 'booking_error'] as string[],
   // PDF Branding
   pdf_header_image: '' as string | null,
   pdf_footer_image: '' as string | null,
@@ -222,8 +223,9 @@ export default function IntegrationSettingsPage() {
           hold_ttl_minutes: 20, // Not in WholesalerApiConfig, use default
           webhook_url: integration.webhook_url || `${window.location.origin}/api/webhooks/integrations/${integration.id}`,
           webhook_secret: integration.webhook_secret || '',
-          notifications_enabled: true, // Not in WholesalerApiConfig, use default
-          notification_emails: [],
+          notifications_enabled: integration.notifications_enabled ?? true,
+          notification_emails: integration.notification_emails || [],
+          notification_types: integration.notification_types || ['sync_error', 'api_error', 'booking_error'],
           // PDF Branding
           pdf_header_image: integration.pdf_header_image || null,
           pdf_footer_image: integration.pdf_footer_image || null,
@@ -302,6 +304,10 @@ export default function IntegrationSettingsPage() {
         supports_availability_check: formData.supports_availability,
         supports_hold_booking: formData.supports_hold,
         supports_modify_booking: formData.supports_modify,
+        // Notification settings
+        notifications_enabled: formData.notifications_enabled,
+        notification_emails: formData.notification_emails.filter(e => e.trim()),
+        notification_types: formData.notification_types,
       };
       
       console.log('Saving update data:', updateData);
@@ -1365,8 +1371,36 @@ export default function IntegrationSettingsPage() {
           {/* Notifications */}
           {activeTab === 'notifications' && (
             <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">การแจ้งเตือน</h2>
-              <p className="text-sm text-gray-500 mb-6">ตั้งค่าการแจ้งเตือนเมื่อเกิดข้อผิดพลาดหรือปัญหา</p>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold">การแจ้งเตือน</h2>
+                  <p className="text-sm text-gray-500">ตั้งค่าการแจ้งเตือนเมื่อเกิดข้อผิดพลาดหรือปัญหา</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      setTesting(true);
+                      const result = await integrationsApi.testNotification(Number(params.id));
+                      if (result.success) {
+                        alert(result.message || 'ส่งอีเมลทดสอบสำเร็จ');
+                      } else {
+                        alert(result.message || 'ไม่สามารถส่งอีเมลทดสอบได้');
+                      }
+                    } catch (err) {
+                      console.error('Test notification error:', err);
+                      alert('เกิดข้อผิดพลาดในการส่งอีเมลทดสอบ');
+                    } finally {
+                      setTesting(false);
+                    }
+                  }}
+                  disabled={testing || !formData.notifications_enabled || formData.notification_emails.filter(e => e.trim()).length === 0}
+                >
+                  {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TestTube className="w-4 h-4 mr-2" />}
+                  ทดสอบแจ้งเตือน
+                </Button>
+              </div>
               
               <div className="space-y-6">
                 {/* Enable Notifications */}
@@ -1435,19 +1469,63 @@ export default function IntegrationSettingsPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-3">แจ้งเตือนเมื่อ</label>
                     <div className="space-y-2">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
+                        <input 
+                          type="checkbox" 
+                          checked={(formData.notification_types || []).includes('sync_error')}
+                          onChange={(e) => {
+                            const current = formData.notification_types || [];
+                            const types = e.target.checked 
+                              ? [...current, 'sync_error']
+                              : current.filter(t => t !== 'sync_error');
+                            setFormData(prev => ({ ...prev, notification_types: types }));
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded" 
+                        />
                         <span className="text-sm">Sync ผิดพลาด</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
+                        <input 
+                          type="checkbox" 
+                          checked={(formData.notification_types || []).includes('api_error')}
+                          onChange={(e) => {
+                            const current = formData.notification_types || [];
+                            const types = e.target.checked 
+                              ? [...current, 'api_error']
+                              : current.filter(t => t !== 'api_error');
+                            setFormData(prev => ({ ...prev, notification_types: types }));
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded" 
+                        />
                         <span className="text-sm">เชื่อมต่อ API มีปัญหา</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
+                        <input 
+                          type="checkbox" 
+                          checked={(formData.notification_types || []).includes('booking_error')}
+                          onChange={(e) => {
+                            const current = formData.notification_types || [];
+                            const types = e.target.checked 
+                              ? [...current, 'booking_error']
+                              : current.filter(t => t !== 'booking_error');
+                            setFormData(prev => ({ ...prev, notification_types: types }));
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded" 
+                        />
                         <span className="text-sm">ยืนยันการจองไม่สำเร็จ</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" />
+                        <input 
+                          type="checkbox" 
+                          checked={(formData.notification_types || []).includes('daily_summary')}
+                          onChange={(e) => {
+                            const current = formData.notification_types || [];
+                            const types = e.target.checked 
+                              ? [...current, 'daily_summary']
+                              : current.filter(t => t !== 'daily_summary');
+                            setFormData(prev => ({ ...prev, notification_types: types }));
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded" 
+                        />
                         <span className="text-sm">สรุป Sync ประจำวัน</span>
                       </label>
                     </div>
