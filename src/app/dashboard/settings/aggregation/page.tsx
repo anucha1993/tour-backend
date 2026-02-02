@@ -13,7 +13,8 @@ import {
   Plus,
   X,
   Trash2,
-  Edit
+  Edit,
+  Calendar
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
@@ -29,6 +30,12 @@ interface AggregationConfig {
 interface PromotionThresholds {
   fire_sale_min_percent: number;
   normal_promo_min_percent: number;
+}
+
+interface SyncSettings {
+  skip_past_periods: boolean;
+  past_period_threshold_days: number;
+  auto_close_past_periods: boolean;
 }
 
 interface ApiConfigOverride {
@@ -51,6 +58,7 @@ interface ApiConfig {
 interface AggregationData {
   global: AggregationConfig;
   promotion_thresholds: PromotionThresholds;
+  sync_settings: SyncSettings;
   options: string[];
   fields: Record<string, string>;
   api_config_overrides: ApiConfigOverride[];
@@ -79,6 +87,11 @@ export default function SettingsAggregationPage() {
     fire_sale_min_percent: 30,
     normal_promo_min_percent: 1,
   });
+  const [syncSettings, setSyncSettings] = useState<SyncSettings>({
+    skip_past_periods: true,
+    past_period_threshold_days: 0,
+    auto_close_past_periods: false,
+  });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
   // Modal states
@@ -103,6 +116,9 @@ export default function SettingsAggregationPage() {
         if (response.data.promotion_thresholds) {
           setPromotionThresholds(response.data.promotion_thresholds);
         }
+        if (response.data.sync_settings) {
+          setSyncSettings(response.data.sync_settings);
+        }
       } else {
         setMessage({ type: 'error', text: response.message || 'ไม่สามารถโหลดข้อมูลได้' });
       }
@@ -119,7 +135,8 @@ export default function SettingsAggregationPage() {
       setSaving(true);
       const response = await apiClient.put('/settings/aggregation', { 
         config: globalConfig,
-        promotion_thresholds: promotionThresholds
+        promotion_thresholds: promotionThresholds,
+        sync_settings: syncSettings
       });
       if (response.success) {
         setMessage({ type: 'success', text: 'บันทึกการตั้งค่าสำเร็จ' });
@@ -413,6 +430,123 @@ export default function SettingsAggregationPage() {
                 <span>➖</span>
                 <span className="font-medium text-gray-700">ไม่มีโปร</span>
                 <span className="text-gray-500 ml-auto">0%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sync Settings */}
+        <div className="bg-white rounded-xl shadow-sm border p-6 border-gray-200 mt-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Calendar className="w-5 h-5 text-green-600" />
+            <h2 className="text-lg font-semibold text-gray-900">การตั้งค่า Sync Period</h2>
+          </div>
+          
+          <p className="text-sm text-gray-500 mb-6">
+            กำหนดพฤติกรรมเมื่อ Sync ข้อมูล Period (รอบเดินทาง) จาก Wholesaler
+          </p>
+
+          <div className="space-y-6">
+            {/* Skip Past Periods */}
+            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📅</span>
+                  <div>
+                    <label className="text-sm font-medium text-green-800">
+                      ข้าม Period ที่วันออกเดินทางเป็นอดีต
+                    </label>
+                    <p className="text-xs text-green-600 mt-1">
+                      เมื่อเปิด จะไม่สร้าง/อัพเดต Period ที่วันออกเดินทางผ่านไปแล้ว
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncSettings.skip_past_periods}
+                    onChange={(e) => setSyncSettings(prev => ({
+                      ...prev,
+                      skip_past_periods: e.target.checked
+                    }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
+              </div>
+              
+              {syncSettings.skip_past_periods && (
+                <div className="mt-4 pt-4 border-t border-green-200">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">Threshold:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="365"
+                      value={syncSettings.past_period_threshold_days}
+                      onChange={(e) => setSyncSettings(prev => ({
+                        ...prev,
+                        past_period_threshold_days: Number(e.target.value)
+                      }))}
+                      className="w-20 px-3 py-2 border border-green-300 rounded-lg text-center font-medium focus:ring-2 focus:ring-green-500"
+                    />
+                    <span className="text-sm text-gray-600">วันก่อนวันนี้</span>
+                  </div>
+                  <p className="text-xs text-green-600 mt-2">
+                    {syncSettings.past_period_threshold_days === 0 
+                      ? 'ข้าม Period ที่วันออกเดินทางก่อนวันนี้' 
+                      : `ข้าม Period ที่วันออกเดินทางก่อน ${syncSettings.past_period_threshold_days} วันที่แล้ว`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Auto Close Past Periods */}
+            <div className="p-4 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🔒</span>
+                  <div>
+                    <label className="text-sm font-medium text-amber-800">
+                      ปิด Period ที่ผ่านไปแล้วอัตโนมัติ
+                    </label>
+                    <p className="text-xs text-amber-600 mt-1">
+                      เปลี่ยนสถานะ Period ที่วันออกเดินทางผ่านไปแล้วเป็น &quot;closed&quot; อัตโนมัติ
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncSettings.auto_close_past_periods}
+                    onChange={(e) => setSyncSettings(prev => ({
+                      ...prev,
+                      auto_close_past_periods: e.target.checked
+                    }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                </label>
+              </div>
+            </div>
+
+            {/* Info Note */}
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex gap-3">
+                <span className="text-xl">💡</span>
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-2">ความแตกต่างระหว่าง 2 ตัวเลือก:</p>
+                  <ul className="space-y-2 text-blue-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-600">📅</span>
+                      <span><strong>ข้าม Period</strong> - ใช้กับข้อมูลใหม่จาก API: ไม่สร้าง Period ที่วันออกเดินทางเป็นอดีตลงในระบบ (ป้องกันข้อมูลเก่าเข้ามา)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-amber-600">🔒</span>
+                      <span><strong>ปิด Period อัตโนมัติ</strong> - ใช้กับข้อมูลที่มีอยู่แล้ว: เปลี่ยนสถานะ Period ที่ผ่านไปแล้วเป็น &quot;closed&quot; เพื่อไม่ให้แสดงบนหน้าเว็บ (ข้อมูลยังอยู่)</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>

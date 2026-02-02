@@ -501,31 +501,67 @@ export default function EditTourPage() {
   const [tour, setTour] = useState<Tour | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    wholesaler_id: string;
+    tour_code: string;
+    wholesaler_tour_code: string;
+    title: string;
+    tour_type: 'join' | 'incentive' | 'collective';
+    country_ids: number[];
+    duration_days: number;
+    duration_nights: number;
+    hotel_star: number | null;
+    min_price: string;
+    price_adult: string;
+    discount_adult: string;
+    highlights: string[];
+    shopping_highlights: string[];
+    food_highlights: string[];
+    special_highlights: string[];
+    inclusions: string;
+    exclusions: string;
+    conditions: string;
+    hashtags: string[];
+    themes: string[];
+    tour_category: '' | 'budget' | 'premium';
+    status: 'draft' | 'active' | 'inactive';
+    promotion_type: 'none' | 'normal' | 'fire_sale';
+    sync_locked: boolean;
+    cover_image_url: string;
+    cover_image_alt: string;
+    pdf_url: string;
+    slug: string;
+    meta_title: string;
+    meta_description: string;
+    keywords: string[];
+    city_ids: number[];
+    transport_id: string;
+    description: string;
+  }>({
     wholesaler_id: '',
     tour_code: '',
     wholesaler_tour_code: '',
     title: '',
-    tour_type: 'join' as 'join' | 'incentive' | 'collective',
-    country_ids: [] as number[],
+    tour_type: 'join',
+    country_ids: [],
     duration_days: 5,
     duration_nights: 4,
-    hotel_star: 4,
+    hotel_star: null,
     min_price: '',
     price_adult: '',
     discount_adult: '',
-    highlights: [] as string[],
-    shopping_highlights: [] as string[],
-    food_highlights: [] as string[],
-    special_highlights: [] as string[],
+    highlights: [],
+    shopping_highlights: [],
+    food_highlights: [],
+    special_highlights: [],
     inclusions: '',
     exclusions: '',
     conditions: '',
-    hashtags: [] as string[],
-    themes: [] as string[],
-    tour_category: '' as '' | 'budget' | 'premium',
-    status: 'draft' as 'draft' | 'active' | 'inactive',
-    promotion_type: 'none' as 'none' | 'normal' | 'fire_sale',
+    hashtags: [],
+    themes: [],
+    tour_category: '',
+    status: 'draft',
+    promotion_type: 'none',
     sync_locked: false,
     cover_image_url: '',
     cover_image_alt: '',
@@ -533,8 +569,8 @@ export default function EditTourPage() {
     slug: '',
     meta_title: '',
     meta_description: '',
-    keywords: [] as string[],
-    city_ids: [] as number[],
+    keywords: [],
+    city_ids: [],
     transport_id: '',
     description: '',
   });
@@ -666,7 +702,7 @@ export default function EditTourPage() {
             country_ids: t.countries?.map(c => c.id) || [],
             duration_days: t.duration_days || 5,
             duration_nights: t.duration_nights || 4,
-            hotel_star: tourData.hotel_star || t.hotel_star_max || t.hotel_star_min || 4,
+            hotel_star: tourData.hotel_star || t.hotel_star_max || t.hotel_star_min || null,
             min_price: t.min_price || '',
             price_adult: tourData.price_adult?.toString() || '',
             discount_adult: tourData.discount_adult?.toString() || '',
@@ -1503,10 +1539,11 @@ export default function EditTourPage() {
             </label>
             <select
               name="hotel_star"
-              value={formData.hotel_star}
-              onChange={(e) => setFormData(prev => ({ ...prev, hotel_star: parseInt(e.target.value) }))}
+              value={formData.hotel_star ?? ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, hotel_star: e.target.value ? parseInt(e.target.value) : null }))}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
+              <option value="">ไม่ระบุ</option>
               {[1, 2, 3, 4, 5].map(n => (
                 <option key={n} value={n}>
                   {'⭐'.repeat(n)} {n} ดาว

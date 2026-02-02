@@ -50,6 +50,7 @@ export default function QueueStatus() {
   const [expanded, setExpanded] = useState(false);
   const [fixing, setFixing] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -97,6 +98,21 @@ export default function QueueStatus() {
       console.error('Failed to process queue:', error);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleClearFailed = async () => {
+    if (!confirm(`ต้องการล้าง Failed Jobs ${data?.queue.failed_jobs} รายการ?`)) return;
+    try {
+      setClearing(true);
+      const response = await apiClient.post('/queue/clear-failed', {});
+      if (response.success) {
+        fetchStatus();
+      }
+    } catch (error) {
+      console.error('Failed to clear failed jobs:', error);
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -154,9 +170,20 @@ export default function QueueStatus() {
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Failed Jobs:</span>
-              <span className={`font-medium ${data.queue.failed_jobs > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                {data.queue.failed_jobs}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`font-medium ${data.queue.failed_jobs > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {data.queue.failed_jobs}
+                </span>
+                {data.queue.failed_jobs > 0 && (
+                  <button
+                    onClick={handleClearFailed}
+                    disabled={clearing}
+                    className="px-1.5 py-0.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors disabled:opacity-50"
+                  >
+                    {clearing ? 'ล้าง...' : 'ล้าง'}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Worker Active:</span>

@@ -19,6 +19,10 @@ import {
   Copy,
   Check,
   Clock,
+  CheckSquare,
+  Square,
+  Download,
+  AlertCircle,
 } from 'lucide-react';
 
 interface Period {
@@ -153,6 +157,12 @@ export default function SalesSearchPage() {
   const [tourCodeMap, setTourCodeMap] = useState<Record<string, TourCodeLookup>>({});
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const progressRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Mass Sync states
+  const [selectedTours, setSelectedTours] = useState<Set<string>>(new Set());
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+  const [syncResult, setSyncResult] = useState<{ success: number; failed: number; message: string } | null>(null);
 
   // Generate month options for the next 12 months
   const generateMonthOptions = () => {
@@ -221,16 +231,20 @@ export default function SalesSearchPage() {
       const extId = tour.external_id || tour._raw?.ProductId || tour._raw?.id || tour._raw?.code;
       return {
         wholesaler_id: tour._wholesaler_id,
-        external_id: String(extId),
+        external_id: extId ? String(extId) : null,
       };
-    }).filter(item => item.external_id);
+    }).filter(item => item.wholesaler_id && item.external_id) as { wholesaler_id: number; external_id: string }[];
 
     if (externalIds.length === 0) return;
 
     try {
       const response = await fetch(`${API_BASE_URL}/tours/lookup-codes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
         body: JSON.stringify({ external_ids: externalIds }),
       });
 
@@ -534,6 +548,128 @@ export default function SalesSearchPage() {
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
   };
+
+  // === Mass Sync Functions ===
+  
+  // Get tour key for selection
+  const getTourKey = (tour: Tour, index: number) => {
+    const raw = tour._raw;
+    return `${tour._wholesaler_id}-${tour.external_id || raw?.ProductId || raw?.id || raw?.code || index}`;
+  };
+
+  const MAX_SYNC_TOURS = 5;
+
+  // Toggle single tour selection
+  const toggleTourSelection = (tourKey: string) => {
+    setSelectedTours(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(tourKey)) {
+        newSet.delete(tourKey);
+      } else {
+        // Limit to MAX_SYNC_TOURS
+        if (newSet.size >= MAX_SYNC_TOURS) {
+          alert(`สามารถเลือกได้สูงสุด ${MAX_SYNC_TOURS} ทัวร์ต่อครั้ง`);
+          return prev;
+        }
+        newSet.add(tourKey);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/Deselect all tours (only unsynced, max MAX_SYNC_TOURS)
+  const toggleSelectAll = () => {
+    if (selectedTours.size > 0) {
+      // Deselect all
+      setSelectedTours(new Set());
+    } else {
+      // Select unsynced tours (limit to MAX_SYNC_TOURS)
+      const unsyncedKeys = tours
+        .map((tour, index) => {
+          const key = getTourKey(tour, index);
+          const syncInfo = tourCodeMap[`${tour._wholesaler_id}_${tour.external_id || tour._raw?.ProductId || tour._raw?.id}`];
+          if (!syncInfo?.synced) {
+            return key;
+          }
+          return null;
+        })
+        .filter((k): k is string => k !== null)
+        .slice(0, MAX_SYNC_TOURS); // Limit to max
+      
+      if (unsyncedKeys.length === MAX_SYNC_TOURS) {
+        alert(`เลือกอัตโนมัติ ${MAX_SYNC_TOURS} ทัวร์แรก (สูงสุดที่ sync ได้ต่อครั้ง)`);
+      }
+      setSelectedTours(new Set(unsyncedKeys));
+    }
+  };
+
+  // Sync selected tours
+  const handleSyncSelected = async () => {
+    if (selectedTours.size === 0 || !filters.wholesaler_id) return;
+
+    setSyncing(true);
+    setSyncProgress({ current: 0, total: selectedTours.size });
+    setSyncResult(null);
+
+    try {
+      // Get selected tour data
+      const selectedToursData = tours.filter((tour, index) => 
+        selectedTours.has(getTourKey(tour, index))
+      );
+
+      // Send to API
+      const response = await fetch(`${API_BASE_URL}/integrations/${filters.wholesaler_id}/tours/sync-selected`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify({ tours: selectedToursData }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSyncResult({
+          success: data.data.success,
+          failed: data.data.failed,
+          message: data.message,
+        });
+        
+        // Refresh tour codes lookup
+        if (tours.length > 0) {
+          lookupTourCodes(tours);
+        }
+        
+        // Clear selection
+        setSelectedTours(new Set());
+      } else {
+        setSyncResult({
+          success: 0,
+          failed: selectedTours.size,
+          message: data.message || 'เกิดข้อผิดพลาดในการ sync',
+        });
+      }
+    } catch (error) {
+      console.error('Sync failed:', error);
+      setSyncResult({
+        success: 0,
+        failed: selectedTours.size,
+        message: 'เกิดข้อผิดพลาดในการเชื่อมต่อ API',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Clear sync result after 5 seconds
+  useEffect(() => {
+    if (syncResult) {
+      const timer = setTimeout(() => setSyncResult(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncResult]);
 
   return (
     <div className="space-y-6">
@@ -994,6 +1130,62 @@ export default function SalesSearchPage() {
 
       {/* Results */}
       <div className="space-y-4">
+        {/* Mass Sync Bar (when tours selected) */}
+        {selectedTours.size > 0 && !syncing && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-medium">
+                เลือก {selectedTours.size} ทัวร์
+              </span>
+              <button
+                onClick={() => setSelectedTours(new Set())}
+                className="text-blue-600 hover:text-blue-800 text-sm underline"
+              >
+                ยกเลิกทั้งหมด
+              </button>
+            </div>
+            <Button
+              onClick={handleSyncSelected}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={selectedTours.size === 0}
+            >
+              <Download className="w-4 h-4" />
+              Sync เข้าระบบ ({selectedTours.size})
+            </Button>
+          </div>
+        )}
+
+        {/* Syncing Progress */}
+        {syncing && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+              <span className="text-blue-800 font-medium">
+                กำลัง Sync {selectedTours.size} ทัวร์เข้าระบบ...
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Sync Result */}
+        {syncResult && (
+          <div className={`rounded-lg p-4 flex items-center gap-3 ${
+            syncResult.failed === 0 
+              ? 'bg-green-50 border border-green-200' 
+              : 'bg-yellow-50 border border-yellow-200'
+          }`}>
+            {syncResult.failed === 0 ? (
+              <Check className="w-5 h-5 text-green-600" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-yellow-600" />
+            )}
+            <span className={syncResult.failed === 0 ? 'text-green-800' : 'text-yellow-800'}>
+              {syncResult.message}
+            </span>
+          </div>
+        )}
+
         {/* Results Header */}
         <div className="flex items-center justify-between">
           <p className="text-gray-600">
@@ -1001,15 +1193,26 @@ export default function SalesSearchPage() {
           </p>
           <div className="flex items-center gap-2">
             {tours.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyAll}
-                className={copiedAll ? 'text-green-600 border-green-600' : ''}
-              >
-                {copiedAll ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copiedAll ? 'คัดลอกแล้ว!' : `คัดลอกทั้งหมด (${tours.length})`}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                  className={selectedTours.size > 0 ? 'text-blue-600 border-blue-600' : ''}
+                >
+                  {selectedTours.size > 0 ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  {selectedTours.size > 0 ? 'ยกเลิกเลือก' : 'เลือกที่ยังไม่ sync'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyAll}
+                  className={copiedAll ? 'text-green-600 border-green-600' : ''}
+                >
+                  {copiedAll ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedAll ? 'คัดลอกแล้ว!' : `คัดลอกทั้งหมด (${tours.length})`}
+                </Button>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={handleSearch} disabled={loading}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -1042,23 +1245,59 @@ export default function SalesSearchPage() {
               <p className="text-xs text-blue-500 mt-2">โปรดรอสักครู่ การค้นหาอาจใช้เวลา 3-6 วินาที</p>
             </div>
             
-            {/* Skeleton Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {[...Array(8)].map((_, i) => (
-                <Card key={i} className="overflow-hidden animate-pulse">
-                  <div className="bg-gray-200 h-8" />
-                  <div className="p-3 space-y-3">
-                    <div className="h-10 bg-gray-200 rounded" />
-                    <div className="space-y-2">
-                      <div className="h-4 bg-gray-200 rounded w-3/4" />
-                      <div className="h-4 bg-gray-200 rounded w-1/2" />
-                      <div className="h-4 bg-gray-200 rounded w-2/3" />
-                    </div>
-                    <div className="h-8 bg-gray-200 rounded mt-4" />
-                  </div>
-                </Card>
-              ))}
-            </div>
+            {/* Skeleton Table */}
+            <Card className="overflow-hidden animate-pulse">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-2 py-3 w-10"><div className="h-4 w-4 bg-gray-200 rounded mx-auto" /></th>
+                      <th className="px-2 py-3 w-10"><div className="h-4 bg-gray-200 rounded w-6 mx-auto" /></th>
+                      <th className="px-2 py-3 w-12"><div className="h-4 bg-gray-200 rounded w-8 mx-auto" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-20" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-24" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-16" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-16" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-24" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-20" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-20" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-16 mx-auto" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-24" /></th>
+                      <th className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-16 mx-auto" /></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...Array(10)].map((_, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="px-2 py-3"><div className="h-4 w-4 bg-gray-200 rounded mx-auto" /></td>
+                        <td className="px-2 py-3"><div className="h-4 bg-gray-200 rounded w-6 mx-auto" /></td>
+                        <td className="px-2 py-3"><div className="h-6 w-6 bg-gray-200 rounded mx-auto" /></td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-24" /></td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="h-4 bg-gray-200 rounded w-48" />
+                            <div className="h-3 bg-gray-100 rounded w-32" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-16" /></td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-20" /></td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-28" /></td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-20" /></td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-24 ml-auto" /></td>
+                        <td className="px-4 py-3"><div className="h-5 bg-gray-200 rounded-full w-14 mx-auto" /></td>
+                        <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-24" /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1 justify-center">
+                            <div className="h-7 w-7 bg-gray-200 rounded" />
+                            <div className="h-7 w-7 bg-gray-200 rounded" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         ) : tours.length === 0 ? (
           <Card className="p-12 text-center">
@@ -1074,6 +1313,19 @@ export default function SalesSearchPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-2 py-3 text-center font-medium text-gray-700 w-10">
+                        <button
+                          onClick={toggleSelectAll}
+                          className="p-1 hover:bg-gray-200 rounded transition-colors"
+                          title={selectedTours.size > 0 ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกที่ยังไม่ sync'}
+                        >
+                          {selectedTours.size > 0 ? (
+                            <CheckSquare className="w-4 h-4 text-blue-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-400" />
+                          )}
+                        </button>
+                      </th>
                       <th className="px-2 py-3 text-center font-medium text-gray-700 w-10">#</th>
                       <th className="px-2 py-3 text-center font-medium text-gray-700 w-12">จอง</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-700">รหัสทัวร์</th>
@@ -1094,7 +1346,7 @@ export default function SalesSearchPage() {
                       const lowestPrice = getLowestPrice(tour);
                       const availablePeriods = getAvailablePeriods(tour);
                       const isExpanded = expandedTour === index;
-                      const tourKey = `${tour._wholesaler_id}-${raw?.id || raw?.code || index}`;
+                      const tourKey = getTourKey(tour, index);
 
                       // Get travel date range from periods
                       const getDateRange = () => {
@@ -1155,8 +1407,25 @@ export default function SalesSearchPage() {
                       return (
                         <tr 
                           key={tourKey} 
-                          className="border-b border-gray-100 hover:bg-blue-50/50 transition-colors"
+                          className={`border-b border-gray-100 hover:bg-blue-50/50 transition-colors ${
+                            selectedTours.has(tourKey) ? 'bg-blue-50' : ''
+                          }`}
                         >
+                          {/* Checkbox */}
+                          <td className="px-2 py-3 text-center">
+                            <button
+                              onClick={() => toggleTourSelection(tourKey)}
+                              className="p-1 hover:bg-gray-200 rounded transition-colors"
+                              title={selectedTours.has(tourKey) ? 'ยกเลิกเลือก' : 'เลือก'}
+                            >
+                              {selectedTours.has(tourKey) ? (
+                                <CheckSquare className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <Square className="w-4 h-4 text-gray-400" />
+                              )}
+                            </button>
+                          </td>
+
                           {/* ลำดับ */}
                           <td className="px-2 py-3 text-center">
                             <span className="text-gray-500 text-sm font-medium">{index + 1}</span>

@@ -76,6 +76,12 @@ export default function ToursPage() {
   const [previewTour, setPreviewTour] = useState<Tour | null>(null);
   const [periodsTour, setPeriodsTour] = useState<Tour | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Mass Delete
+  const [selectedTours, setSelectedTours] = useState<Set<number>>(new Set());
+  const [massDeleteConfirm, setMassDeleteConfirm] = useState(false);
+  const [isMassDeleting, setIsMassDeleting] = useState(false);
 
   const fetchTours = useCallback(async () => {
     setLoading(true);
@@ -119,12 +125,49 @@ export default function ToursPage() {
   }, [search]);
 
   const handleDelete = async (id: number) => {
+    setIsDeleting(true);
     try {
       await toursApi.delete(id);
       fetchTours();
       setDeleteConfirm(null);
     } catch (err) {
       console.error('Failed to delete tour:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleMassDelete = async () => {
+    if (selectedTours.size === 0) return;
+    setIsMassDeleting(true);
+    try {
+      const ids = Array.from(selectedTours);
+      await toursApi.massDelete(ids);
+      setSelectedTours(new Set());
+      setMassDeleteConfirm(false);
+      fetchTours();
+    } catch (err) {
+      console.error('Failed to mass delete tours:', err);
+    } finally {
+      setIsMassDeleting(false);
+    }
+  };
+
+  const toggleSelectTour = (id: number) => {
+    const newSelected = new Set(selectedTours);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedTours(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTours.size === tours.length) {
+      setSelectedTours(new Set());
+    } else {
+      setSelectedTours(new Set(tours.map(t => t.id)));
     }
   };
 
@@ -212,6 +255,16 @@ export default function ToursPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {selectedTours.size > 0 && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setMassDeleteConfirm(true)}
+            >
+              <Trash2 className="w-4 h-4" />
+              ลบที่เลือก ({selectedTours.size})
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={fetchTours}>
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -333,6 +386,14 @@ export default function ToursPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-100">
                 <tr>
+                  <th className="text-center px-3 py-3 font-medium text-gray-700 whitespace-nowrap w-10">
+                    <input
+                      type="checkbox"
+                      checked={tours.length > 0 && selectedTours.size === tours.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รูป</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รหัส / ชื่อทัวร์</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ประเทศ</th>
@@ -349,7 +410,16 @@ export default function ToursPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {tours.map((tour, index) => (
-                  <tr key={tour.id} className={`hover:bg-blue-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                  <tr key={tour.id} className={`hover:bg-blue-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} ${selectedTours.has(tour.id) ? 'bg-blue-50' : ''}`}>
+                    {/* Checkbox */}
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedTours.has(tour.id)}
+                        onChange={() => toggleSelectTour(tour.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
                     {/* Cover Image */}
                     <td className="px-4 py-3">
                       <div className="relative w-16 h-12 rounded-lg overflow-hidden bg-gray-100 shadow-sm">
@@ -628,8 +698,46 @@ export default function ToursPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">ยืนยันการลบ</h3>
             <p className="text-gray-600 mb-4">คุณต้องการลบทัวร์นี้หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>ยกเลิก</Button>
-              <Button variant="danger" onClick={() => handleDelete(deleteConfirm)}>ลบ</Button>
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)} disabled={isDeleting}>ยกเลิก</Button>
+              <Button variant="danger" onClick={() => handleDelete(deleteConfirm)} disabled={isDeleting}>
+                {isDeleting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    กำลังลบ...
+                  </>
+                ) : 'ลบ'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Mass Delete Confirm Modal */}
+      {massDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">ยืนยันการลบหลายรายการ</h3>
+            <p className="text-gray-600 mb-4">
+              คุณต้องการลบทัวร์ที่เลือก <span className="font-semibold text-red-600">{selectedTours.size} รายการ</span> หรือไม่?
+              <br />
+              <span className="text-sm text-red-500">การดำเนินการนี้ไม่สามารถย้อนกลับได้</span>
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setMassDeleteConfirm(false)} disabled={isMassDeleting}>ยกเลิก</Button>
+              <Button variant="danger" onClick={handleMassDelete} disabled={isMassDeleting}>
+                {isMassDeleting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    กำลังลบ...
+                  </>
+                ) : `ลบ ${selectedTours.size} รายการ`}
+              </Button>
             </div>
           </Card>
         </div>

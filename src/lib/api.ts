@@ -787,6 +787,12 @@ export const toursApi = {
   delete: (id: number) =>
     apiRequest(`/tours/${id}`, { method: 'DELETE' }),
 
+  massDelete: (ids: number[]) =>
+    apiRequest<{ deleted: number; failed: number }>('/tours/mass-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+
   toggleStatus: (id: number) =>
     apiRequest<Tour>(`/tours/${id}/toggle-status`, { method: 'PATCH' }),
 
