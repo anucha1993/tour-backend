@@ -52,7 +52,9 @@ interface Tour {
   duration_days?: number | string;
   duration_nights?: number | string;
   primary_country_id?: string;
+  primary_country_id_name?: string; // Display name from countries table
   transport_id?: string;
+  transport_id_name?: string; // Display name from transports table
   // Meta fields
   periods?: Period[];
   _wholesaler_id: number;
@@ -439,9 +441,9 @@ export default function SalesSearchPage() {
     const title = tour.title || raw?.ProductName || '';
     const days = tour.duration_days || raw?.Days || '';
     const nights = tour.duration_nights || raw?.Nights || '';
-    const airline = raw?.AirlineName || '';
-    const airlineCode = raw?.AirlineCode || tour.transport_id || '';
-    const pdfUrl = raw?.FilePDF || raw?.pdfUrl || '';
+    const airline = tour.transport_id || '';
+    const airlineCode = '';
+    const pdfUrl = raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '';
     
     const formatFullDate = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
     
@@ -1393,9 +1395,9 @@ export default function SalesSearchPage() {
                         }
                         return raw?.Nights || raw?.nights || '';
                       };
-                      const getCountry = () => tour.primary_country_id || raw?.CountryName || raw?.countryName || '';
-                      const getAirline = () => raw?.AirlineName || raw?.airlineName || '';
-                      const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || '';
+                      const getCountry = () => tour.primary_country_id_name || tour.primary_country_id || '';
+                      const getAirline = () => tour.transport_id_name || tour.transport_id || '';
+                      const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '';
                       const totalPeriods = tour.periods?.length || raw?.Periods?.length || 0;
 
                       // Get synced tour code from lookup

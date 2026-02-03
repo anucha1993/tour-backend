@@ -93,6 +93,7 @@ const SCHEDULE_PRESETS = [
   { label: 'ทุก 12 ชั่วโมง', value: '0 */12 * * *' },
   { label: 'วันละครั้ง (เที่ยงคืน)', value: '0 0 * * *' },
   { label: 'วันละครั้ง (06:00 น.)', value: '0 6 * * *' },
+  { label: 'กำหนดเอง (Custom)', value: 'custom' },
 ];
 
 export default function IntegrationSettingsPage() {
@@ -108,6 +109,8 @@ export default function IntegrationSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const [uploadingFooter, setUploadingFooter] = useState(false);
+  const [customCron, setCustomCron] = useState(false);
+  const [customCronValue, setCustomCronValue] = useState('');
   
   // Form state
   const [formData, setFormData] = useState<FormData>(defaultFormData);
@@ -337,6 +340,7 @@ export default function IntegrationSettingsPage() {
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult('idle');
+    setError(null);
     
     try {
       // Build auth_credentials
@@ -352,6 +356,10 @@ export default function IntegrationSettingsPage() {
         case 'basic':
           authCredentials.username = formData.username;
           authCredentials.password = formData.password;
+          break;
+        case 'oauth2':
+          authCredentials.token_url = formData.oauth_token_url;
+          authCredentials.oauth_fields = formData.oauth_fields;
           break;
         case 'custom':
           const headersObj: Record<string, string> = {};
@@ -372,9 +380,15 @@ export default function IntegrationSettingsPage() {
       });
       
       setTestResult(result.success ? 'success' : 'failed');
-    } catch (err) {
+      if (!result.success && result.message) {
+        setError(result.message);
+      }
+    } catch (err: unknown) {
       console.error('Test connection failed:', err);
       setTestResult('failed');
+      if (err && typeof err === 'object' && 'message' in err) {
+        setError((err as { message: string }).message);
+      }
     } finally {
       setTesting(false);
     }
@@ -931,15 +945,56 @@ export default function IntegrationSettingsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ความถี่ในการ Sync</label>
                   <select
-                    value={formData.sync_schedule}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sync_schedule: e.target.value }))}
+                    value={customCron ? 'custom' : (SCHEDULE_PRESETS.some(p => p.value === formData.sync_schedule) ? formData.sync_schedule : 'custom')}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom') {
+                        setCustomCron(true);
+                        setCustomCronValue(formData.sync_schedule);
+                      } else {
+                        setCustomCron(false);
+                        setFormData(prev => ({ ...prev, sync_schedule: e.target.value }));
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {SCHEDULE_PRESETS.map((preset) => (
                       <option key={preset.value} value={preset.value}>{preset.label}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">Cron expression: {formData.sync_schedule}</p>
+                  
+                  {/* Custom Cron Input */}
+                  {(customCron || !SCHEDULE_PRESETS.some(p => p.value === formData.sync_schedule)) && (
+                    <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Custom Cron Expression
+                      </label>
+                      <input
+                        type="text"
+                        value={customCron ? customCronValue : formData.sync_schedule}
+                        onChange={(e) => {
+                          setCustomCronValue(e.target.value);
+                          setFormData(prev => ({ ...prev, sync_schedule: e.target.value }));
+                        }}
+                        placeholder="0 */2 * * *"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+                      />
+                      <div className="mt-2 text-xs text-gray-500 space-y-1">
+                        <p className="font-medium">รูปแบบ: นาที ชั่วโมง วัน เดือน วันในสัปดาห์</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                          <span>• <code className="bg-gray-200 px-1 rounded">0 * * * *</code> = ทุกชั่วโมง</span>
+                          <span>• <code className="bg-gray-200 px-1 rounded">*/30 * * * *</code> = ทุก 30 นาที</span>
+                          <span>• <code className="bg-gray-200 px-1 rounded">0 */2 * * *</code> = ทุก 2 ชั่วโมง</span>
+                          <span>• <code className="bg-gray-200 px-1 rounded">0 9,18 * * *</code> = 9:00 และ 18:00</span>
+                          <span>• <code className="bg-gray-200 px-1 rounded">0 6 * * 1-5</code> = จันทร์-ศุกร์ 6:00</span>
+                          <span>• <code className="bg-gray-200 px-1 rounded">0 0 1 * *</code> = วันที่ 1 ของเดือน</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!customCron && SCHEDULE_PRESETS.some(p => p.value === formData.sync_schedule) && (
+                    <p className="text-xs text-gray-500 mt-1">Cron expression: <code className="bg-gray-100 px-1 rounded">{formData.sync_schedule}</code></p>
+                  )}
                 </div>
                 
                 {/* Sync Method */}

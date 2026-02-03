@@ -396,6 +396,7 @@ export default function ToursPage() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รูป</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รหัส / ชื่อทัวร์</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">Wholesaler</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ประเทศ</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สายการบิน</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">กลุ่ม</th>
@@ -469,6 +470,25 @@ export default function ToursPage() {
                           </div>
                         )}
                       </div>
+                    </td>
+
+                    {/* Wholesaler */}
+                    <td className="px-4 py-3 text-center">
+                      {tour.wholesaler ? (
+                        <Link 
+                          href={`/dashboard/integrations/${tour.wholesaler_id}`}
+                          className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded hover:bg-purple-100 transition-colors inline-block max-w-[100px] truncate"
+                          title={tour.wholesaler.name}
+                        >
+                          {tour.wholesaler.name}
+                        </Link>
+                      ) : tour.data_source === 'manual' ? (
+                        <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded">
+                          สร้างเอง
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
 
                     {/* Countries */}

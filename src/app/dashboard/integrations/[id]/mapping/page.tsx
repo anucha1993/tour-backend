@@ -125,8 +125,8 @@ const ALL_FIELDS: FieldDefinition[] = [
   
   // --- Period Info (จะ insert ไป periods table) ---
   { section: 'departure', key: 'external_id', label: 'Period External ID', type: 'string', required: true, description: 'ID รอบเดินทางจาก Wholesaler API (สำหรับ sync)', targetTable: 'periods' },
-  { section: 'departure', key: 'departure_date', label: 'วันเดินทางไป', type: 'date', required: true, description: 'วันที่ออกเดินทาง', targetTable: 'periods' },
-  { section: 'departure', key: 'return_date', label: 'วันเดินทางกลับ', type: 'date', required: false, description: 'วันที่กลับ', targetTable: 'periods' },
+  { section: 'departure', key: 'start_date', label: 'วันเดินทางไป', type: 'date', required: true, description: 'วันที่ออกเดินทาง (Database: start_date)', targetTable: 'periods' },
+  { section: 'departure', key: 'end_date', label: 'วันเดินทางกลับ', type: 'date', required: false, description: 'วันที่กลับ (Database: end_date)', targetTable: 'periods' },
   { section: 'departure', key: 'capacity', label: 'จำนวนที่นั่งทั้งหมด', type: 'int', required: false, description: 'ที่นั่งทั้งหมด', targetTable: 'periods' },
   { section: 'departure', key: 'available', label: 'ที่นั่งว่าง', type: 'int', required: false, description: 'ที่นั่งที่เหลือ', targetTable: 'periods' },
   { section: 'departure', key: 'status', label: 'สถานะรอบ', type: 'string', required: true, description: 'สถานะรอบเดินทาง', targetTable: 'periods', options: [

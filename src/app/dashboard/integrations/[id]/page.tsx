@@ -103,7 +103,7 @@ interface SyncHistoryItem {
   error_count?: number;
   periods_created?: number;
   periods_updated?: number;
-  error_summary?: Array<{ type: string; message: string; count: number }> | null;
+  error_summary?: Array<{ type: string; message: string; count: number }> | { message: string } | null;
 }
 
 export default function IntegrationDetailPage() {
@@ -404,7 +404,7 @@ export default function IntegrationDetailPage() {
         const maxAttempts = 30;
         
         const pollInterval = setInterval(async () => {
-          attempts++;
+        attempts++;
           
           try {
             const response = await integrationsApi.getSyncHistory(Number(params.id));
@@ -780,7 +780,7 @@ export default function IntegrationDetailPage() {
                   ) : (
                     <XCircle className="w-5 h-5 text-red-500" />
                   )}
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">
                       {sync.status === 'running' 
                         ? 'กำลัง Sync...'
@@ -789,6 +789,22 @@ export default function IntegrationDetailPage() {
                           : 'Sync ล้มเหลว'
                       }
                     </p>
+                    {/* Show error message for failed sync */}
+                    {sync.status === 'failed' && sync.error_summary && (
+                      <p className="text-xs text-red-600 mt-0.5 truncate max-w-xs" title={
+                        !Array.isArray(sync.error_summary) && 'message' in sync.error_summary 
+                          ? sync.error_summary.message 
+                          : Array.isArray(sync.error_summary) && sync.error_summary.length > 0 
+                            ? sync.error_summary[0].message 
+                            : ''
+                      }>
+                        {!Array.isArray(sync.error_summary) && 'message' in sync.error_summary 
+                          ? sync.error_summary.message.substring(0, 80) + (sync.error_summary.message.length > 80 ? '...' : '')
+                          : Array.isArray(sync.error_summary) && sync.error_summary.length > 0 
+                            ? sync.error_summary[0].message 
+                            : ''}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500">
                       {new Date(sync.started_at).toLocaleString('th-TH', {
                         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
@@ -1156,14 +1172,24 @@ export default function IntegrationDetailPage() {
               )}
 
               {/* Error Summary */}
-              {syncLogModal.log.error_summary && syncLogModal.log.error_summary.length > 0 && (
+              {syncLogModal.log.error_summary && (
                 <div>
                   <h4 className="font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-red-500" />
-                    ข้อผิดพลาด ({syncLogModal.log.error_count ?? syncLogModal.log.error_summary.length})
+                    ข้อผิดพลาด
                   </h4>
                   <div className="bg-red-50 rounded-lg p-3 space-y-2 max-h-48 overflow-auto">
-                    {syncLogModal.log.error_summary.map((err, idx) => (
+                    {/* Handle object format: {message: "..."} */}
+                    {!Array.isArray(syncLogModal.log.error_summary) && 'message' in syncLogModal.log.error_summary && (
+                      <div className="text-sm">
+                        <p className="text-red-700 font-medium mb-1">รายละเอียด Error:</p>
+                        <p className="text-red-600 bg-white p-2 rounded border border-red-200 break-words whitespace-pre-wrap font-mono text-xs">
+                          {syncLogModal.log.error_summary.message}
+                        </p>
+                      </div>
+                    )}
+                    {/* Handle array format: [{type, message, count}] */}
+                    {Array.isArray(syncLogModal.log.error_summary) && syncLogModal.log.error_summary.map((err, idx) => (
                       <div key={idx} className="text-sm border-b border-red-100 pb-2 last:border-0 last:pb-0">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-red-700">{err.type}</span>
