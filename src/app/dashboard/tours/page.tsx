@@ -372,9 +372,115 @@ export default function ToursPage() {
 
       {/* Tours Table */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        </div>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="text-center px-3 py-3 font-medium text-gray-700 whitespace-nowrap w-10">
+                    <div className="w-4 h-4 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รูป</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รหัส / ชื่อทัวร์</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">Wholesaler</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ประเทศ</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สายการบิน</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">กลุ่ม</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">โรงแรม</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ราคา</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รอบ</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">อัปเดต</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[...Array(10)].map((_, index) => (
+                  <tr key={index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    {/* Checkbox */}
+                    <td className="px-3 py-3 text-center">
+                      <div className="w-4 h-4 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                    </td>
+                    {/* Cover Image */}
+                    <td className="px-4 py-3">
+                      <div className="w-16 h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                    </td>
+                    {/* Tour Code & Title */}
+                    <td className="px-4 py-3">
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-20"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-48"></div>
+                        <div className="flex gap-1">
+                          <div className="h-3 bg-gray-200 rounded animate-pulse w-12"></div>
+                          <div className="h-3 bg-gray-200 rounded animate-pulse w-12"></div>
+                        </div>
+                      </div>
+                    </td>
+                    {/* Wholesaler */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-6 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
+                    </td>
+                    {/* Countries */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex justify-center gap-1">
+                        <div className="h-5 bg-gray-200 rounded animate-pulse w-10"></div>
+                        <div className="h-5 bg-gray-200 rounded animate-pulse w-10"></div>
+                      </div>
+                    </td>
+                    {/* Airlines */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-5 bg-gray-200 rounded animate-pulse w-12 mx-auto"></div>
+                    </td>
+                    {/* Tour Type */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-5 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
+                    </td>
+                    {/* Days/Nights */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
+                    </td>
+                    {/* Hotel */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex justify-center gap-0.5">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className="w-3 h-3 bg-gray-200 rounded animate-pulse"></div>
+                        ))}
+                      </div>
+                    </td>
+                    {/* Price */}
+                    <td className="px-4 py-3 text-right">
+                      <div className="h-5 bg-gray-200 rounded animate-pulse w-20 ml-auto"></div>
+                    </td>
+                    {/* Periods */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-6 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
+                    </td>
+                    {/* Status */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-5 bg-gray-200 rounded-full animate-pulse w-16 mx-auto"></div>
+                    </td>
+                    {/* Updated */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="space-y-1">
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-10 mx-auto"></div>
+                      </div>
+                    </td>
+                    {/* Actions */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex justify-center gap-1">
+                        <div className="w-7 h-7 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-7 h-7 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-7 h-7 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : tours.length === 0 ? (
         <Card className="p-12 text-center">
           <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
