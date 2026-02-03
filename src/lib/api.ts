@@ -575,7 +575,7 @@ export interface Offer {
   price_child_nobed: string | null;
   discount_child_nobed: string;
   price_infant: string | null;
-  price_single_surcharge: string | null;
+  price_single: string | null;
   discount_single: string;
   deposit: string | null;
   cancellation_policy: string | null;

@@ -41,7 +41,7 @@ interface FormData {
   // Pricing
   price_adult: string;
   discount_adult: string;
-  price_single_surcharge: string;
+  price_single: string;
   discount_single: string;
   price_child: string;
   discount_child_bed: string;
@@ -67,7 +67,7 @@ const emptyForm: FormData = {
   sale_status: 'available',
   price_adult: '',
   discount_adult: '0',
-  price_single_surcharge: '',
+  price_single: '',
   discount_single: '0',
   price_child: '',
   discount_child_bed: '0',
@@ -154,7 +154,7 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
       sale_status: period.sale_status || 'available',
       price_adult: period.offer?.price_adult || '',
       discount_adult: period.offer?.discount_adult || '0',
-      price_single_surcharge: period.offer?.price_single_surcharge || '',
+      price_single: period.offer?.price_single || '',
       discount_single: period.offer?.discount_single || '0',
       price_child: period.offer?.price_child || '',
       discount_child_bed: period.offer?.discount_child_bed || '0',
@@ -182,7 +182,7 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
         discount_child_bed: parseFloat(formData.discount_child_bed) || 0,
         price_child_nobed: formData.price_child_nobed ? parseFloat(formData.price_child_nobed) : null,
         discount_child_nobed: parseFloat(formData.discount_child_nobed) || 0,
-        price_single_surcharge: formData.price_single_surcharge ? parseFloat(formData.price_single_surcharge) : null,
+        price_single: formData.price_single ? parseFloat(formData.price_single) : null,
         discount_single: parseFloat(formData.discount_single) || 0,
         deposit: formData.deposit ? parseFloat(formData.deposit) : null,
         promo_quota: formData.promo_quota ? parseInt(formData.promo_quota) : null,
@@ -428,8 +428,8 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                     <label className="block text-xs font-medium text-gray-700 mb-1">ผู้ใหญ่พักเดี่ยว</label>
                     <input
                       type="number"
-                      value={formData.price_single_surcharge}
-                      onChange={(e) => setFormData(prev => ({ ...prev, price_single_surcharge: e.target.value }))}
+                      value={formData.price_single}
+                      onChange={(e) => setFormData(prev => ({ ...prev, price_single: e.target.value }))}
                       placeholder="5,000"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     />
@@ -755,7 +755,7 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                         )}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        <div className="text-gray-700">฿{formatPrice(period.offer?.price_single_surcharge)}</div>
+                        <div className="text-gray-700">฿{formatPrice(period.offer?.price_single)}</div>
                         {parseFloat(period.offer?.discount_single || '0') > 0 && (
                           <div className="text-xs text-red-500">-฿{formatPrice(period.offer?.discount_single)}</div>
                         )}

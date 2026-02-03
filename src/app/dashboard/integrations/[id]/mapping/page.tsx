@@ -173,7 +173,7 @@ const ALL_FIELDS: FieldDefinition[] = [
   { section: 'departure', key: 'price_joinland', label: 'ราคา Join Land', type: 'float', required: false, description: 'ไม่รวมตั๋วเครื่องบิน', targetTable: 'offers' },
   
   // พักเดี่ยว
-  { section: 'departure', key: 'price_single_surcharge', label: 'พักเดี่ยวเพิ่ม', type: 'float', required: false, description: 'ค่าพักเดี่ยวเพิ่มเติม', targetTable: 'offers' },
+  { section: 'departure', key: 'price_single', label: 'พักเดี่ยว', type: 'float', required: false, description: 'พักเดี่ยว', targetTable: 'offers' },
   { section: 'departure', key: 'discount_single', label: 'ส่วนลดพักเดี่ยว', type: 'float', required: false, description: 'ส่วนลดพักเดี่ยว', targetTable: 'offers' },
   
   // มัดจำ

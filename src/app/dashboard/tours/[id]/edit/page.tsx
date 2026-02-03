@@ -121,7 +121,7 @@ interface PeriodFormData {
   sale_status: string;
   price_adult: string;
   discount_adult: string;
-  price_single_surcharge: string;
+  price_single: string;
   discount_single: string;
   price_child: string;
   discount_child_bed: string;
@@ -145,7 +145,7 @@ const emptyPeriodForm: PeriodFormData = {
   sale_status: 'available',
   price_adult: '',
   discount_adult: '0',
-  price_single_surcharge: '',
+  price_single: '',
   discount_single: '0',
   price_child: '',
   discount_child_bed: '0',
@@ -606,7 +606,7 @@ export default function EditTourPage() {
     capacity: 30,
     price_adult: '',
     discount_adult: '',
-    price_single_surcharge: '',
+    price_single: '',
     discount_single: '',
     price_child: '',
     discount_child_bed: '',
@@ -1144,7 +1144,7 @@ export default function EditTourPage() {
       capacity: 30,
       price_adult: '',
       discount_adult: '',
-      price_single_surcharge: '',
+      price_single: '',
       discount_single: '',
       price_child: '',
       discount_child_bed: '',
@@ -1170,7 +1170,7 @@ export default function EditTourPage() {
         sale_status: 'available',
         price_adult: parseFloat(newPeriodData.price_adult) || 0,
         discount_adult: parseFloat(newPeriodData.discount_adult) || 0,
-        price_single_surcharge: parseFloat(newPeriodData.price_single_surcharge) || 0,
+        price_single: parseFloat(newPeriodData.price_single) || 0,
         discount_single: parseFloat(newPeriodData.discount_single) || 0,
         price_child: parseFloat(newPeriodData.price_child) || 0,
         discount_child_bed: parseFloat(newPeriodData.discount_child_bed) || 0,
@@ -1208,7 +1208,7 @@ export default function EditTourPage() {
       sale_status: period.sale_status || 'available',
       price_adult: period.offer?.price_adult || '',
       discount_adult: period.offer?.discount_adult || '0',
-      price_single_surcharge: period.offer?.price_single_surcharge || '',
+      price_single: period.offer?.price_single || '',
       discount_single: period.offer?.discount_single || '0',
       price_child: period.offer?.price_child || '',
       discount_child_bed: period.offer?.discount_child_bed || '0',
@@ -1237,7 +1237,7 @@ export default function EditTourPage() {
         discount_child_bed: parseFloat(periodForm.discount_child_bed) || 0,
         price_child_nobed: periodForm.price_child_nobed ? parseFloat(periodForm.price_child_nobed) : null,
         discount_child_nobed: parseFloat(periodForm.discount_child_nobed) || 0,
-        price_single_surcharge: periodForm.price_single_surcharge ? parseFloat(periodForm.price_single_surcharge) : null,
+        price_single: periodForm.price_single ? parseFloat(periodForm.price_single) : null,
         discount_single: parseFloat(periodForm.discount_single) || 0,
         deposit: periodForm.deposit ? parseFloat(periodForm.deposit) : null,
         promo_quota: periodForm.promo_quota ? parseInt(periodForm.promo_quota) : null,
@@ -2450,8 +2450,8 @@ export default function EditTourPage() {
                 <label className="block text-xs font-medium text-gray-700 mb-1">ผู้ใหญ่พักเดี่ยว</label>
                 <input
                   type="number"
-                  value={periodForm.price_single_surcharge}
-                  onChange={(e) => setPeriodForm(prev => ({ ...prev, price_single_surcharge: e.target.value }))}
+                  value={periodForm.price_single}
+                  onChange={(e) => setPeriodForm(prev => ({ ...prev, price_single: e.target.value }))}
                   placeholder="5,000"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
@@ -2806,8 +2806,8 @@ export default function EditTourPage() {
                     <div className="flex flex-col gap-0.5">
                       <input
                         type="number"
-                        value={newPeriodData.price_single_surcharge}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_single_surcharge: e.target.value }))}
+                        value={newPeriodData.price_single}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_single: e.target.value }))}
                         className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
                         placeholder="ราคา"
                       />
@@ -3033,9 +3033,9 @@ export default function EditTourPage() {
                       <div className="flex flex-col gap-0.5">
                         <input
                           type="number"
-                          key={`single-${period.id}-${period.offer?.price_single_surcharge}`}
-                          defaultValue={period.offer?.price_single_surcharge || ''}
-                          onBlur={(e) => handleInlineOfferUpdate(period.id, 'price_single_surcharge', e.target.value)}
+                          key={`single-${period.id}-${period.offer?.price_single}`}
+                          defaultValue={period.offer?.price_single || ''}
+                          onBlur={(e) => handleInlineOfferUpdate(period.id, 'price_single', e.target.value)}
                           className="w-20 px-1 py-0.5 border border-blue-400 rounded text-xs text-right"
                           placeholder="ราคา"
                         />
@@ -3050,7 +3050,7 @@ export default function EditTourPage() {
                       </div>
                     ) : (
                       <div className="text-right">
-                        <div className="text-sm text-gray-900">{formatPrice(period.offer?.price_single_surcharge)}</div>
+                        <div className="text-sm text-gray-900">{formatPrice(period.offer?.price_single)}</div>
                         <div className="text-sm text-red-500">{formatDiscount(period.offer?.discount_single)}</div>
                       </div>
                     )}
