@@ -1088,6 +1088,13 @@ export default function EditTourPage() {
       return;
     }
 
+    // Validate meta_description length
+    if (formData.meta_description && formData.meta_description.length > 300) {
+      setErrors({ meta_description: ['Meta description ต้องไม่เกิน 300 ตัวอักษร'] });
+      setActiveTab('seo');
+      return;
+    }
+
     setLoading(true);
     setErrors({});
 
@@ -1099,6 +1106,11 @@ export default function EditTourPage() {
         hotel_star: formData.hotel_star || null,
         price_adult: formData.price_adult ? parseFloat(formData.price_adult) : null,
         discount_adult: formData.discount_adult ? parseFloat(formData.discount_adult) : null,
+        // Ensure meta fields don't exceed limits
+        meta_description: formData.meta_description?.slice(0, 300) || '',
+        meta_title: formData.meta_title?.slice(0, 255) || '',
+        // Ensure keywords is always an array
+        keywords: Array.isArray(formData.keywords) ? formData.keywords : [],
       };
 
       const response = await toursApi.update(parseInt(tourId), payload);
@@ -1803,11 +1815,12 @@ export default function EditTourPage() {
           <FileText className="w-5 h-5 inline mr-2 text-blue-500" />
           รายละเอียดทัวร์
         </h3>
-        <RichTextEditor
+        <textarea
           value={formData.description}
-          onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="รายละเอียดทัวร์ทั้งหมด เช่น โปรแกรมการเดินทาง สถานที่ท่องเที่ยว กิจกรรม..."
           rows={8}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
         />
       </div>
 
@@ -2070,6 +2083,58 @@ export default function EditTourPage() {
               ))}
               {formData.hashtags.length === 0 && <span className="text-gray-400 text-sm">ยังไม่มี hashtag</span>}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Conditions, Inclusions, Exclusions */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-orange-500" />
+          เงื่อนไขและรายละเอียดแพ็คเกจ
+        </h3>
+        
+        <div className="space-y-6">
+          {/* Inclusions */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Check className="w-4 h-4 inline text-green-500" /> รวมในแพ็คเกจ (Inclusions)
+            </label>
+            <textarea
+              value={formData.inclusions}
+              onChange={(e) => setFormData(prev => ({ ...prev, inclusions: e.target.value }))}
+              placeholder="- ตั๋วเครื่องบินไป-กลับ&#10;- ที่พัก 4 คืน&#10;- อาหารตามรายการ..."
+              rows={5}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+            />
+          </div>
+
+          {/* Exclusions */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <X className="w-4 h-4 inline text-red-500" /> ไม่รวมในแพ็คเกจ (Exclusions)
+            </label>
+            <textarea
+              value={formData.exclusions}
+              onChange={(e) => setFormData(prev => ({ ...prev, exclusions: e.target.value }))}
+              placeholder="- ค่าทิปไกด์และคนขับรถ&#10;- ค่าใช้จ่ายส่วนตัว..."
+              rows={5}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+            />
+          </div>
+
+          {/* Conditions */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Info className="w-4 h-4 inline text-blue-500" /> เงื่อนไขทัวร์ (Conditions)
+            </label>
+            <textarea
+              value={formData.conditions}
+              onChange={(e) => setFormData(prev => ({ ...prev, conditions: e.target.value }))}
+              placeholder="- เงื่อนไขการจอง&#10;- เงื่อนไขการยกเลิก..."
+              rows={5}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+            />
           </div>
         </div>
       </div>
@@ -4289,9 +4354,54 @@ export default function EditTourPage() {
           placeholder="คำอธิบายสำหรับ SEO..."
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
         />
-        <p className="text-xs text-gray-500 mt-1">
-          ความยาว: {formData.meta_description.length}/160 ตัวอักษร
+        <p className={`text-xs mt-1 ${formData.meta_description.length > 300 ? 'text-red-500' : 'text-gray-500'}`}>
+          ความยาว: {formData.meta_description.length}/300 ตัวอักษร {formData.meta_description.length > 300 && '(เกินกำหนด!)'}
         </p>
+      </div>
+
+      {/* Keywords */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Keywords</label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {(Array.isArray(formData.keywords) ? formData.keywords : []).map((keyword, idx) => (
+            <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+              {keyword}
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({
+                  ...prev,
+                  keywords: (Array.isArray(prev.keywords) ? prev.keywords : []).filter((_, i) => i !== idx)
+                }))}
+                className="text-blue-500 hover:text-blue-700"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="พิมพ์ keyword แล้วกด Enter..."
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const input = e.target as HTMLInputElement;
+                const value = input.value.trim();
+                const currentKeywords = Array.isArray(formData.keywords) ? formData.keywords : [];
+                if (value && !currentKeywords.includes(value)) {
+                  setFormData(prev => ({
+                    ...prev,
+                    keywords: [...(Array.isArray(prev.keywords) ? prev.keywords : []), value]
+                  }));
+                  input.value = '';
+                }
+              }
+            }}
+          />
+        </div>
+        <p className="text-xs text-gray-500 mt-1">กด Enter เพื่อเพิ่ม keyword</p>
       </div>
 
       {/* Preview */}
