@@ -1190,6 +1190,8 @@ export interface WholesalerApiConfig {
   notifications_enabled?: boolean;
   notification_emails?: string[];
   notification_types?: string[];
+  // City Extraction
+  extract_cities_from_name?: boolean;
   created_at: string;
   updated_at: string;
 }

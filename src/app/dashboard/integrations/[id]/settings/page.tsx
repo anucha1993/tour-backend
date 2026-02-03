@@ -74,6 +74,8 @@ const defaultFormData = {
   notifications_enabled: true,
   notification_emails: [] as string[],
   notification_types: ['sync_error', 'api_error', 'booking_error'] as string[],
+  // City Extraction
+  extract_cities_from_name: false,
   // PDF Branding
   pdf_header_image: '' as string | null,
   pdf_footer_image: '' as string | null,
@@ -229,6 +231,8 @@ export default function IntegrationSettingsPage() {
           notifications_enabled: integration.notifications_enabled ?? true,
           notification_emails: integration.notification_emails || [],
           notification_types: integration.notification_types || ['sync_error', 'api_error', 'booking_error'],
+          // City Extraction
+          extract_cities_from_name: integration.extract_cities_from_name ?? false,
           // PDF Branding
           pdf_header_image: integration.pdf_header_image || null,
           pdf_footer_image: integration.pdf_footer_image || null,
@@ -311,6 +315,8 @@ export default function IntegrationSettingsPage() {
         notifications_enabled: formData.notifications_enabled,
         notification_emails: formData.notification_emails.filter(e => e.trim()),
         notification_types: formData.notification_types,
+        // City Extraction
+        extract_cities_from_name: formData.extract_cities_from_name,
       };
       
       console.log('Saving update data:', updateData);
@@ -1176,6 +1182,30 @@ export default function IntegrationSettingsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Extract Cities from Tour Name */}
+                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-amber-800">ค้นหาเมืองจากชื่อทัวร์</h3>
+                      <p className="text-sm text-amber-600 mt-1">
+                        เปิดใช้งานเมื่อ API ไม่ส่งข้อมูลเมืองมา ระบบจะวิเคราะห์ชื่อทัวร์และดึงชื่อเมืองออกมาอัตโนมัติ
+                      </p>
+                      <p className="text-xs text-amber-500 mt-2">
+                        ตัวอย่าง: &quot;ไต้หวัน <strong>ไทเป</strong> <strong>ตั้นสุ่ย</strong> ชมซากุระ 4วัน2คืน&quot; → จะดึง ไทเป, ตั้นสุ่ย
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.extract_cities_from_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, extract_cities_from_name: e.target.checked }))}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
                 </div>
               </div>
             </Card>
