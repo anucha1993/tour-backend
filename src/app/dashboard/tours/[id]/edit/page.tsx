@@ -2073,8 +2073,8 @@ export default function EditTourPage() {
               </Button>
             </div>
             <div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-lg bg-blue-50 min-h-[60px]">
-              {formData.hashtags.map(tag => (
-                <span key={tag} className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-sm">
+              {formData.hashtags.map((tag, index) => (
+                <span key={`${tag}-${index}`} className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-sm">
                   #{tag}
                   <button type="button" onClick={() => handleRemoveHashtag(tag)} className="hover:text-blue-900">
                     <X className="w-3.5 h-3.5" />
