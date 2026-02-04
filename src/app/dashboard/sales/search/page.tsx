@@ -648,6 +648,13 @@ export default function SalesSearchPage() {
         body: JSON.stringify({ tours: selectedToursData }),
       });
 
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Sync API error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText.slice(0, 200)}`);
+      }
+
       const data = await response.json();
 
       if (data.success) {
