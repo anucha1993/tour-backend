@@ -58,7 +58,7 @@ interface Tour {
   transport_id_name?: string; // Display name from transports table
   // Meta fields
   periods?: Period[];
-  _wholesaler_id: number;
+  _integration_id: number;
   _wholesaler_name: string;
 }
 
@@ -77,13 +77,16 @@ interface SearchFilters {
   min_price: string;
   max_price: string;
   min_seats: string;
-  wholesaler_id: number | null;
+  integration_id: number | null; // Changed from integration_id
   _sort: string;
 }
 
-interface Wholesaler {
+interface Integration {
   id: number;
   name: string;
+  integration_id?: number;
+  api_version?: string;
+  label?: string; // Display label with API version
 }
 
 // Tour code lookup result
@@ -152,7 +155,7 @@ export default function SalesSearchPage() {
   const [total, setTotal] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
   const [expandedTour, setExpandedTour] = useState<number | null>(null);
-  const [wholesalers, setWholesalers] = useState<Wholesaler[]>([]);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
@@ -202,20 +205,27 @@ export default function SalesSearchPage() {
     min_price: '',
     max_price: '',
     min_seats: '',
-    wholesaler_id: null,
+    integration_id: null,
     _sort: 'price',
   });
 
-  // Load wholesalers and countries
+  // Load integrations and countries
   useEffect(() => {
     const loadFilters = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/tours/search/filters`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error(`Expected JSON but got ${contentType}`);
+        }
         const data = await response.json();
-        if (data.wholesalers && data.wholesalers.length > 0) {
-          setWholesalers(data.wholesalers);
+        if (data.integrations && data.integrations.length > 0) {
+          setIntegrations(data.integrations);
           // Auto-select first wholesaler (required)
-          setFilters(prev => ({ ...prev, wholesaler_id: data.wholesalers[0].id }));
+          setFilters(prev => ({ ...prev, integration_id: data.integrations[0].id }));
         }
         if (data.countries) {
           setCountries(data.countries);
@@ -233,10 +243,10 @@ export default function SalesSearchPage() {
     const externalIds = toursData.map(tour => {
       const extId = tour.external_id || tour._raw?.ProductId || tour._raw?.id || tour._raw?.code;
       return {
-        wholesaler_id: tour._wholesaler_id,
+        integration_id: tour._integration_id,
         external_id: extId ? String(extId) : null,
       };
-    }).filter(item => item.wholesaler_id && item.external_id) as { wholesaler_id: number; external_id: string }[];
+    }).filter(item => item.integration_id && item.external_id) as { integration_id: number; external_id: string }[];
 
     if (externalIds.length === 0) return;
 
@@ -275,7 +285,7 @@ export default function SalesSearchPage() {
 
   const handleSearch = useCallback(async () => {
     // Require wholesaler selection
-    if (!filters.wholesaler_id) {
+    if (!filters.integration_id) {
       return;
     }
     
@@ -331,9 +341,16 @@ export default function SalesSearchPage() {
       params.append('_limit', '500');
       
       // Use specific wholesaler (required)
-      const url = `${API_BASE_URL}/integrations/${filters.wholesaler_id}/tours/search`;
+      const url = `${API_BASE_URL}/integrations/${filters.integration_id}/tours/search`;
       
       const response = await fetch(`${url}?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Expected JSON but got ${contentType}. API URL: ${url}`);
+      }
       const data = await response.json();
       
       if (data.success) {
@@ -370,12 +387,12 @@ export default function SalesSearchPage() {
     }
     
     // Set new debounce (500ms delay)
-    if (value.length >= 2 && filters.wholesaler_id) {
+    if (value.length >= 2 && filters.integration_id) {
       debounceRef.current = setTimeout(() => {
         handleSearch();
       }, 500);
     }
-  }, [filters.wholesaler_id, handleSearch]);
+  }, [filters.integration_id, handleSearch]);
 
   const clearFilters = () => {
     setFilters(prev => ({
@@ -391,7 +408,7 @@ export default function SalesSearchPage() {
       min_price: '',
       max_price: '',
       min_seats: '',
-      wholesaler_id: prev.wholesaler_id, // Keep wholesaler selection
+      integration_id: prev.integration_id, // Keep wholesaler selection
       _sort: 'price',
     }));
   };
@@ -557,7 +574,7 @@ export default function SalesSearchPage() {
   // Get tour key for selection
   const getTourKey = (tour: Tour, index: number) => {
     const raw = tour._raw;
-    return `${tour._wholesaler_id}-${tour.external_id || raw?.ProductId || raw?.id || raw?.code || index}`;
+    return `${tour._integration_id}-${tour.external_id || raw?.ProductId || raw?.id || raw?.code || index}`;
   };
 
   const MAX_SYNC_TOURS = 5;
@@ -590,7 +607,7 @@ export default function SalesSearchPage() {
       const unsyncedKeys = tours
         .map((tour, index) => {
           const key = getTourKey(tour, index);
-          const syncInfo = tourCodeMap[`${tour._wholesaler_id}_${tour.external_id || tour._raw?.ProductId || tour._raw?.id}`];
+          const syncInfo = tourCodeMap[`${tour._integration_id}_${tour.external_id || tour._raw?.ProductId || tour._raw?.id}`];
           if (!syncInfo?.synced) {
             return key;
           }
@@ -608,7 +625,7 @@ export default function SalesSearchPage() {
 
   // Sync selected tours
   const handleSyncSelected = async () => {
-    if (selectedTours.size === 0 || !filters.wholesaler_id) return;
+    if (selectedTours.size === 0 || !filters.integration_id) return;
 
     setSyncing(true);
     setSyncProgress({ current: 0, total: selectedTours.size });
@@ -621,7 +638,7 @@ export default function SalesSearchPage() {
       );
 
       // Send to API
-      const response = await fetch(`${API_BASE_URL}/integrations/${filters.wholesaler_id}/tours/sync-selected`, {
+      const response = await fetch(`${API_BASE_URL}/integrations/${filters.integration_id}/tours/sync-selected`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -681,7 +698,7 @@ export default function SalesSearchPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">ค้นหาทัวร์ (Realtime)</h1>
           <p className="text-gray-500 text-sm">
-            ค้นหาทัวร์จาก Wholesaler API โดยตรง • ข้อมูลเรียลไทม์ ถูกต้อง ทันสมัย
+            ค้นหาทัวร์จาก Integration API โดยตรง • ข้อมูลเรียลไทม์ ถูกต้อง ทันสมัย
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -719,7 +736,7 @@ export default function SalesSearchPage() {
                   />
                 </div>
               </div>
-              <Button onClick={handleSearch} disabled={loading || !filters.wholesaler_id} className="px-8">
+              <Button onClick={handleSearch} disabled={loading || !filters.integration_id} className="px-8">
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
@@ -1092,26 +1109,26 @@ export default function SalesSearchPage() {
               </div>
             </div>
 
-            {/* Wholesaler Select - Single Select (Required) */}
+            {/* Integration Select - Single Select (Required) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Wholesaler <span className="text-red-500">*</span>
+                Integration <span className="text-red-500">*</span>
               </label>
               <div className="flex flex-wrap gap-2">
-                {wholesalers.map((w) => (
+                {integrations.map((w) => (
                   <button
                     key={w.id}
                     onClick={() => setFilters(prev => ({
                       ...prev,
-                      wholesaler_id: w.id
+                      integration_id: w.id
                     }))}
                     className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                      filters.wholesaler_id === w.id
+                      filters.integration_id === w.id
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    {w.name}
+                    {w.label || w.name}
                   </button>
                 ))}
               </div>
@@ -1232,7 +1249,7 @@ export default function SalesSearchPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                  <span className="text-blue-700 font-medium">กำลังดึงข้อมูลจาก Wholesaler API...</span>
+                  <span className="text-blue-700 font-medium">กำลังดึงข้อมูลจาก Integration API...</span>
                 </div>
                 <div className="flex items-center gap-1 text-blue-600">
                   <Clock className="w-4 h-4" />
@@ -1306,7 +1323,7 @@ export default function SalesSearchPage() {
           <Card className="p-12 text-center">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">ยังไม่มีผลการค้นหา</h3>
-            <p className="text-gray-500">กรุณากดปุ่ม &quot;ค้นหา&quot; เพื่อดึงข้อมูลจาก Wholesaler API</p>
+            <p className="text-gray-500">กรุณากดปุ่ม &quot;ค้นหา&quot; เพื่อดึงข้อมูลจาก Integration API</p>
           </Card>
         ) : (
           <>
@@ -1339,7 +1356,7 @@ export default function SalesSearchPage() {
                       <th className="px-4 py-3 text-left font-medium text-gray-700">สายการบิน</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-700">ราคาเริ่มต้น</th>
                       <th className="px-4 py-3 text-center font-medium text-gray-700">รอบ/ว่าง</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Wholesaler</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Integration</th>
                       <th className="px-4 py-3 text-center font-medium text-gray-700">จัดการ</th>
                     </tr>
                   </thead>
@@ -1420,7 +1437,7 @@ export default function SalesSearchPage() {
                       const totalPeriods = tour.periods?.length || raw?.Periods?.length || 0;
 
                       // Get synced tour code from lookup
-                      const lookupKey = `${tour._wholesaler_id}_${getExternalId()}`;
+                      const lookupKey = `${tour._integration_id}_${getExternalId()}`;
                       const syncInfo = tourCodeMap[lookupKey];
                       const syncedTourCode = syncInfo?.tour_code;
                       const isSynced = syncInfo?.synced ?? false;
@@ -1476,8 +1493,8 @@ export default function SalesSearchPage() {
                                   ยังไม่ sync
                                 </span>
                               )}
-                              {/* Wholesaler code (smaller, gray) */}
-                              <span className="font-mono text-[10px] text-gray-400 block" title="รหัส Wholesaler">
+                              {/* Integration code (smaller, gray) */}
+                              <span className="font-mono text-[10px] text-gray-400 block" title="รหัส Integration">
                                 {getTourCode()}
                               </span>
                             </div>
@@ -1548,7 +1565,7 @@ export default function SalesSearchPage() {
                             </button>
                           </td>
                           
-                          {/* Wholesaler */}
+                          {/* Integration */}
                           <td className="px-4 py-3">
                             <span className="flex items-center gap-1 text-orange-600 text-xs">
                               <Building2 className="w-3 h-3 flex-shrink-0" />
