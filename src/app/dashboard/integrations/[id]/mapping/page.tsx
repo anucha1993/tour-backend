@@ -795,20 +795,20 @@ export default function IntegrationMappingPage() {
     }
 
     // Helper function to get nested value from object using dot notation
+    // Supports multiple nested arrays like "periods[].tour_period[].period_id"
     const getNestedValue = (obj: Record<string, unknown>, path: string): unknown => {
-      // Handle array notation like "departures[].date" -> get first item
       const parts = path.split('.');
       let current: unknown = obj;
       
       for (const part of parts) {
         if (current === null || current === undefined) return undefined;
         
-        // Handle array notation like "departures[]"
+        // Handle array notation like "departures[]" or "periods[]"
         if (part.includes('[]')) {
           const arrayKey = part.replace('[]', '');
           const arr = (current as Record<string, unknown>)[arrayKey];
           if (Array.isArray(arr) && arr.length > 0) {
-            current = arr[0]; // Get first item
+            current = arr[0]; // Get first item for preview
           } else {
             return undefined;
           }
@@ -818,6 +818,52 @@ export default function IntegrationMappingPage() {
       }
       
       return current;
+    };
+
+    // Helper function to flatten deeply nested arrays
+    // e.g., "periods[].tour_period[]" will return all items from periods[*].tour_period[*]
+    const flattenNestedArrays = (obj: Record<string, unknown>, path: string): unknown[] => {
+      // Split path by '[].' to get array segments
+      // e.g., "periods[].tour_period[]" -> ["periods", "tour_period"]
+      // e.g., "periods[].tour_daily[].day_list[]" -> ["periods", "tour_daily", "day_list"]
+      const segments = path.split('[].').map(s => s.replace('[]', ''));
+      
+      const flatten = (current: unknown, segmentIndex: number): unknown[] => {
+        if (segmentIndex >= segments.length) {
+          return current !== undefined && current !== null ? [current] : [];
+        }
+        
+        const segment = segments[segmentIndex];
+        
+        if (current === null || current === undefined) return [];
+        
+        const arr = (current as Record<string, unknown>)[segment];
+        
+        if (!Array.isArray(arr)) {
+          // If not an array, try to get the value directly
+          if (segmentIndex === segments.length - 1 && arr !== undefined) {
+            return [arr];
+          }
+          return [];
+        }
+        
+        // Recursively flatten nested arrays
+        const results: unknown[] = [];
+        for (const item of arr) {
+          results.push(...flatten(item, segmentIndex + 1));
+        }
+        return results;
+      };
+      
+      return flatten(obj, 0);
+    };
+
+    // Helper to get the deepest array path from a mapping path
+    // e.g., "periods[].tour_period[].period_id" -> "periods[].tour_period[]"
+    const getDeepestArrayPath = (path: string): string | null => {
+      const lastArrayIndex = path.lastIndexOf('[]');
+      if (lastArrayIndex === -1) return null;
+      return path.substring(0, lastArrayIndex + 2);
     };
 
     // Helper to get value from a specific array item
@@ -901,18 +947,23 @@ export default function IntegrationMappingPage() {
         }
       }
 
-      // Find source array in sourceData
+      // Find source array in sourceData using deepest nested path
       let sourceArray: unknown[] = [];
+      let deepestArrayPath: string | null = null;
       
       // Priority: find array from priority fields first
       for (const priorityField of priorityFields) {
         const mapping = sectionMappings[priorityField]?.mapping;
         if (mapping?.type === 'api' && mapping.value.includes('[]')) {
-          const arrayKey = mapping.value.split('[]')[0];
-          const arr = sourceData[arrayKey];
-          if (Array.isArray(arr) && arr.length > 0) {
-            sourceArray = arr;
-            break;
+          const arrayPath = getDeepestArrayPath(mapping.value);
+          if (arrayPath) {
+            // Use flattenNestedArrays to get all nested items
+            const arr = flattenNestedArrays(sourceData, arrayPath);
+            if (arr.length > 0) {
+              sourceArray = arr;
+              deepestArrayPath = arrayPath;
+              break;
+            }
           }
         }
       }
@@ -921,15 +972,35 @@ export default function IntegrationMappingPage() {
       if (sourceArray.length === 0) {
         for (const { mapping } of Object.values(sectionMappings)) {
           if (mapping.type === 'api' && mapping.value.includes('[]')) {
-            const arrayKey = mapping.value.split('[]')[0];
-            const arr = sourceData[arrayKey];
-            if (Array.isArray(arr) && arr.length > 0) {
-              sourceArray = arr;
-              break;
+            const arrayPath = getDeepestArrayPath(mapping.value);
+            if (arrayPath) {
+              const arr = flattenNestedArrays(sourceData, arrayPath);
+              if (arr.length > 0) {
+                sourceArray = arr;
+                deepestArrayPath = arrayPath;
+                break;
+              }
             }
           }
         }
       }
+
+      // Helper to extract field path relative to the array base
+      const getRelativeFieldPath = (fullPath: string): string | null => {
+        if (!deepestArrayPath) return null;
+        // e.g., fullPath = "periods[].tour_period[].period_id"
+        // deepestArrayPath = "periods[].tour_period[]"
+        // should return "period_id"
+        if (fullPath.startsWith(deepestArrayPath + '.')) {
+          return fullPath.substring(deepestArrayPath.length + 1);
+        }
+        // If path has nested array after the deepest, get the last segment
+        const lastBracket = fullPath.lastIndexOf('[].');
+        if (lastBracket !== -1) {
+          return fullPath.substring(lastBracket + 3);
+        }
+        return null;
+      };
 
       // Loop through all items
       if (sourceArray.length > 0) {
@@ -941,10 +1012,21 @@ export default function IntegrationMappingPage() {
               item[key] = mapping.value;
             } else if (mapping.type === 'api') {
               let fieldPath = mapping.value;
-              if (fieldPath.includes('[].')) {
-                fieldPath = fieldPath.split('[].')[1];
-              } else if (!fieldPath.includes('[]')) {
-                // Top-level field
+              
+              if (fieldPath.includes('[]')) {
+                // Get the field name relative to the deepest array
+                const relativePath = getRelativeFieldPath(fieldPath);
+                if (relativePath) {
+                  fieldPath = relativePath;
+                } else {
+                  // Fallback: get the last part after the last '[].
+                  const lastBracket = fieldPath.lastIndexOf('[].');
+                  if (lastBracket !== -1) {
+                    fieldPath = fieldPath.substring(lastBracket + 3);
+                  }
+                }
+              } else {
+                // Top-level field (no array notation)
                 const apiValue = getNestedValue(sourceData, fieldPath);
                 if (apiValue !== undefined) {
                   item[key] = applyTransforms(apiValue, mapping, field);

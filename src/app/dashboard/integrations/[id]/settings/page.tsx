@@ -81,6 +81,9 @@ const defaultFormData = {
   pdf_footer_image: '' as string | null,
   pdf_header_height: null as number | null,
   pdf_footer_height: null as number | null,
+  // Data Structure for nested arrays
+  departures_path: '',
+  itineraries_path: '',
 };
 
 // Type for form data
@@ -238,6 +241,9 @@ export default function IntegrationSettingsPage() {
           pdf_footer_image: integration.pdf_footer_image || null,
           pdf_header_height: integration.pdf_header_height || null,
           pdf_footer_height: integration.pdf_footer_height || null,
+          // Data Structure for nested arrays
+          departures_path: integration.aggregation_config?.data_structure?.departures?.path || '',
+          itineraries_path: integration.aggregation_config?.data_structure?.itineraries?.path || '',
         });
       } catch (err) {
         console.error('Failed to load integration:', err);
@@ -317,6 +323,25 @@ export default function IntegrationSettingsPage() {
         notification_types: formData.notification_types,
         // City Extraction
         extract_cities_from_name: formData.extract_cities_from_name,
+        // Data Structure for nested arrays (only if has values)
+        ...(formData.departures_path || formData.itineraries_path ? {
+          aggregation_config: {
+            data_structure: {
+              ...(formData.departures_path ? {
+                departures: {
+                  path: formData.departures_path,
+                  description: 'Path to departures/periods in API response'
+                }
+              } : {}),
+              ...(formData.itineraries_path ? {
+                itineraries: {
+                  path: formData.itineraries_path,
+                  description: 'Path to itineraries in API response'
+                }
+              } : {})
+            }
+          }
+        } : {}),
       };
       
       console.log('Saving update data:', updateData);
@@ -1182,6 +1207,57 @@ export default function IntegrationSettingsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Data Structure for Nested Arrays */}
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <h3 className="font-medium text-purple-800 mb-3">โครงสร้างข้อมูล Nested (Data Structure)</h3>
+                  <p className="text-sm text-purple-600 mb-4">
+                    กำหนด path สำหรับ API ที่มีโครงสร้างข้อมูลซ้อนหลายชั้น เช่น GO365 ที่มี periods[].tour_period[] แทนที่จะเป็น periods[] แบบปกติ
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Departures/Periods Path
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="เช่น periods[] (ปกติ) หรือ periods[].tour_period[] (nested)"
+                        value={formData.departures_path}
+                        onChange={(e) => setFormData(prev => ({ ...prev, departures_path: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Path ไปยัง array ของรอบเดินทาง • เว้นว่างถ้าใช้โครงสร้างปกติ (periods[])
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Itineraries Path
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="เช่น itineraries[] หรือ periods[].tour_daily[].day_list[]"
+                        value={formData.itineraries_path}
+                        onChange={(e) => setFormData(prev => ({ ...prev, itineraries_path: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Path ไปยัง array ของโปรแกรมทัวร์แต่ละวัน • เว้นว่างถ้าใช้โครงสร้างปกติ (itineraries[])
+                      </p>
+                    </div>
+                    
+                    <div className="text-xs text-purple-600 bg-purple-100 p-3 rounded-lg">
+                      <p className="font-medium mb-2">ตัวอย่างรูปแบบ Path:</p>
+                      <ul className="space-y-1 ml-3 list-disc">
+                        <li><code className="bg-white px-1 rounded">periods[]</code> - รอบเดินทางอยู่ใน periods array โดยตรง</li>
+                        <li><code className="bg-white px-1 rounded">periods[].tour_period[]</code> - รอบเดินทางซ้อนอยู่ใน tour_period</li>
+                        <li><code className="bg-white px-1 rounded">data[].schedules[]</code> - รอบเดินทางอยู่ใน schedules ภายใน data</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Extract Cities from Tour Name */}

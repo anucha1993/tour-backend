@@ -1360,7 +1360,8 @@ export default function SalesSearchPage() {
                         }
                         const dates = tour.periods
                           .map(p => {
-                            const dateStr = p._raw?.departureDate || p._raw?.DepartureDate || p.departure_date;
+                            // Support multiple field names from different APIs
+                            const dateStr = p.start_date || p.departure_date || p._raw?.departureDate || p._raw?.DepartureDate || p._raw?.period_date;
                             if (!dateStr) return null;
                             const d = new Date(dateStr);
                             return isNaN(d.getTime()) ? null : d;
@@ -1396,7 +1397,24 @@ export default function SalesSearchPage() {
                         return raw?.Nights || raw?.nights || '';
                       };
                       const getCountry = () => tour.primary_country_id_name || tour.primary_country_id || '';
-                      const getAirline = () => tour.transport_id_name || tour.transport_id || '';
+                      const getAirline = () => {
+                        // First try from tour level
+                        if (tour.transport_id_name || tour.transport_id) {
+                          return tour.transport_id_name || tour.transport_id;
+                        }
+                        // Fallback: get from raw tour data
+                        if (raw?.tour_airline?.airline_name || raw?.tour_airline?.airline_iata) {
+                          return raw.tour_airline.airline_name || raw.tour_airline.airline_iata;
+                        }
+                        // Fallback: get from first period
+                        if (tour.periods && tour.periods.length > 0) {
+                          const firstPeriod = tour.periods[0];
+                          const pRaw = firstPeriod._raw;
+                          if (pRaw?.period_airline) return pRaw.period_airline;
+                          if (pRaw?.flight?.[0]?.airline) return pRaw.flight[0].airline;
+                        }
+                        return '';
+                      };
                       const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '';
                       const totalPeriods = tour.periods?.length || raw?.Periods?.length || 0;
 

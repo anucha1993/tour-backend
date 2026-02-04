@@ -1192,6 +1192,19 @@ export interface WholesalerApiConfig {
   notification_types?: string[];
   // City Extraction
   extract_cities_from_name?: boolean;
+  // Data Structure Config for nested arrays
+  aggregation_config?: {
+    data_structure?: {
+      departures?: {
+        path?: string;
+        description?: string;
+      };
+      itineraries?: {
+        path?: string;
+        description?: string;
+      };
+    };
+  };
   created_at: string;
   updated_at: string;
 }
