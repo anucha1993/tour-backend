@@ -237,17 +237,34 @@ export default function SalesSearchPage() {
     loadFilters();
   }, []);
 
-  // Lookup tour codes from our database by external_id
+  // Lookup tour codes from our database by wholesaler_tour_code (preferred) or external_id
+  // Helper to get external_id from tour (from mapping - NO hardcoded fallback)
+  const getExternalIdFromTour = (tour: Tour): string | null => {
+    // external_id comes from transformToUnified() which uses mapping
+    // e.g., wholesaler 6 maps external_id from "tour_id" field
+    // DO NOT use hardcoded fallback - trust the mapping!
+    if (tour.external_id !== undefined && tour.external_id !== null) {
+      return String(tour.external_id);
+    }
+    return null;
+  };
+
   const lookupTourCodes = async (toursData: Tour[]) => {
-    // Build lookup request - use external_id or raw id/ProductId
+    // Build lookup request - use external_id for matching
     const externalIds = toursData.map(tour => {
-      const extId = tour.external_id || tour._raw?.ProductId || tour._raw?.id || tour._raw?.code;
+      const extId = getExternalIdFromTour(tour);
       return {
         integration_id: tour._integration_id,
-        external_id: extId ? String(extId) : null,
+        external_id: extId,
       };
-    }).filter(item => item.integration_id && item.external_id) as { integration_id: number; external_id: string }[];
+    }).filter(item => item.integration_id && item.external_id) as { 
+      integration_id: number; 
+      external_id: string;
+    }[];
 
+    console.log('Lookup request - externalIds:', externalIds.slice(0, 5)); // Debug: show first 5
+    console.log('First tour data:', toursData[0]); // Debug: show first tour
+    
     if (externalIds.length === 0) return;
 
     try {
@@ -274,7 +291,9 @@ export default function SalesSearchPage() {
       }
 
       const data = await response.json();
+      console.log('Lookup response:', data);
       if (data.success) {
+        console.log('Setting tourCodeMap:', data.data);
         setTourCodeMap(data.data);
       }
     } catch {
@@ -607,7 +626,9 @@ export default function SalesSearchPage() {
       const unsyncedKeys = tours
         .map((tour, index) => {
           const key = getTourKey(tour, index);
-          const syncInfo = tourCodeMap[`${tour._integration_id}_${tour.external_id || tour._raw?.ProductId || tour._raw?.id}`];
+          // Use external_id for lookup (same as lookupTourCodes)
+          const lookupKey = getExternalIdFromTour(tour);
+          const syncInfo = lookupKey ? tourCodeMap[`${tour._integration_id}_${lookupKey}`] : null;
           if (!syncInfo?.synced) {
             return key;
           }
@@ -1413,6 +1434,7 @@ export default function SalesSearchPage() {
                       // Helper: ดึงค่าจาก unified fields หรือ fallback ไป raw
                       const getExternalId = () => tour.external_id || raw?.ProductId || raw?.id || raw?.code || '';
                       const getTourCode = () => tour.wholesaler_tour_code || raw?.ProductCode || raw?.code || '';
+                      const getWholesalerTourCode = () => tour.wholesaler_tour_code || raw?.tour_code || raw?.ProductCode || '';
                       const getTourTitle = () => tour.title || raw?.ProductName || raw?.name || '';
                       const getDays = () => tour.duration_days || raw?.Days || raw?.days || '';
                       const getNights = () => {
@@ -1443,9 +1465,10 @@ export default function SalesSearchPage() {
                       const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '';
                       const totalPeriods = tour.periods?.length || raw?.Periods?.length || 0;
 
-                      // Get synced tour code from lookup
-                      const lookupKey = `${tour._integration_id}_${getExternalId()}`;
-                      const syncInfo = tourCodeMap[lookupKey];
+                      // Get synced tour code from lookup (use external_id for matching)
+                      const extId = getExternalIdFromTour(tour);
+                      const lookupKey = extId ? `${tour._integration_id}_${extId}` : '';
+                      const syncInfo = lookupKey ? tourCodeMap[lookupKey] : null;
                       const syncedTourCode = syncInfo?.tour_code;
                       const isSynced = syncInfo?.synced ?? false;
 
