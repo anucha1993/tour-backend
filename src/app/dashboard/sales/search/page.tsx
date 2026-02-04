@@ -30,6 +30,7 @@ interface Period {
   _raw: any; // Raw data from API - varies by wholesaler
   // Unified fields from backend transform
   external_id?: number;
+  start_date?: string;
   departure_date?: string;
   return_date?: string;
   price_adult?: number;
