@@ -367,6 +367,103 @@ export const usersApi = {
     apiRequest(`/users/${id}`, { method: 'DELETE' }),
 };
 
+// Web Members API (สมาชิกหน้าเว็บ - แยกจาก Users ซึ่งเป็นผู้ใช้ backend)
+export interface WebMember {
+  id: number;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  line_id: string | null;
+  avatar: string | null;
+  birth_date: string | null;
+  gender: 'male' | 'female' | 'other' | null;
+  email_verified: boolean;
+  email_verified_at: string | null;
+  phone_verified: boolean;
+  phone_verified_at: string | null;
+  consent_terms: boolean;
+  consent_privacy: boolean;
+  consent_marketing: boolean;
+  consent_at: string | null;
+  status: 'active' | 'inactive' | 'suspended';
+  failed_login_attempts: number;
+  locked_until: string | null;
+  last_login_at: string | null;
+  last_login_ip: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebMemberStatistics {
+  total: number;
+  active: number;
+  inactive: number;
+  suspended: number;
+  verified: number;
+  unverified: number;
+  new_this_month: number;
+  new_today: number;
+}
+
+export const webMembersApi = {
+  list: (params?: { 
+    page?: number; 
+    per_page?: number; 
+    search?: string; 
+    status?: string;
+    verified?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.per_page) searchParams.append('per_page', params.per_page.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.verified) searchParams.append('verified', params.verified);
+    
+    return apiRequest<{
+      data: WebMember[];
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+    }>(`/web-members?${searchParams.toString()}`);
+  },
+
+  get: (id: number) =>
+    apiRequest<WebMember>(`/web-members/${id}`),
+
+  statistics: () =>
+    apiRequest<WebMemberStatistics>('/web-members/statistics'),
+
+  updateStatus: (id: number, status: 'active' | 'inactive' | 'suspended') =>
+    apiRequest<WebMember>(`/web-members/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  resetPassword: (id: number, password: string, password_confirmation: string) =>
+    apiRequest(`/web-members/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password, password_confirmation }),
+    }),
+
+  unlock: (id: number) =>
+    apiRequest<WebMember>(`/web-members/${id}/unlock`, { method: 'POST' }),
+
+  delete: (id: number) =>
+    apiRequest(`/web-members/${id}`, { method: 'DELETE' }),
+
+  export: (params?: { status?: string; verified?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.verified) searchParams.append('verified', params.verified);
+    
+    return apiRequest(`/web-members/export?${searchParams.toString()}`);
+  },
+};
+
 // Transports API
 export const transportsApi = {
   list: (params?: Record<string, string>) => {
@@ -1192,6 +1289,9 @@ export interface WholesalerApiConfig {
   notification_types?: string[];
   // City Extraction
   extract_cities_from_name?: boolean;
+  // Past Period Handling
+  past_period_handling?: 'skip' | 'close' | 'keep';
+  past_period_threshold_days?: number;
   // Data Structure Config for nested arrays
   aggregation_config?: {
     data_structure?: {

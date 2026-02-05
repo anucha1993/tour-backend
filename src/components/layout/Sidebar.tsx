@@ -33,6 +33,7 @@ import {
   Search,
   ShoppingCart,
   Mail,
+  Smartphone,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -155,6 +156,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     href: '/dashboard/users',
     icon: Users,
   },
+  {
+    title: 'สมาชิกเว็บ',
+    href: '/dashboard/web-members',
+    icon: Users,
+  },
   // TODO: สร้างหน้า reports
   // {
   //   title: 'รายงาน',
@@ -174,6 +180,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
         title: 'SMTP',
         href: '/dashboard/settings/smtp',
         icon: Mail,
+      },
+      {
+        title: 'OTP',
+        href: '/dashboard/settings/otp',
+        icon: Smartphone,
       },
     ],
   },

@@ -76,6 +76,9 @@ const defaultFormData = {
   notification_types: ['sync_error', 'api_error', 'booking_error'] as string[],
   // City Extraction
   extract_cities_from_name: false,
+  // Past Period Handling
+  past_period_handling: 'skip' as 'skip' | 'close' | 'keep',
+  past_period_threshold_days: 0,
   // PDF Branding
   pdf_header_image: '' as string | null,
   pdf_footer_image: '' as string | null,
@@ -236,6 +239,9 @@ export default function IntegrationSettingsPage() {
           notification_types: integration.notification_types || ['sync_error', 'api_error', 'booking_error'],
           // City Extraction
           extract_cities_from_name: integration.extract_cities_from_name ?? false,
+          // Past Period Handling
+          past_period_handling: (integration.past_period_handling || 'skip') as 'skip' | 'close' | 'keep',
+          past_period_threshold_days: integration.past_period_threshold_days ?? 0,
           // PDF Branding
           pdf_header_image: integration.pdf_header_image || null,
           pdf_footer_image: integration.pdf_footer_image || null,
@@ -259,6 +265,19 @@ export default function IntegrationSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    
+    // Validate form data before saving
+    if (formData.past_period_threshold_days < 0 || formData.past_period_threshold_days > 365) {
+      setError('นับวันย้อนหลังต้องอยู่ระหว่าง 0-365 วัน');
+      setSaving(false);
+      return;
+    }
+    
+    if (!['skip', 'close', 'keep'].includes(formData.past_period_handling)) {
+      setError('กรุณาเลือกวิธีจัดการรอบเดินทางที่ผ่านไปแล้ว');
+      setSaving(false);
+      return;
+    }
     
     try {
       // Build auth_credentials from form fields
@@ -323,6 +342,9 @@ export default function IntegrationSettingsPage() {
         notification_types: formData.notification_types,
         // City Extraction
         extract_cities_from_name: formData.extract_cities_from_name,
+        // Past Period Handling
+        past_period_handling: formData.past_period_handling,
+        past_period_threshold_days: formData.past_period_threshold_days,
         // Data Structure for nested arrays (only if has values)
         ...(formData.departures_path || formData.itineraries_path ? {
           aggregation_config: {
@@ -1281,6 +1303,84 @@ export default function IntegrationSettingsPage() {
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                     </label>
+                  </div>
+                </div>
+
+                {/* Past Period Handling */}
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <h3 className="font-medium text-orange-800 mb-3">จัดการรอบเดินทางที่ผ่านไปแล้ว</h3>
+                  <p className="text-sm text-orange-600 mb-4">
+                    กำหนดวิธีจัดการ Periods ที่วันเดินทางผ่านไปแล้ว (Past Periods)
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">วิธีจัดการ</label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, past_period_handling: 'skip' }))}
+                          className={`
+                            p-3 rounded-lg border-2 text-left transition-colors
+                            ${formData.past_period_handling === 'skip' 
+                              ? 'border-orange-500 bg-white' 
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                            }
+                          `}
+                        >
+                          <p className="font-medium text-sm">ข้าม (Skip)</p>
+                          <p className="text-xs text-gray-500 mt-1">ไม่บันทึกข้อมูล Period ที่ผ่านไปแล้ว</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, past_period_handling: 'close' }))}
+                          className={`
+                            p-3 rounded-lg border-2 text-left transition-colors
+                            ${formData.past_period_handling === 'close' 
+                              ? 'border-orange-500 bg-white' 
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                            }
+                          `}
+                        >
+                          <p className="font-medium text-sm">ปิดการขาย (Close)</p>
+                          <p className="text-xs text-gray-500 mt-1">บันทึกแต่ตั้งสถานะเป็น Closed</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, past_period_handling: 'keep' }))}
+                          className={`
+                            p-3 rounded-lg border-2 text-left transition-colors
+                            ${formData.past_period_handling === 'keep' 
+                              ? 'border-orange-500 bg-white' 
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                            }
+                          `}
+                        >
+                          <p className="font-medium text-sm">เก็บไว้ (Keep)</p>
+                          <p className="text-xs text-gray-500 mt-1">บันทึกปกติไม่เปลี่ยนสถานะ</p>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        นับวันย้อนหลัง (Threshold Days)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="365"
+                        value={formData.past_period_threshold_days || 0}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          past_period_threshold_days: parseInt(e.target.value) || 0 
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        0 = วันนี้เป็นเกณฑ์, 7 = รอบที่เดินทาง 7 วันก่อนหน้ายังถือว่าไม่ผ่าน
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
