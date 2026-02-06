@@ -161,6 +161,59 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     href: '/dashboard/web-members',
     icon: Users,
   },
+  {
+    title: 'จัดการเว็บไซต์',
+    icon: FileText,
+    children: [
+      {
+        title: 'ทั่วไป',
+        icon: FileText,
+        children: [
+          {
+            title: 'นโยบายคุกกี้',
+            href: '/dashboard/website/general/cookie-policy',
+            icon: FileText,
+          },
+          {
+            title: 'นโยบายความเป็นส่วนตัว',
+            href: '/dashboard/website/general/privacy-policy',
+            icon: FileText,
+          },
+          {
+            title: 'เงื่อนไขการให้บริการ',
+            href: '/dashboard/website/member/terms',
+            icon: FileText,
+          },
+          {
+            title: 'เงื่อนไขการชำระเงิน',
+            href: '/dashboard/website/member/payment-terms',
+            icon: FileText,
+          },
+          {
+            title: 'ช่องทางการชำระเงิน',
+            href: '/dashboard/website/general/payment-channels',
+            icon: FileText,
+          },
+        ],
+      },
+      {
+        title: 'หน้าสมาชิก',
+        icon: Users,
+        children: [
+          {
+            title: 'เข้าสู่ระบบ (Login)',
+            href: '/dashboard/website/member/login-page',
+            icon: FileText,
+          },
+          {
+            title: 'สมัครสมาชิก (Register)',
+            href: '/dashboard/website/member/register-page',
+            icon: FileText,
+          },
+        ],
+      },
+    ],
+  },
   // TODO: สร้างหน้า reports
   // {
   //   title: 'รายงาน',
@@ -387,7 +440,75 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
                     <div className="mt-1 ml-4 pl-4 border-l border-gray-200 space-y-1">
                       {item.children!.map((child) => {
                         const ChildIcon = child.icon;
-                        const isChildActive = child.href && isMenuItemActive(child.href);
+                        const hasGrandChildren = child.children && child.children.length > 0;
+                        const isGrandExpanded = isMenuExpanded(child.title);
+                        
+                        // Check if any grandchild is active
+                        const hasActiveGrandChild = hasGrandChildren && child.children!.some(
+                          (grandChild) => grandChild.href && isMenuItemActive(grandChild.href)
+                        );
+                        
+                        const isChildActive = child.href 
+                          ? isMenuItemActive(child.href)
+                          : hasActiveGrandChild;
+
+                        if (hasGrandChildren) {
+                          return (
+                            <div key={child.title}>
+                              <button
+                                onClick={() => toggleMenu(child.title)}
+                                className={cn(
+                                  'flex items-center justify-between w-full px-3 py-2 rounded-lg transition-all duration-200 text-sm',
+                                  isChildActive
+                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <ChildIcon className={cn(
+                                    'w-4 h-4 shrink-0',
+                                    isChildActive ? 'text-blue-600' : 'text-gray-500'
+                                  )} />
+                                  <span className="truncate">{child.title}</span>
+                                </div>
+                                <ChevronDown className={cn(
+                                  'w-3 h-3 transition-transform duration-200',
+                                  isGrandExpanded && 'rotate-180'
+                                )} />
+                              </button>
+                              
+                              {/* Grandchild submenu */}
+                              {isGrandExpanded && (
+                                <div className="mt-1 ml-4 pl-3 border-l border-gray-100 space-y-1">
+                                  {child.children!.map((grandChild) => {
+                                    const GrandChildIcon = grandChild.icon;
+                                    const isGrandChildActive = grandChild.href && isMenuItemActive(grandChild.href);
+
+                                    return (
+                                      <Link
+                                        key={grandChild.href}
+                                        href={grandChild.href!}
+                                        onClick={closeMobile}
+                                        className={cn(
+                                          'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 text-xs',
+                                          isGrandChildActive
+                                            ? 'bg-blue-50 text-blue-700 font-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        )}
+                                      >
+                                        <GrandChildIcon className={cn(
+                                          'w-3.5 h-3.5 shrink-0',
+                                          isGrandChildActive ? 'text-blue-600' : 'text-gray-500'
+                                        )} />
+                                        <span className="truncate">{grandChild.title}</span>
+                                      </Link>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
 
                         return (
                           <Link
