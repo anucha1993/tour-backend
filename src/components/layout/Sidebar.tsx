@@ -118,6 +118,7 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     href: '/dashboard/gallery',
     icon: ImageIcon,
   },
+
   // TODO: สร้างหน้า departures
   // {
   //   title: 'รอบเดินทาง',
@@ -151,6 +152,7 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
       // },
     ],
   },
+  
   {
     title: 'ผู้ใช้งาน',
     href: '/dashboard/users',
@@ -165,6 +167,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'จัดการเว็บไซต์',
     icon: FileText,
     children: [
+        {
+    title: 'Hero Slides',
+    href: '/dashboard/hero-slides',
+    icon: ImageIcon,
+  },
       {
         title: 'ทั่วไป',
         icon: FileText,

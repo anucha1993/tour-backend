@@ -1652,3 +1652,134 @@ export const sectionDefinitionsApi = {
     apiRequest<SectionDefinition[]>(`/integrations/section-definitions/${sectionName}`),
 };
 
+// Hero Slides Types
+export interface HeroSlide {
+  id: number;
+  cloudflare_id: string | null;
+  url: string;
+  thumbnail_url: string | null;
+  filename: string;
+  alt: string | null;
+  title: string | null;
+  subtitle: string | null;
+  button_text: string | null;
+  button_link: string | null;
+  width: number;
+  height: number;
+  file_size: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HeroSlideStatistics {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
+// Hero Slides API
+export const heroSlidesApi = {
+  // List all hero slides
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<HeroSlide[]>(`/hero-slides?${searchParams.toString()}`);
+  },
+
+  // Get a single hero slide
+  get: (id: number) => apiRequest<HeroSlide>(`/hero-slides/${id}`),
+
+  // Upload new hero slide
+  upload: async (
+    file: File,
+    data?: {
+      alt?: string;
+      title?: string;
+      subtitle?: string;
+      button_text?: string;
+      button_link?: string;
+      custom_filename?: string;
+    }
+  ) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (data?.alt) formData.append('alt', data.alt);
+    if (data?.title) formData.append('title', data.title);
+    if (data?.subtitle) formData.append('subtitle', data.subtitle);
+    if (data?.button_text) formData.append('button_text', data.button_text);
+    if (data?.button_link) formData.append('button_link', data.button_link);
+    if (data?.custom_filename) formData.append('custom_filename', data.custom_filename);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/hero-slides`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Upload failed');
+    }
+    return responseData as { success: boolean; data: HeroSlide; message: string };
+  },
+
+  // Update hero slide details
+  update: (id: number, data: Partial<HeroSlide>) =>
+    apiRequest<HeroSlide>(`/hero-slides/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Replace hero slide image
+  replaceImage: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/hero-slides/${id}/replace-image`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Replace image failed');
+    }
+    return responseData as { success: boolean; data: HeroSlide; message: string };
+  },
+
+  // Toggle hero slide status
+  toggleStatus: (id: number) =>
+    apiRequest<HeroSlide>(`/hero-slides/${id}/toggle-status`, { method: 'PATCH' }),
+
+  // Reorder hero slides
+  reorder: (slides: { id: number; sort_order: number }[]) =>
+    apiRequest('/hero-slides/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ slides }),
+    }),
+
+  // Delete hero slide
+  delete: (id: number) =>
+    apiRequest(`/hero-slides/${id}`, { method: 'DELETE' }),
+
+  // Get statistics
+  getStatistics: () =>
+    apiRequest<HeroSlideStatistics>('/hero-slides/statistics'),
+};
