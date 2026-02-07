@@ -34,6 +34,8 @@ import {
   ShoppingCart,
   Mail,
   Smartphone,
+  Tag,
+  Layers,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -171,6 +173,21 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'Hero Slides',
     href: '/dashboard/hero-slides',
     icon: ImageIcon,
+  },
+  {
+    title: 'ประเทศยอดนิยม',
+    href: '/dashboard/website/popular-countries',
+    icon: Globe,
+  },
+  {
+    title: 'โปรโมชั่น',
+    href: '/dashboard/website/promotions',
+    icon: Tag,
+  },
+  {
+    title: 'Tour Tabs',
+    href: '/dashboard/website/tour-tabs',
+    icon: Layers,
   },
       {
         title: 'ทั่วไป',

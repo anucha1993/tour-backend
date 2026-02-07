@@ -155,8 +155,46 @@ export interface Promotion {
   discount_value: string | null;
   is_active: boolean;
   sort_order: number;
+  banner_url: string | null;
+  cloudflare_id: string | null;
+  link_url: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  badge_text: string | null;
+  badge_color: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TourTabCondition {
+  type: string;
+  value: string | number | boolean | (string | number)[];
+}
+
+export interface TourTab {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null | undefined;
+  icon: string | null | undefined;
+  badge_text: string | null | undefined;
+  badge_color: string | null | undefined;
+  conditions: TourTabCondition[] | null | undefined;
+  display_limit: number;
+  sort_by: 'popular' | 'price_asc' | 'price_desc' | 'newest' | 'departure_date';
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TourTabConditionOptions {
+  condition_types: Record<string, string>;
+  sort_options: Record<string, string>;
+  countries: Array<{ id: number; name_th: string; name_en: string; iso2: string }>;
+  regions: Record<string, string>;
+  wholesalers: Array<{ id: number; name: string; code: string }>;
+  tour_types: Record<string, string>;
 }
 
 export interface GalleryImage {
@@ -1128,6 +1166,9 @@ export const promotionsApi = {
     return apiRequest<Promotion[]>(`/promotions?${searchParams.toString()}`);
   },
 
+  get: (id: number) =>
+    apiRequest<Promotion>(`/promotions/${id}`),
+
   create: (data: Partial<Promotion>) =>
     apiRequest<Promotion>('/promotions', {
       method: 'POST',
@@ -1142,6 +1183,44 @@ export const promotionsApi = {
 
   delete: (id: number) =>
     apiRequest(`/promotions/${id}`, { method: 'DELETE' }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<Promotion>(`/promotions/${id}/toggle-status`, { method: 'PATCH' }),
+
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/promotions/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  uploadBanner: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/promotions/${id}/upload-banner`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to upload banner');
+    }
+
+    return response.json() as Promise<{
+      success: boolean;
+      banner_url: string;
+      cloudflare_id: string;
+      message: string;
+    }>;
+  },
+
+  deleteBanner: (id: number) =>
+    apiRequest(`/promotions/${id}/delete-banner`, { method: 'DELETE' }),
 };
 
 // Gallery Images API
@@ -1782,4 +1861,305 @@ export const heroSlidesApi = {
   // Get statistics
   getStatistics: () =>
     apiRequest<HeroSlideStatistics>('/hero-slides/statistics'),
+};
+
+// Popular Country Setting Types
+export interface PopularCountryItem {
+  id: number;
+  setting_id: number;
+  country_id: number;
+  image_url: string | null;
+  cloudflare_id: string | null;
+  alt_text: string | null;
+  title: string | null;
+  subtitle: string | null;
+  link_url: string | null;
+  display_name: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  country?: {
+    id: number;
+    iso2: string;
+    iso3: string;
+    name_en: string;
+    name_th: string | null;
+    region: string | null;
+    flag_emoji: string | null;
+  };
+}
+
+export interface PopularCountrySetting {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  selection_mode: 'auto' | 'manual';
+  country_ids: number[] | null;
+  filters: {
+    wholesaler_ids?: number[];
+    promotion_types?: string[];
+    themes?: string[];
+    regions?: string[];
+    min_price?: number;
+    max_price?: number;
+    hotel_star_min?: number;
+    hotel_star_max?: number;
+    duration_min?: number;
+    duration_max?: number;
+  } | null;
+  tour_conditions: {
+    has_upcoming_periods?: boolean;
+    travel_months?: number[];
+    travel_date_from?: string;
+    travel_date_to?: string;
+    min_available_seats?: number;
+  } | null;
+  display_count: number;
+  min_tour_count: number;
+  sort_by: 'tour_count' | 'name' | 'manual';
+  sort_direction: 'asc' | 'desc';
+  is_active: boolean;
+  sort_order: number;
+  cache_minutes: number;
+  last_cached_at: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: PopularCountryItem[];
+}
+
+// Input type for creating/updating country items
+export interface PopularCountryItemInput {
+  country_id: number;
+  alt_text?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  link_url?: string | null;
+  display_name?: string | null;
+  sort_order?: number;
+}
+
+// Input type for creating/updating settings
+export interface PopularCountrySettingInput extends Omit<Partial<PopularCountrySetting>, 'items' | 'id' | 'created_at' | 'updated_at' | 'last_cached_at'> {
+  items?: PopularCountryItemInput[];
+}
+
+export interface PopularCountryResult {
+  id: number;
+  iso2: string;
+  iso3: string;
+  name_en: string;
+  name_th: string | null;
+  slug: string;
+  region: string | null;
+  flag_emoji: string | null;
+  tour_count: number;
+  // Custom display from PopularCountryItem
+  image_url?: string | null;
+  alt_text?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  link_url?: string | null;
+  display_name?: string | null;
+}
+
+export interface PopularCountryFilterOptions {
+  selection_modes: Record<string, string>;
+  sort_options: Record<string, string>;
+  promotion_types: Record<string, string>;
+  themes: Record<string, string>;
+  regions: Record<string, string>;
+  wholesalers: { id: number; name: string; code: string }[];
+  countries: { id: number; iso2: string; name_en: string; name_th: string | null; flag_emoji: string | null; region: string | null }[];
+  months: Record<number, string>;
+}
+
+// Popular Country Settings API
+export const popularCountriesApi = {
+  // List all settings
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<PopularCountrySetting[]>(`/popular-countries?${searchParams.toString()}`);
+  },
+
+  // Get filter options
+  getFilterOptions: () =>
+    apiRequest<PopularCountryFilterOptions>('/popular-countries/filter-options'),
+
+  // Get a single setting
+  get: (id: number) =>
+    apiRequest<PopularCountrySetting>(`/popular-countries/${id}`),
+
+  // Create new setting
+  create: (data: PopularCountrySettingInput) =>
+    apiRequest<PopularCountrySetting>('/popular-countries', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update a setting
+  update: (id: number, data: PopularCountrySettingInput) =>
+    apiRequest<PopularCountrySetting>(`/popular-countries/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete a setting
+  delete: (id: number) =>
+    apiRequest(`/popular-countries/${id}`, { method: 'DELETE' }),
+
+  // Toggle status
+  toggleStatus: (id: number) =>
+    apiRequest<PopularCountrySetting>(`/popular-countries/${id}/toggle-status`, {
+      method: 'PATCH',
+    }),
+
+  // Preview with saved setting
+  preview: (id: number) =>
+    apiRequest<{ setting: { name: string; slug: string }; countries: PopularCountryResult[]; total_found: number }>(
+      `/popular-countries/${id}/preview`
+    ),
+
+  // Preview with unsaved settings
+  previewSettings: (data: {
+    setting_id?: number; // Include to load saved images when editing existing setting
+    selection_mode: string;
+    country_ids?: number[];
+    filters?: PopularCountrySetting['filters'];
+    tour_conditions?: PopularCountrySetting['tour_conditions'];
+    display_count?: number;
+    min_tour_count?: number;
+    sort_by?: string;
+    sort_direction?: string;
+  }) =>
+    apiRequest<{ countries: PopularCountryResult[]; total_found: number }>(
+      '/popular-countries/preview-settings',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
+
+  // Clear cache
+  clearCache: (id: number) =>
+    apiRequest(`/popular-countries/${id}/clear-cache`, { method: 'POST' }),
+
+  // Reorder settings
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/popular-countries/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  // Upload image for a country item
+  uploadItemImage: async (settingId: number, countryId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/popular-countries/${settingId}/items/${countryId}/image`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to upload image');
+    }
+    
+    return response.json() as Promise<{ 
+      success: boolean; 
+      image_url: string; 
+      cloudflare_id: string;
+      item: PopularCountryItem;
+    }>;
+  },
+
+  // Delete image from a country item
+  deleteItemImage: (settingId: number, countryId: number) =>
+    apiRequest<{ success: boolean; item: PopularCountryItem }>(
+      `/popular-countries/${settingId}/items/${countryId}/image`,
+      { method: 'DELETE' }
+    ),
+
+  // Update a specific country item
+  updateItem: (settingId: number, countryId: number, data: Partial<Pick<PopularCountryItem, 'alt_text' | 'title' | 'subtitle' | 'link_url' | 'display_name' | 'sort_order'>>) =>
+    apiRequest<{ success: boolean; item: PopularCountryItem }>(
+      `/popular-countries/${settingId}/items/${countryId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    ),
+};
+
+// Tour Tabs API
+export const tourTabsApi = {
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<TourTab[]>(`/tour-tabs?${searchParams.toString()}`);
+  },
+
+  get: (id: number) =>
+    apiRequest<TourTab>(`/tour-tabs/${id}`),
+
+  create: (data: Partial<TourTab>) =>
+    apiRequest<TourTab>('/tour-tabs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<TourTab>) =>
+    apiRequest<TourTab>(`/tour-tabs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/tour-tabs/${id}`, { method: 'DELETE' }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<TourTab>(`/tour-tabs/${id}/toggle-status`, { method: 'PATCH' }),
+
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/tour-tabs/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  getConditionOptions: () =>
+    apiRequest<TourTabConditionOptions>('/tour-tabs/condition-options'),
+
+  preview: (id: number, limit?: number) => {
+    const params = limit ? `?limit=${limit}` : '';
+    return apiRequest<{
+      tours: Array<{
+        id: number;
+        title: string;
+        tour_code: string;
+        country: string;
+        days: number;
+        nights: number;
+        price: number | null;
+        departure_date: string | null;
+        image_url: string | null;
+      }>;
+      total: number;
+      conditions: TourTabCondition[] | null;
+      sort_by: string;
+    }>(`/tour-tabs/${id}/preview${params}`);
+  },
 };
