@@ -1622,6 +1622,21 @@ export const integrationsApi = {
       wholesaler_name: string;
     }>(`/integrations/${id}/check-tour-count`),
 
+  // Check schedule conflict
+  checkScheduleConflict: (schedule: string, excludeId?: number) => {
+    const params = new URLSearchParams({ schedule });
+    if (excludeId) params.append('exclude_id', String(excludeId));
+    return apiRequest<{
+      conflict: boolean;
+      message: string;
+      conflicting_integration?: string;
+      conflicting_minute?: number;
+      gap_minutes?: number;
+      min_gap?: number;
+      suggested_minutes?: number[];
+    }>(`/integrations/check-schedule?${params.toString()}`);
+  },
+
   // Sync Now - Run sync immediately
   runSyncNow: (id: number, data?: {
     transformed_data?: Array<Record<string, unknown>>;

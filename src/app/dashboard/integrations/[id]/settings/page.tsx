@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
 import { 
@@ -30,6 +30,7 @@ import {
   Power,
   Play,
   Pause,
+  AlertCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { integrationsApi, type WholesalerApiConfig } from '@/lib/api';
@@ -136,6 +137,13 @@ export default function IntegrationSettingsPage() {
   const [customCron, setCustomCron] = useState(false);
   const [customCronValue, setCustomCronValue] = useState('');
   const [syncMinuteOffset, setSyncMinuteOffset] = useState(0);
+  const [scheduleConflict, setScheduleConflict] = useState<{
+    conflict: boolean;
+    message?: string;
+    conflicting_integration?: string;
+    suggested_minutes?: number[];
+  } | null>(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
   const [togglingSync, setTogglingSync] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -143,6 +151,22 @@ export default function IntegrationSettingsPage() {
   // Form state
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   
+  // Check schedule conflict with debounce
+  const checkConflict = useCallback(async (schedule: string, configId: number) => {
+    if (!schedule) return;
+    setCheckingConflict(true);
+    try {
+      const result = await integrationsApi.checkScheduleConflict(schedule, configId);
+      if (result.success && result.data) {
+        setScheduleConflict(result.data);
+      }
+    } catch {
+      // Ignore errors for conflict check
+    } finally {
+      setCheckingConflict(false);
+    }
+  }, []);
+
   // Load integration data
   useEffect(() => {
     const fetchIntegration = async () => {
@@ -276,6 +300,9 @@ export default function IntegrationSettingsPage() {
         const { minute } = parseCronSchedule(integration.sync_schedule || '0 */2 * * *');
         setSyncMinuteOffset(minute);
 
+        // Check initial schedule conflict
+        checkConflict(integration.sync_schedule || '0 */2 * * *', integration.id);
+
       } catch (err) {
         console.error('Failed to load integration:', err);
         setError('ไม่สามารถโหลดข้อมูล Integration ได้');
@@ -290,6 +317,13 @@ export default function IntegrationSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    
+    // Block save if schedule conflict exists
+    if (scheduleConflict?.conflict) {
+      setError('ไม่สามารถบันทึกได้ — Schedule ชนกับ integration อื่น กรุณาเลือกนาทีที่ไม่ชนกัน');
+      setSaving(false);
+      return;
+    }
     
     // Validate form data before saving
     if (formData.past_period_threshold_days < 0 || formData.past_period_threshold_days > 365) {
@@ -1143,17 +1177,30 @@ export default function IntegrationSettingsPage() {
                   
                   {/* Minute Offset - only show when not custom */}
                   {!customCron && (
-                    <div className="mt-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className={`mt-3 p-4 rounded-lg border ${
+                      scheduleConflict?.conflict 
+                        ? 'bg-red-50 border-red-300' 
+                        : 'bg-blue-50 border-blue-200'
+                    }`}>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="block text-sm font-medium text-blue-800">
+                        <label className={`block text-sm font-medium ${
+                          scheduleConflict?.conflict ? 'text-red-800' : 'text-blue-800'
+                        }`}>
                           ⏱️ นาทีที่เริ่ม Sync (Offset)
                         </label>
-                        <span className="text-sm font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                          นาทีที่ {syncMinuteOffset}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {checkingConflict && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+                          <span className={`text-sm font-mono font-bold px-2 py-0.5 rounded ${
+                            scheduleConflict?.conflict 
+                              ? 'text-red-700 bg-red-100' 
+                              : 'text-blue-700 bg-blue-100'
+                          }`}>
+                            นาทีที่ {syncMinuteOffset}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-xs text-blue-600 mb-3">
-                        กำหนดนาทีที่เริ่ม sync เพื่อไม่ให้ integration หลายตัวรันชนกัน เช่น ตัวแรก = 0, ตัวที่สอง = 10, ตัวที่สาม = 20
+                      <p className={`text-xs mb-3 ${scheduleConflict?.conflict ? 'text-red-600' : 'text-blue-600'}`}>
+                        กำหนดนาทีที่เริ่ม sync เพื่อไม่ให้ integration หลายตัวรันชนกัน (ต้องห่างกันอย่างน้อย 10 นาที)
                       </p>
                       <input
                         type="range"
@@ -1164,17 +1211,67 @@ export default function IntegrationSettingsPage() {
                           const minute = parseInt(e.target.value);
                           setSyncMinuteOffset(minute);
                           const { intervalPart } = parseCronSchedule(formData.sync_schedule);
-                          setFormData(prev => ({ ...prev, sync_schedule: buildCron(intervalPart, minute) }));
+                          const newCron = buildCron(intervalPart, minute);
+                          setFormData(prev => ({ ...prev, sync_schedule: newCron }));
+                          checkConflict(newCron, formData.id);
                         }}
-                        className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          scheduleConflict?.conflict 
+                            ? 'bg-red-200 accent-red-600' 
+                            : 'bg-blue-200 accent-blue-600'
+                        }`}
                       />
-                      <div className="flex justify-between text-xs text-blue-400 mt-1">
+                      <div className="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0</span>
                         <span>15</span>
                         <span>30</span>
                         <span>45</span>
                         <span>59</span>
                       </div>
+
+                      {/* Conflict Warning */}
+                      {scheduleConflict?.conflict && (
+                        <div className="mt-3 p-3 bg-red-100 rounded-lg border border-red-200">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-red-800">⚠️ Schedule ชนกัน!</p>
+                              <p className="text-xs text-red-700 mt-0.5">{scheduleConflict.message}</p>
+                              {scheduleConflict.suggested_minutes && scheduleConflict.suggested_minutes.length > 0 && (
+                                <div className="mt-2">
+                                  <p className="text-xs text-red-600 font-medium mb-1">นาทีที่ว่าง (เลือกได้):</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {scheduleConflict.suggested_minutes.filter((_, i) => i % 5 === 0).slice(0, 12).map((m) => (
+                                      <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => {
+                                          setSyncMinuteOffset(m);
+                                          const { intervalPart } = parseCronSchedule(formData.sync_schedule);
+                                          const newCron = buildCron(intervalPart, m);
+                                          setFormData(prev => ({ ...prev, sync_schedule: newCron }));
+                                          checkConflict(newCron, formData.id);
+                                        }}
+                                        className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors font-mono"
+                                      >
+                                        :{String(m).padStart(2, '0')}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No Conflict - OK */}
+                      {scheduleConflict && !scheduleConflict.conflict && !checkingConflict && (
+                        <div className="mt-3 flex items-center gap-2 text-green-600">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-xs font-medium">ไม่ชนกับ integration อื่น ✓</span>
+                        </div>
+                      )}
                     </div>
                   )}
                   
