@@ -1426,8 +1426,9 @@ export interface IntegrationWithStats extends WholesalerApiConfig {
   wholesaler_name: string;
   wholesaler_logo?: string;
   tours_count: number;
-  last_sync_at?: string;
+  last_synced_at?: string;
   last_sync_status?: 'success' | 'failed' | 'partial';
+  next_sync_at?: string;
   errors_count: number;
   health_status: 'healthy' | 'degraded' | 'down' | 'unknown';
 }
@@ -1496,7 +1497,7 @@ export const integrationsApi = {
 
   // Toggle sync
   toggleSync: (id: number) =>
-    apiRequest<WholesalerApiConfig>(`/integrations/${id}/toggle-sync`, { method: 'POST' }),
+    apiRequest<{ sync_enabled: boolean }>(`/integrations/${id}/toggle-sync`, { method: 'POST' }),
 
   // Trigger manual sync (deprecated - use runSyncNow instead)
   syncNow: (id: number) =>
@@ -1717,6 +1718,75 @@ export const integrationsApi = {
   testNotification: (id: number) =>
     apiRequest<{ success: boolean; message: string }>(`/integrations/${id}/test-notification`, {
       method: 'POST',
+    }),
+};
+
+// ============================================================
+// Sync Progress & Control API (new endpoints)
+// ============================================================
+export interface SyncProgressData {
+  sync_log_id: number;
+  status: string;
+  progress_percent: number;
+  processed_items: number;
+  total_items: number;
+  current_item_code: string | null;
+  chunk_size: number;
+  current_chunk: number;
+  total_chunks: number;
+  api_calls_count: number;
+  cancel_requested: boolean;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  last_heartbeat_at: string | null;
+  heartbeat_timeout_minutes: number;
+  is_stuck: boolean;
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  tours_created: number;
+  tours_updated: number;
+  tours_failed: number;
+  error_count: number;
+}
+
+export interface RunningSyncData {
+  id: number;
+  wholesaler_id: number;
+  wholesaler_name: string;
+  sync_type: string;
+  status: string;
+  progress_percent: number;
+  processed_items: number;
+  total_items: number;
+  current_item_code: string | null;
+  started_at: string;
+  last_heartbeat_at: string | null;
+  is_stuck: boolean;
+  cancel_requested: boolean;
+}
+
+export const syncApi = {
+  // Get all running syncs with progress
+  getRunning: () =>
+    apiRequest<RunningSyncData[]>('/sync/running'),
+
+  // Get progress for specific sync
+  getProgress: (syncLogId: number) =>
+    apiRequest<SyncProgressData>(`/sync/${syncLogId}/progress`),
+
+  // Request cancel (graceful)
+  cancel: (syncLogId: number, reason?: string) =>
+    apiRequest<{ message: string }>(`/sync/${syncLogId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'Cancelled by user' }),
+    }),
+
+  // Force cancel (immediate)
+  forceCancel: (syncLogId: number, reason?: string) =>
+    apiRequest<{ message: string }>(`/sync/${syncLogId}/force-cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'Force cancelled by user' }),
     }),
 };
 
@@ -2162,4 +2232,54 @@ export const tourTabsApi = {
       sort_by: string;
     }>(`/tour-tabs/${id}/preview${params}`);
   },
+};
+
+// ===================== Dashboard API =====================
+
+export interface DashboardStats {
+  total_wholesalers: number;
+  active_wholesalers: number;
+  total_tours: number;
+  published_tours: number;
+  total_periods: number;
+  upcoming_periods: number;
+  today_syncs: number;
+  success_syncs: number;
+  failed_syncs: number;
+}
+
+export interface WholesalerStat {
+  id: number;
+  name: string;
+  code: string;
+  logo_url: string | null;
+  tours_count: number;
+  is_active: boolean;
+}
+
+export interface RecentSync {
+  id: number;
+  wholesaler_name: string;
+  wholesaler_code: string;
+  wholesaler_logo: string | null;
+  status: string;
+  sync_type: string;
+  tours_received: number;
+  tours_created: number;
+  tours_updated: number;
+  tours_failed: number;
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
+}
+
+export interface DashboardSummary {
+  stats: DashboardStats;
+  tours_per_wholesaler: WholesalerStat[];
+  recent_syncs: RecentSync[];
+}
+
+export const dashboardApi = {
+  getSummary: () =>
+    apiRequest<DashboardSummary>('/dashboard/summary'),
 };

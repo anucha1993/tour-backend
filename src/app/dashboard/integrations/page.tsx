@@ -19,6 +19,7 @@ import {
   X,
   Globe,
   XCircle,
+  Timer,
 } from 'lucide-react';
 import Link from 'next/link';
 import { integrationsApi, IntegrationWithStats } from '@/lib/api';
@@ -101,11 +102,18 @@ export default function IntegrationsPage() {
   const getSyncStatusBadge = (status: string | null | undefined) => {
     switch (status) {
       case 'success':
+      case 'completed':
         return <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">สำเร็จ</span>;
       case 'partial':
         return <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">บางส่วน</span>;
       case 'failed':
         return <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full">ล้มเหลว</span>;
+      case 'cancelled':
+        return <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">ยกเลิก</span>;
+      case 'timeout':
+        return <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full">หมดเวลา</span>;
+      case 'running':
+        return <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full animate-pulse">กำลัง Sync</span>;
       default:
         return <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">ยังไม่เคย</span>;
     }
@@ -122,12 +130,68 @@ export default function IntegrationsPage() {
   };
 
   const formatSchedule = (cron: string) => {
-    if (cron === '0 */2 * * *') return 'ทุก 2 ชั่วโมง';
-    if (cron === '0 */4 * * *') return 'ทุก 4 ชั่วโมง';
-    if (cron === '0 */6 * * *') return 'ทุก 6 ชั่วโมง';
-    if (cron === '0 * * * *') return 'ทุกชั่วโมง';
-    if (cron === '0 3 * * *') return 'ทุกวัน 03:00';
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length < 5) return cron;
+    
+    const [minutePart, hourPart] = parts;
+    const minute = parseInt(minutePart) || 0;
+    
+    // Pattern: M */N * * * (every N hours at minute M)
+    const hourMatch = hourPart.match(/^\*\/(\d+)$/);
+    if (hourMatch) {
+      const hours = parseInt(hourMatch[1]);
+      const offsetText = minute > 0 ? ` (นาทีที่ ${minute})` : '';
+      return `ทุก ${hours} ชั่วโมง${offsetText}`;
+    }
+    
+    // Pattern: M * * * * (every hour at minute M)
+    if (hourPart === '*') {
+      if (minutePart.startsWith('*/')) {
+        const mins = parseInt(minutePart.replace('*/', ''));
+        return `ทุก ${mins} นาที`;
+      }
+      return minute > 0 ? `ทุกชั่วโมง (นาทีที่ ${minute})` : 'ทุกชั่วโมง';
+    }
+    
+    // Pattern: M H * * * (daily at H:M)
+    const hourNum = parseInt(hourPart);
+    if (!isNaN(hourNum)) {
+      return `ทุกวัน ${String(hourNum).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
+    
     return cron;
+  };
+
+  const formatNextSync = (dateStr: string | null | undefined, syncEnabled: boolean) => {
+    if (!syncEnabled) return { text: 'Sync ปิดอยู่', color: 'text-gray-400' };
+    if (!dateStr) return { text: 'ยังไม่มีกำหนด', color: 'text-gray-400' };
+    
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    
+    if (diffMs < 0) {
+      // Already past - should sync soon
+      return { text: 'รอ Sync', color: 'text-orange-600' };
+    }
+    
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMin / 60);
+    const remainMin = diffMin % 60;
+    
+    if (diffMin < 1) return { text: 'กำลังจะ Sync', color: 'text-blue-600' };
+    if (diffMin < 60) return { text: `อีก ${diffMin} นาที`, color: 'text-blue-600' };
+    if (diffHr < 24) {
+      const parts = [];
+      parts.push(`${diffHr} ชม.`);
+      if (remainMin > 0) parts.push(`${remainMin} น.`);
+      return { text: `อีก ${parts.join(' ')}`, color: 'text-blue-600' };
+    }
+    
+    return { 
+      text: date.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+      color: 'text-gray-600'
+    };
   };
 
   const handleSyncNow = async (id: number) => {
@@ -328,12 +392,15 @@ export default function IntegrationsPage() {
                     {!integration.is_active && (
                       <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">ปิดใช้งาน</span>
                     )}
+                    {integration.is_active && !integration.sync_enabled && (
+                      <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 rounded-full border border-orange-200">Sync หยุดอยู่</span>
+                    )}
                   </div>
                   
                   <p className="text-sm text-gray-500 font-mono mb-3">{integration.api_base_url}</p>
                   
                   {/* Stats Row */}
-                  <div className="flex items-center gap-6 text-sm">
+                  <div className="flex items-center gap-6 text-sm flex-wrap">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">ทัวร์:</span>
                       <span className="font-medium">{integration.tours_count}</span>
@@ -341,8 +408,17 @@ export default function IntegrationsPage() {
                     
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">Sync ล่าสุด:</span>
-                      <span className="font-medium">{formatDate(integration.last_sync_at)}</span>
+                      <span className="font-medium">{formatDate(integration.last_synced_at)}</span>
                       {getSyncStatusBadge(integration.last_sync_status)}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Timer className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-gray-500">Next Sync:</span>
+                      {(() => {
+                        const next = formatNextSync(integration.next_sync_at, integration.sync_enabled);
+                        return <span className={`font-medium ${next.color}`}>{next.text}</span>;
+                      })()}
                     </div>
                     
                     <div className="flex items-center gap-2">

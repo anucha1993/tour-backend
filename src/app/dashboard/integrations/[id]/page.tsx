@@ -29,9 +29,11 @@ import {
   X,
   Search,
   Globe,
+  Ban,
+  StopCircle,
 } from 'lucide-react';
 import Link from 'next/link';
-import { integrationsApi, type WholesalerApiConfig } from '@/lib/api';
+import { integrationsApi, syncApi, type WholesalerApiConfig, type SyncProgressData } from '@/lib/api';
 
 // Preview Data Modal type - ข้อมูลที่จะส่งไป Backend
 interface PreviewData {
@@ -103,6 +105,13 @@ interface SyncHistoryItem {
   error_count?: number;
   periods_created?: number;
   periods_updated?: number;
+  progress_percent?: number;
+  processed_items?: number;
+  total_items?: number;
+  current_item_code?: string | null;
+  cancel_requested?: boolean;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
   error_summary?: Array<{ type: string; message: string; count: number }> | { message: string } | null;
 }
 
@@ -152,6 +161,10 @@ export default function IntegrationDetailPage() {
     open: boolean;
     log: SyncHistoryItem | null;
   }>({ open: false, log: null });
+
+  // Live sync progress tracking
+  const [liveProgress, setLiveProgress] = useState<SyncProgressData | null>(null);
+  const [cancellingSync, setCancellingSync] = useState(false);
 
   // Load integration data
   useEffect(() => {
@@ -238,6 +251,70 @@ export default function IntegrationDetailPage() {
       fetchSyncHistory();
     }
   }, [params.id]);
+
+  // Poll for live sync progress
+  useEffect(() => {
+    if (!pollingSync && !syncing) {
+      setLiveProgress(null);
+      return;
+    }
+
+    const pollProgress = async () => {
+      try {
+        // Find latest running sync from history
+        const runningSyncLog = syncHistory.find(s => s.status === 'running');
+        if (runningSyncLog) {
+          const response = await syncApi.getProgress(runningSyncLog.id);
+          if (response.success && response.data) {
+            setLiveProgress(response.data);
+          }
+        }
+      } catch {
+        // Silently fail
+      }
+    };
+
+    pollProgress();
+    const interval = setInterval(pollProgress, 3000);
+    return () => clearInterval(interval);
+  }, [pollingSync, syncing, syncHistory]);
+
+  // Cancel running sync
+  const handleCancelSync = async (syncLogId: number) => {
+    if (!confirm('ต้องการยกเลิก Sync นี้?')) return;
+    try {
+      setCancellingSync(true);
+      const response = await syncApi.cancel(syncLogId);
+      if (response.success) {
+        setSyncMessage('⏳ กำลังยกเลิก Sync... รอให้เสร็จ chunk ปัจจุบัน');
+        fetchSyncHistory();
+      }
+    } catch (err) {
+      console.error('Cancel failed:', err);
+    } finally {
+      setCancellingSync(false);
+    }
+  };
+
+  // Force cancel running sync
+  const handleForceCancelSync = async (syncLogId: number) => {
+    if (!confirm('⚠️ Force Cancel จะหยุด Sync ทันที ต้องการดำเนินการ?')) return;
+    try {
+      setCancellingSync(true);
+      const response = await syncApi.forceCancel(syncLogId);
+      if (response.success) {
+        setSyncMessage('🛑 Sync ถูกยกเลิกแล้ว');
+        setSyncing(false);
+        setPollingSync(false);
+        setLiveProgress(null);
+        fetchSyncHistory();
+      }
+    } catch (err) {
+      console.error('Force cancel failed:', err);
+    } finally {
+      setCancellingSync(false);
+    }
+  };
 
   const handleSync = async () => {
     setSyncing(true);
@@ -608,17 +685,23 @@ export default function IntegrationDetailPage() {
       {/* Sync Message */}
       {syncMessage && (
         <div className={`p-4 rounded-lg ${
-          syncMessage.includes('success') 
+          syncMessage.includes('✅') 
             ? 'bg-green-50 border border-green-200 text-green-700'
-            : 'bg-red-50 border border-red-200 text-red-700'
+            : syncMessage.includes('❌') || syncMessage.includes('🛑')
+              ? 'bg-red-50 border border-red-200 text-red-700'
+              : syncMessage.includes('⚠️')
+                ? 'bg-yellow-50 border border-yellow-200 text-yellow-700'
+                : 'bg-blue-50 border border-blue-200 text-blue-700'
         }`}>
           <div className="flex items-center gap-2">
-            {syncMessage.includes('success') ? (
+            {syncMessage.includes('✅') ? (
               <CheckCircle className="w-5 h-5" />
+            ) : syncMessage.includes('❌') || syncMessage.includes('🛑') ? (
+              <XCircle className="w-5 h-5" />
             ) : (
-              <AlertCircle className="w-5 h-5" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             )}
-            <span>{syncMessage}</span>
+            <span className="flex-1">{syncMessage}</span>
             <button 
               onClick={() => setSyncMessage(null)}
               className="ml-auto text-gray-400 hover:text-gray-600"
@@ -627,6 +710,91 @@ export default function IntegrationDetailPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Live Sync Progress */}
+      {liveProgress && liveProgress.status === 'running' && (
+        <Card className="p-4 border-blue-200 bg-blue-50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+              <span className="font-semibold text-blue-800">กำลัง Sync...</span>
+              {liveProgress.cancel_requested && (
+                <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full font-medium">
+                  กำลังยกเลิก...
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {!liveProgress.cancel_requested ? (
+                <button
+                  onClick={() => handleCancelSync(liveProgress.sync_log_id)}
+                  disabled={cancellingSync}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {cancellingSync ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ban className="w-3 h-3" />}
+                  ยกเลิก
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleForceCancelSync(liveProgress.sync_log_id)}
+                  disabled={cancellingSync}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-200 hover:bg-red-300 text-red-800 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {cancellingSync ? <Loader2 className="w-3 h-3 animate-spin" /> : <StopCircle className="w-3 h-3" />}
+                  Force Cancel
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-blue-200 rounded-full h-3 mb-2">
+            <div 
+              className={`h-3 rounded-full transition-all duration-500 ${
+                liveProgress.cancel_requested ? 'bg-yellow-500' : 'bg-blue-600'
+              }`}
+              style={{ width: `${Math.min(liveProgress.progress_percent || 0, 100)}%` }}
+            />
+          </div>
+          
+          {/* Progress Details */}
+          <div className="flex items-center justify-between text-sm text-blue-700">
+            <div className="flex items-center gap-4">
+              <span>{liveProgress.processed_items}/{liveProgress.total_items} รายการ</span>
+              {liveProgress.current_chunk > 0 && (
+                <span className="text-blue-500">Chunk {liveProgress.current_chunk}/{liveProgress.total_chunks}</span>
+              )}
+              {liveProgress.current_item_code && (
+                <span className="font-mono text-xs bg-blue-100 px-2 py-0.5 rounded">
+                  {liveProgress.current_item_code}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="font-bold">{Math.round(liveProgress.progress_percent || 0)}%</span>
+              {liveProgress.api_calls_count > 0 && (
+                <span className="text-blue-500 text-xs">API: {liveProgress.api_calls_count} calls</span>
+              )}
+            </div>
+          </div>
+          
+          {/* Live Stats */}
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className="bg-green-50 rounded px-2 py-1 text-center">
+              <span className="text-xs text-green-600">สร้าง</span>
+              <p className="text-sm font-bold text-green-700">+{liveProgress.tours_created}</p>
+            </div>
+            <div className="bg-purple-50 rounded px-2 py-1 text-center">
+              <span className="text-xs text-purple-600">อัพเดท</span>
+              <p className="text-sm font-bold text-purple-700">{liveProgress.tours_updated}</p>
+            </div>
+            <div className="bg-red-50 rounded px-2 py-1 text-center">
+              <span className="text-xs text-red-600">ล้มเหลว</span>
+              <p className="text-sm font-bold text-red-700">{liveProgress.tours_failed}</p>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Quick Stats */}
@@ -669,10 +837,18 @@ export default function IntegrationDetailPage() {
               <p className={`text-2xl font-bold ${
                 integration.last_sync_status === 'completed' ? 'text-green-600' : 
                 integration.last_sync_status === 'failed' ? 'text-red-600' : 
+                integration.last_sync_status === 'cancelled' ? 'text-orange-600' :
+                integration.last_sync_status === 'timeout' ? 'text-red-600' :
+                integration.last_sync_status === 'partial' ? 'text-yellow-600' :
+                integration.last_sync_status === 'running' ? 'text-blue-600' :
                 'text-gray-600'
               }`}>
                 {integration.last_sync_status === 'completed' ? '✓ สำเร็จ' : 
                  integration.last_sync_status === 'failed' ? '✗ ล้มเหลว' : 
+                 integration.last_sync_status === 'cancelled' ? '⊘ ยกเลิก' :
+                 integration.last_sync_status === 'timeout' ? '⏱ หมดเวลา' :
+                 integration.last_sync_status === 'partial' ? '⚠ บางส่วน' :
+                 integration.last_sync_status === 'running' ? '◉ กำลังทำงาน' :
                  integration.last_sync_status || '-'}
               </p>
             </div>
@@ -767,7 +943,12 @@ export default function IntegrationDetailPage() {
             {syncHistory.length > 0 ? syncHistory.map((sync) => (
               <div 
                 key={sync.id} 
-                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all ${sync.status === 'running' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}
+                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all ${
+                  sync.status === 'running' ? 'bg-blue-50 border border-blue-200' : 
+                  sync.status === 'cancelled' ? 'bg-orange-50 border border-orange-200' :
+                  sync.status === 'timeout' ? 'bg-red-50 border border-red-200' :
+                  'bg-gray-50'
+                }`}
                 onClick={() => setSyncLogModal({ open: true, log: sync })}
               >
                 <div className="flex items-center gap-3">
@@ -777,18 +958,35 @@ export default function IntegrationDetailPage() {
                     <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                   ) : sync.status === 'partial' ? (
                     <AlertCircle className="w-5 h-5 text-yellow-500" />
+                  ) : sync.status === 'cancelled' ? (
+                    <Ban className="w-5 h-5 text-orange-500" />
+                  ) : sync.status === 'timeout' ? (
+                    <Clock className="w-5 h-5 text-red-500" />
                   ) : (
                     <XCircle className="w-5 h-5 text-red-500" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">
                       {sync.status === 'running' 
-                        ? 'กำลัง Sync...'
+                        ? `กำลัง Sync... ${sync.progress_percent ? `(${Math.round(sync.progress_percent)}%)` : ''}`
                         : sync.status === 'completed' || sync.status === 'partial'
                           ? `+${sync.tours_created} เพิ่ม, ${sync.tours_updated} อัพเดท${(sync.tours_failed || sync.error_count || 0) > 0 ? `, ${sync.tours_failed || sync.error_count} ล้มเหลว` : ''}`
-                          : 'Sync ล้มเหลว'
+                          : sync.status === 'cancelled'
+                            ? `ยกเลิก (${sync.processed_items || 0}/${sync.total_items || 0} รายการ)${sync.cancel_reason ? ` - ${sync.cancel_reason}` : ''}`
+                            : sync.status === 'timeout'
+                              ? 'หมดเวลา (Timeout)'
+                              : 'Sync ล้มเหลว'
                       }
                     </p>
+                    {/* Progress bar for running sync */}
+                    {sync.status === 'running' && (sync.progress_percent || 0) > 0 && (
+                      <div className="w-full bg-blue-200 rounded-full h-1 mt-1">
+                        <div 
+                          className="h-1 rounded-full bg-blue-600 transition-all duration-500"
+                          style={{ width: `${Math.min(sync.progress_percent || 0, 100)}%` }}
+                        />
+                      </div>
+                    )}
                     {/* Show error message for failed sync */}
                     {sync.status === 'failed' && sync.error_summary && (
                       <p className="text-xs text-red-600 mt-0.5 truncate max-w-xs" title={
@@ -823,6 +1021,8 @@ export default function IntegrationDetailPage() {
                       ${sync.status === 'running' ? 'bg-blue-100 text-blue-700' : ''}
                       ${sync.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : ''}
                       ${sync.status === 'failed' ? 'bg-red-100 text-red-700' : ''}
+                      ${sync.status === 'cancelled' ? 'bg-orange-100 text-orange-700' : ''}
+                      ${sync.status === 'timeout' ? 'bg-red-100 text-red-700' : ''}
                     `}>
                       {sync.sync_type}
                     </span>
@@ -1050,9 +1250,9 @@ export default function IntegrationDetailPage() {
       {/* Sync Log Detail Modal */}
       {syncLogModal.open && syncLogModal.log && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
               <div className="flex items-center gap-3">
                 {syncLogModal.log.status === 'completed' ? (
                   <CheckCircle className="w-6 h-6 text-green-500" />
@@ -1060,6 +1260,10 @@ export default function IntegrationDetailPage() {
                   <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
                 ) : syncLogModal.log.status === 'partial' ? (
                   <AlertCircle className="w-6 h-6 text-yellow-500" />
+                ) : syncLogModal.log.status === 'cancelled' ? (
+                  <Ban className="w-6 h-6 text-orange-500" />
+                ) : syncLogModal.log.status === 'timeout' ? (
+                  <Clock className="w-6 h-6 text-red-500" />
                 ) : (
                   <XCircle className="w-6 h-6 text-red-500" />
                 )}
@@ -1089,11 +1293,15 @@ export default function IntegrationDetailPage() {
                     ${syncLogModal.log.status === 'running' ? 'bg-blue-100 text-blue-700' : ''}
                     ${syncLogModal.log.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : ''}
                     ${syncLogModal.log.status === 'failed' ? 'bg-red-100 text-red-700' : ''}
+                    ${syncLogModal.log.status === 'cancelled' ? 'bg-orange-100 text-orange-700' : ''}
+                    ${syncLogModal.log.status === 'timeout' ? 'bg-red-100 text-red-700' : ''}
                   `}>
                     {syncLogModal.log.status === 'completed' ? 'สำเร็จ' :
                      syncLogModal.log.status === 'running' ? 'กำลังทำงาน' :
                      syncLogModal.log.status === 'partial' ? 'สำเร็จบางส่วน' :
-                     syncLogModal.log.status === 'failed' ? 'ล้มเหลว' : syncLogModal.log.status}
+                     syncLogModal.log.status === 'failed' ? 'ล้มเหลว' :
+                     syncLogModal.log.status === 'cancelled' ? 'ยกเลิก' :
+                     syncLogModal.log.status === 'timeout' ? 'หมดเวลา' : syncLogModal.log.status}
                   </span>
                   <p className="text-xs text-gray-500 mt-2">สถานะ</p>
                 </div>
@@ -1167,6 +1375,54 @@ export default function IntegrationDetailPage() {
                       <p className="text-xl font-bold text-purple-700">{syncLogModal.log.periods_updated ?? 0}</p>
                       <p className="text-xs text-purple-600">อัพเดท</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Progress Info (for running/cancelled) */}
+              {(syncLogModal.log.progress_percent !== undefined && syncLogModal.log.progress_percent !== null && syncLogModal.log.progress_percent > 0) && (
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-2">ความคืบหน้า</h4>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                      <div 
+                        className={`h-2.5 rounded-full ${
+                          syncLogModal.log.status === 'cancelled' ? 'bg-orange-500' :
+                          syncLogModal.log.status === 'timeout' ? 'bg-red-500' :
+                          syncLogModal.log.status === 'running' ? 'bg-blue-500' :
+                          'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(syncLogModal.log.progress_percent, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>{syncLogModal.log.processed_items ?? 0}/{syncLogModal.log.total_items ?? 0} รายการ</span>
+                      <span className="font-medium">{Math.round(syncLogModal.log.progress_percent)}%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cancel Info */}
+              {syncLogModal.log.status === 'cancelled' && (
+                <div>
+                  <h4 className="font-medium text-orange-700 mb-2 flex items-center gap-2">
+                    <Ban className="w-4 h-4" />
+                    ข้อมูลการยกเลิก
+                  </h4>
+                  <div className="bg-orange-50 rounded-lg p-3 space-y-2 text-sm">
+                    {syncLogModal.log.cancel_reason && (
+                      <div>
+                        <span className="text-gray-500">เหตุผล:</span>
+                        <span className="ml-2 text-orange-700 font-medium">{syncLogModal.log.cancel_reason}</span>
+                      </div>
+                    )}
+                    {syncLogModal.log.cancelled_at && (
+                      <div>
+                        <span className="text-gray-500">ยกเลิกเมื่อ:</span>
+                        <span className="ml-2">{new Date(syncLogModal.log.cancelled_at).toLocaleString('th-TH')}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

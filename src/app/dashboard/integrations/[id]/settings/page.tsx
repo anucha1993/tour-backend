@@ -27,6 +27,9 @@ import {
   FileImage,
   Upload,
   Image as ImageIcon,
+  Power,
+  Play,
+  Pause,
 } from 'lucide-react';
 import Link from 'next/link';
 import { integrationsApi, type WholesalerApiConfig } from '@/lib/api';
@@ -92,17 +95,30 @@ const defaultFormData = {
 // Type for form data
 type FormData = typeof defaultFormData;
 
-// Cron schedule presets
+// Cron schedule presets (interval only - minute offset is separate)
 const SCHEDULE_PRESETS = [
-  { label: 'ทุก 1 ชั่วโมง', value: '0 * * * *' },
-  { label: 'ทุก 2 ชั่วโมง', value: '0 */2 * * *' },
-  { label: 'ทุก 4 ชั่วโมง', value: '0 */4 * * *' },
-  { label: 'ทุก 6 ชั่วโมง', value: '0 */6 * * *' },
-  { label: 'ทุก 12 ชั่วโมง', value: '0 */12 * * *' },
-  { label: 'วันละครั้ง (เที่ยงคืน)', value: '0 0 * * *' },
-  { label: 'วันละครั้ง (06:00 น.)', value: '0 6 * * *' },
-  { label: 'กำหนดเอง (Custom)', value: 'custom' },
+  { label: 'ทุก 1 ชั่วโมง', value: '* * * *', hourPart: '* * * *' },
+  { label: 'ทุก 2 ชั่วโมง', value: '*/2 * * *', hourPart: '*/2 * * *' },
+  { label: 'ทุก 4 ชั่วโมง', value: '*/4 * * *', hourPart: '*/4 * * *' },
+  { label: 'ทุก 6 ชั่วโมง', value: '*/6 * * *', hourPart: '*/6 * * *' },
+  { label: 'ทุก 12 ชั่วโมง', value: '*/12 * * *', hourPart: '*/12 * * *' },
+  { label: 'วันละครั้ง (เที่ยงคืน)', value: '0 * * *', hourPart: '0 * * *' },
+  { label: 'วันละครั้ง (06:00 น.)', value: '6 * * *', hourPart: '6 * * *' },
+  { label: 'กำหนดเอง (Custom)', value: 'custom', hourPart: 'custom' },
 ];
+
+// Helper: extract minute offset and interval from cron
+function parseCronSchedule(cron: string): { minute: number; intervalPart: string } {
+  const parts = cron.trim().split(/\s+/);
+  const minute = parseInt(parts[0]) || 0;
+  const rest = parts.slice(1).join(' ');
+  return { minute, intervalPart: rest };
+}
+
+// Helper: build cron from interval preset and minute offset
+function buildCron(intervalPart: string, minute: number): string {
+  return `${minute} ${intervalPart}`;
+}
 
 export default function IntegrationSettingsPage() {
   const params = useParams();
@@ -119,6 +135,10 @@ export default function IntegrationSettingsPage() {
   const [uploadingFooter, setUploadingFooter] = useState(false);
   const [customCron, setCustomCron] = useState(false);
   const [customCronValue, setCustomCronValue] = useState('');
+  const [syncMinuteOffset, setSyncMinuteOffset] = useState(0);
+  const [togglingSync, setTogglingSync] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState<FormData>(defaultFormData);
@@ -251,6 +271,11 @@ export default function IntegrationSettingsPage() {
           departures_path: integration.aggregation_config?.data_structure?.departures?.path || '',
           itineraries_path: integration.aggregation_config?.data_structure?.itineraries?.path || '',
         });
+
+        // Initialize minute offset from current cron schedule
+        const { minute } = parseCronSchedule(integration.sync_schedule || '0 */2 * * *');
+        setSyncMinuteOffset(minute);
+
       } catch (err) {
         console.error('Failed to load integration:', err);
         setError('ไม่สามารถโหลดข้อมูล Integration ได้');
@@ -453,11 +478,49 @@ export default function IntegrationSettingsPage() {
     }
     
     try {
+      setDeleting(true);
       await integrationsApi.delete(Number(params.id));
       router.push('/dashboard/integrations');
     } catch (err) {
       console.error('Failed to delete:', err);
       setError('ไม่สามารถลบ Integration ได้');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Toggle sync enabled/disabled via API (instant, no need to save)
+  const handleToggleSync = async () => {
+    setTogglingSync(true);
+    setError(null);
+    try {
+      const result = await integrationsApi.toggleSync(Number(params.id));
+      const newSyncEnabled = result.data?.sync_enabled ?? !formData.sync_enabled;
+      setFormData(prev => ({ ...prev, sync_enabled: newSyncEnabled }));
+    } catch (err) {
+      console.error('Failed to toggle sync:', err);
+      setError('ไม่สามารถเปลี่ยนสถานะ Sync ได้');
+    } finally {
+      setTogglingSync(false);
+    }
+  };
+
+  // Re-sync all tours from scratch
+  const handleResync = async () => {
+    if (!confirm('ต้องการ Sync ทัวร์ทั้งหมดใหม่จากต้นหรือไม่? อาจใช้เวลาสักครู่')) {
+      return;
+    }
+    
+    setResyncing(true);
+    setError(null);
+    try {
+      await integrationsApi.runSyncNow(Number(params.id), { sync_type: 'full' });
+      alert('เริ่ม Re-sync ทั้งหมดแล้ว คุณสามารถดูความคืบหน้าได้ที่หน้า Integration');
+    } catch (err) {
+      console.error('Failed to re-sync:', err);
+      setError('ไม่สามารถเริ่ม Re-sync ได้');
+    } finally {
+      setResyncing(false);
     }
   };
 
@@ -612,24 +675,57 @@ export default function IntegrationSettingsPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">ตั้งค่า Integration</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">ตั้งค่า Integration</h1>
+              {/* Sync Status Badge */}
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                formData.sync_enabled
+                  ? 'bg-green-100 text-green-700 border border-green-200'
+                  : 'bg-red-100 text-red-700 border border-red-200'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${formData.sync_enabled ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                {formData.sync_enabled ? 'Sync เปิดอยู่' : 'Sync ปิดอยู่'}
+              </span>
+            </div>
             <p className="text-gray-500 text-sm">{formData.wholesaler.name}</p>
           </div>
         </div>
-        
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? (
-            <>
+
+        <div className="flex items-center gap-3">
+          {/* Quick Toggle Sync Button */}
+          <Button 
+            variant="outline"
+            onClick={handleToggleSync}
+            disabled={togglingSync}
+            className={formData.sync_enabled 
+              ? 'text-orange-600 border-orange-300 hover:bg-orange-50' 
+              : 'text-green-600 border-green-300 hover:bg-green-50'
+            }
+          >
+            {togglingSync ? (
               <Loader2 className="w-4 h-4 animate-spin" />
-              กำลังบันทึก...
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              บันทึก
-            </>
-          )}
-        </Button>
+            ) : formData.sync_enabled ? (
+              <Pause className="w-4 h-4" />
+            ) : (
+              <Play className="w-4 h-4" />
+            )}
+            {formData.sync_enabled ? 'ปิด Sync' : 'เปิด Sync'}
+          </Button>
+
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                กำลังบันทึก...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                บันทึก
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-6">
@@ -978,34 +1074,64 @@ export default function IntegrationSettingsPage() {
               
               <div className="space-y-6">
                 {/* Sync Enabled */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium">เปิดใช้ Auto Sync</p>
-                    <p className="text-sm text-gray-500">Sync ทัวร์อัตโนมัติตามตารางเวลาที่กำหนด</p>
+                <div className={`flex items-center justify-between p-4 rounded-lg border-2 transition-colors ${
+                  formData.sync_enabled 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${formData.sync_enabled ? 'bg-green-100' : 'bg-red-100'}`}>
+                      <Power className={`w-5 h-5 ${formData.sync_enabled ? 'text-green-600' : 'text-red-500'}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">{formData.sync_enabled ? 'Auto Sync เปิดอยู่' : 'Auto Sync ปิดอยู่'}</p>
+                      <p className="text-sm text-gray-500">
+                        {formData.sync_enabled 
+                          ? 'ระบบจะ Sync ทัวร์อัตโนมัติตามตารางเวลาที่กำหนด'
+                          : 'การ Sync ถูกหยุดไว้ ทัวร์จะไม่ถูกอัพเดทอัตโนมัติ'
+                        }
+                      </p>
+                    </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.sync_enabled}
-                      onChange={(e) => setFormData(prev => ({ ...prev, sync_enabled: e.target.checked }))}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleToggleSync}
+                    disabled={togglingSync}
+                    className={formData.sync_enabled 
+                      ? 'text-red-600 border-red-300 hover:bg-red-100' 
+                      : 'text-green-600 border-green-300 hover:bg-green-100'
+                    }
+                  >
+                    {togglingSync ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : formData.sync_enabled ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                    {formData.sync_enabled ? 'ปิด Sync' : 'เปิด Sync'}
+                  </Button>
                 </div>
                 
                 {/* Sync Schedule */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ความถี่ในการ Sync</label>
                   <select
-                    value={customCron ? 'custom' : (SCHEDULE_PRESETS.some(p => p.value === formData.sync_schedule) ? formData.sync_schedule : 'custom')}
+                    value={(() => {
+                      const { intervalPart } = parseCronSchedule(formData.sync_schedule);
+                      if (customCron) return 'custom';
+                      const matched = SCHEDULE_PRESETS.find(p => p.hourPart === intervalPart);
+                      return matched ? matched.value : 'custom';
+                    })()}
                     onChange={(e) => {
                       if (e.target.value === 'custom') {
                         setCustomCron(true);
                         setCustomCronValue(formData.sync_schedule);
                       } else {
                         setCustomCron(false);
-                        setFormData(prev => ({ ...prev, sync_schedule: e.target.value }));
+                        const newCron = buildCron(e.target.value, syncMinuteOffset);
+                        setFormData(prev => ({ ...prev, sync_schedule: newCron }));
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -1015,8 +1141,48 @@ export default function IntegrationSettingsPage() {
                     ))}
                   </select>
                   
+                  {/* Minute Offset - only show when not custom */}
+                  {!customCron && (
+                    <div className="mt-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-blue-800">
+                          ⏱️ นาทีที่เริ่ม Sync (Offset)
+                        </label>
+                        <span className="text-sm font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                          นาทีที่ {syncMinuteOffset}
+                        </span>
+                      </div>
+                      <p className="text-xs text-blue-600 mb-3">
+                        กำหนดนาทีที่เริ่ม sync เพื่อไม่ให้ integration หลายตัวรันชนกัน เช่น ตัวแรก = 0, ตัวที่สอง = 10, ตัวที่สาม = 20
+                      </p>
+                      <input
+                        type="range"
+                        min="0"
+                        max="59"
+                        value={syncMinuteOffset}
+                        onChange={(e) => {
+                          const minute = parseInt(e.target.value);
+                          setSyncMinuteOffset(minute);
+                          const { intervalPart } = parseCronSchedule(formData.sync_schedule);
+                          setFormData(prev => ({ ...prev, sync_schedule: buildCron(intervalPart, minute) }));
+                        }}
+                        className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <div className="flex justify-between text-xs text-blue-400 mt-1">
+                        <span>0</span>
+                        <span>15</span>
+                        <span>30</span>
+                        <span>45</span>
+                        <span>59</span>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Custom Cron Input */}
-                  {(customCron || !SCHEDULE_PRESETS.some(p => p.value === formData.sync_schedule)) && (
+                  {(customCron || (() => {
+                    const { intervalPart } = parseCronSchedule(formData.sync_schedule);
+                    return !SCHEDULE_PRESETS.some(p => p.hourPart === intervalPart);
+                  })()) && (
                     <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Custom Cron Expression
@@ -1045,7 +1211,7 @@ export default function IntegrationSettingsPage() {
                     </div>
                   )}
                   
-                  {!customCron && SCHEDULE_PRESETS.some(p => p.value === formData.sync_schedule) && (
+                  {!customCron && (
                     <p className="text-xs text-gray-500 mt-1">Cron expression: <code className="bg-gray-100 px-1 rounded">{formData.sync_schedule}</code></p>
                   )}
                 </div>
@@ -1803,14 +1969,40 @@ export default function IntegrationSettingsPage() {
               <p className="text-sm text-gray-500 mb-6">การดำเนินการในส่วนนี้อาจมีผลกระทบสำคัญ โปรดดำเนินการด้วยความระมัดระวัง</p>
               
               <div className="space-y-6">
-                {/* Pause Integration */}
-                <div className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                {/* Pause/Resume Integration Sync */}
+                <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                  formData.sync_enabled 
+                    ? 'bg-yellow-50 border-yellow-200' 
+                    : 'bg-green-50 border-green-200'
+                }`}>
                   <div>
-                    <p className="font-medium">หยุดชั่วคราว</p>
-                    <p className="text-sm text-gray-500">หยุดการ sync และการจองชั่วคราว</p>
+                    <p className="font-medium">
+                      {formData.sync_enabled ? 'หยุดชั่วคราว' : 'เปิด Sync อีกครั้ง'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {formData.sync_enabled 
+                        ? 'หยุดการ sync อัตโนมัติชั่วคราว ทัวร์จะไม่ถูกอัพเดทจนกว่าจะเปิดใหม่' 
+                        : 'Sync ถูกหยุดอยู่ กดเพื่อเปิดการ sync อัตโนมัติอีกครั้ง'
+                      }
+                    </p>
                   </div>
-                  <Button variant="outline" className="text-yellow-600 border-yellow-400 hover:bg-yellow-50">
-                    หยุด
+                  <Button 
+                    variant="outline" 
+                    className={formData.sync_enabled 
+                      ? 'text-yellow-600 border-yellow-400 hover:bg-yellow-100' 
+                      : 'text-green-600 border-green-400 hover:bg-green-100'
+                    }
+                    onClick={handleToggleSync}
+                    disabled={togglingSync}
+                  >
+                    {togglingSync ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : formData.sync_enabled ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                    {formData.sync_enabled ? 'หยุด' : 'เปิด'}
                   </Button>
                 </div>
                 
@@ -1820,8 +2012,18 @@ export default function IntegrationSettingsPage() {
                     <p className="font-medium">Sync ทั้งหมดใหม่</p>
                     <p className="text-sm text-gray-500">Sync ทัวร์ทั้งหมดใหม่จากต้น (อาจใช้เวลาสักครู่)</p>
                   </div>
-                  <Button variant="outline" className="text-orange-600 border-orange-400 hover:bg-orange-50">
-                    Re-sync
+                  <Button 
+                    variant="outline" 
+                    className="text-orange-600 border-orange-400 hover:bg-orange-100"
+                    onClick={handleResync}
+                    disabled={resyncing}
+                  >
+                    {resyncing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    {resyncing ? 'กำลัง Sync...' : 'Re-sync'}
                   </Button>
                 </div>
                 
@@ -1833,11 +2035,16 @@ export default function IntegrationSettingsPage() {
                   </div>
                   <Button 
                     variant="outline" 
-                    className="text-red-600 border-red-400 hover:bg-red-50"
+                    className="text-red-600 border-red-400 hover:bg-red-100"
                     onClick={handleDelete}
+                    disabled={deleting}
                   >
-                    <Trash2 className="w-4 h-4" />
-                    ลบ
+                    {deleting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                    {deleting ? 'กำลังลบ...' : 'ลบ'}
                   </Button>
                 </div>
               </div>

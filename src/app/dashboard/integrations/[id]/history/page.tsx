@@ -16,6 +16,7 @@ import {
   Download,
   Search,
   Calendar,
+  Ban,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -131,11 +132,16 @@ export default function IntegrationHistoryPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'success':
+      case 'completed':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'partial':
         return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
       case 'failed':
         return <XCircle className="w-5 h-5 text-red-500" />;
+      case 'cancelled':
+        return <Ban className="w-5 h-5 text-orange-500" />;
+      case 'timeout':
+        return <Clock className="w-5 h-5 text-red-500" />;
       default:
         return <Clock className="w-5 h-5 text-gray-400" />;
     }
@@ -144,10 +150,15 @@ export default function IntegrationHistoryPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'success':
+      case 'completed':
         return 'bg-green-100 text-green-700';
       case 'partial':
         return 'bg-yellow-100 text-yellow-700';
       case 'failed':
+        return 'bg-red-100 text-red-700';
+      case 'cancelled':
+        return 'bg-orange-100 text-orange-700';
+      case 'timeout':
         return 'bg-red-100 text-red-700';
       default:
         return 'bg-gray-100 text-gray-700';
@@ -245,6 +256,8 @@ export default function IntegrationHistoryPage() {
             <option value="success">Success</option>
             <option value="partial">Partial</option>
             <option value="failed">Failed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="timeout">Timeout</option>
           </select>
         </div>
         

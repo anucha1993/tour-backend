@@ -249,7 +249,18 @@ export default function WholesalersPage() {
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                          {wholesaler.logo_url ? (
+                            <img 
+                              src={wholesaler.logo_url} 
+                              alt={wholesaler.name}
+                              className="w-10 h-10 rounded-lg object-contain bg-white border border-gray-100"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                              }}
+                            />
+                          ) : null}
+                          <div className={`w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 ${wholesaler.logo_url ? 'hidden' : ''}`}>
                             <Building2 className="w-5 h-5 text-white" />
                           </div>
                           <div>
@@ -375,7 +386,18 @@ export default function WholesalersPage() {
               <Card key={wholesaler.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                    {wholesaler.logo_url ? (
+                      <img 
+                        src={wholesaler.logo_url} 
+                        alt={wholesaler.name}
+                        className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-100 shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shrink-0 ${wholesaler.logo_url ? 'hidden' : ''}`}>
                       <Building2 className="w-6 h-6 text-white" />
                     </div>
                     <div>

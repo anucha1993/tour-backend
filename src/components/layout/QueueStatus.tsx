@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Activity, 
@@ -14,9 +14,12 @@ import {
   Loader2,
   Eye,
   X,
-  Bug
+  Bug,
+  Ban,
+  Zap,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { syncApi, type RunningSyncData } from '@/lib/api';
 
 interface QueueStatusData {
   queue: {
@@ -71,8 +74,10 @@ export default function QueueStatus() {
   const [failedJobs, setFailedJobs] = useState<FailedJob[]>([]);
   const [loadingFailed, setLoadingFailed] = useState(false);
   const [selectedJob, setSelectedJob] = useState<FailedJob | null>(null);
+  const [runningSyncs, setRunningSyncs] = useState<RunningSyncData[]>([]);
+  const [cancellingSync, setCancellingSync] = useState<number | null>(null);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get<QueueStatusData>('/queue/status');
@@ -84,14 +89,64 @@ export default function QueueStatus() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchRunningSyncs = useCallback(async () => {
+    try {
+      const response = await syncApi.getRunning();
+      if (response.success && response.data) {
+        setRunningSyncs(Array.isArray(response.data) ? response.data : []);
+      }
+    } catch (error) {
+      // Silently fail - endpoint might not exist yet
+      console.error('Failed to fetch running syncs:', error);
+    }
+  }, []);
 
   useEffect(() => {
     fetchStatus();
-    // Refresh every 30 seconds
+    fetchRunningSyncs();
+    // Refresh queue status every 30 seconds
     const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    // Refresh running syncs every 5 seconds for live progress
+    const progressInterval = setInterval(fetchRunningSyncs, 5000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(progressInterval);
+    };
+  }, [fetchStatus, fetchRunningSyncs]);
+
+  const handleCancelSync = async (syncLogId: number) => {
+    if (!confirm('ต้องการยกเลิก Sync นี้?')) return;
+    try {
+      setCancellingSync(syncLogId);
+      const response = await syncApi.cancel(syncLogId);
+      if (response.success) {
+        fetchRunningSyncs();
+        fetchStatus();
+      }
+    } catch (error) {
+      console.error('Failed to cancel sync:', error);
+    } finally {
+      setCancellingSync(null);
+    }
+  };
+
+  const handleForceCancelSync = async (syncLogId: number) => {
+    if (!confirm('⚠️ Force Cancel จะหยุด Sync ทันที ต้องการดำเนินการ?')) return;
+    try {
+      setCancellingSync(syncLogId);
+      const response = await syncApi.forceCancel(syncLogId);
+      if (response.success) {
+        fetchRunningSyncs();
+        fetchStatus();
+      }
+    } catch (error) {
+      console.error('Failed to force cancel sync:', error);
+    } finally {
+      setCancellingSync(null);
+    }
+  };
 
   const handleFixStuck = async () => {
     try {
@@ -268,17 +323,76 @@ export default function QueueStatus() {
             </div>
           )}
 
-          {/* Running Syncs */}
-          {data.syncs.running.length > 0 && (
+          {/* Running Syncs with Progress */}
+          {(runningSyncs.length > 0 || data.syncs.running.length > 0) && (
             <div>
               <div className="text-xs text-gray-500 mb-1">กำลัง Sync:</div>
-              {data.syncs.running.map((sync) => (
-                <div key={sync.id} className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  {sync.wholesaler?.name || `Wholesaler #${sync.wholesaler_id}`}
-                  <span className="text-blue-400">({sync.sync_type})</span>
-                </div>
-              ))}
+              <div className="space-y-2">
+                {runningSyncs.length > 0 ? runningSyncs.map((sync) => (
+                  <div key={sync.id} className="bg-blue-50 p-2 rounded border border-blue-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2 text-xs text-blue-700 min-w-0">
+                        <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                        <span className="truncate font-medium">{sync.wholesaler_name}</span>
+                        <span className="text-blue-400 flex-shrink-0">({sync.sync_type})</span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {sync.is_stuck && (
+                          <span className="px-1 py-0.5 text-[10px] bg-red-100 text-red-600 rounded font-medium">ค้าง!</span>
+                        )}
+                        {sync.cancel_requested ? (
+                          <span className="px-1 py-0.5 text-[10px] bg-yellow-100 text-yellow-700 rounded">กำลังยกเลิก...</span>
+                        ) : (
+                          <button
+                            onClick={() => handleCancelSync(sync.id)}
+                            disabled={cancellingSync === sync.id}
+                            className="p-0.5 hover:bg-red-100 rounded transition-colors"
+                            title="ยกเลิก Sync"
+                          >
+                            {cancellingSync === sync.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin text-red-500" />
+                            ) : (
+                              <Ban className="w-3 h-3 text-red-500" />
+                            )}
+                          </button>
+                        )}
+                        {(sync.is_stuck || sync.cancel_requested) && (
+                          <button
+                            onClick={() => handleForceCancelSync(sync.id)}
+                            disabled={cancellingSync === sync.id}
+                            className="p-0.5 hover:bg-red-100 rounded transition-colors"
+                            title="Force Cancel"
+                          >
+                            <Zap className="w-3 h-3 text-red-600" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-blue-200 rounded-full h-1.5 mb-1">
+                      <div 
+                        className={`h-1.5 rounded-full transition-all duration-500 ${
+                          sync.is_stuck ? 'bg-red-500' : sync.cancel_requested ? 'bg-yellow-500' : 'bg-blue-600'
+                        }`}
+                        style={{ width: `${Math.min(sync.progress_percent || 0, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-blue-600">
+                      <span>
+                        {sync.processed_items}/{sync.total_items} รายการ
+                        {sync.current_item_code && ` • ${sync.current_item_code}`}
+                      </span>
+                      <span className="font-medium">{Math.round(sync.progress_percent || 0)}%</span>
+                    </div>
+                  </div>
+                )) : data.syncs.running.map((sync) => (
+                  <div key={sync.id} className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {sync.wholesaler?.name || `Wholesaler #${sync.wholesaler_id}`}
+                    <span className="text-blue-400">({sync.sync_type})</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
