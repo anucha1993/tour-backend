@@ -977,6 +977,21 @@ export const toursApi = {
   togglePublish: (id: number) =>
     apiRequest<Tour>(`/tours/${id}/toggle-publish`, { method: 'PATCH' }),
 
+  generateSlug: (id: number) =>
+    apiRequest<{ slug: string; tour_id: number }>(`/tours/${id}/generate-slug`, { method: 'POST' }),
+
+  checkSlug: (slug: string, tourId?: number) =>
+    apiRequest<{ slug: string; is_unique: boolean }>('/tours/check-slug', {
+      method: 'POST',
+      body: JSON.stringify({ slug, tour_id: tourId }),
+    }),
+
+  previewSlug: (title: string, tourId?: number) =>
+    apiRequest<{ slug: string }>('/tours/preview-slug', {
+      method: 'POST',
+      body: JSON.stringify({ title, tour_id: tourId }),
+    }),
+
   recalculate: (id: number) =>
     apiRequest<Tour>(`/tours/${id}/recalculate`, { method: 'POST' }),
 

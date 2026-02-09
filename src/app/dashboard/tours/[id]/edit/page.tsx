@@ -33,6 +33,11 @@ import {
   ChevronRight,
   Code,
   RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Link2,
+  Copy,
+  Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -661,6 +666,14 @@ export default function EditTourPage() {
   const [loadingGallery, setLoadingGallery] = useState(false);
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<number>(-1); // -1 = cover image, 0+ = gallery index
 
+  // Slug states
+  const [generatingSlug, setGeneratingSlug] = useState(false);
+  const [checkingSlug, setCheckingSlug] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null); // null = not checked
+  const [slugEditing, setSlugEditing] = useState(false);
+  const [slugPreview, setSlugPreview] = useState<string>('');
+  const slugCheckTimeout = useRef<NodeJS.Timeout | null>(null);
+
   // Debounce ref for pending API updates
   const pendingUpdates = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -1099,8 +1112,24 @@ export default function EditTourPage() {
     setErrors({});
 
     try {
+      // Auto-generate slug ถ้าสถานะเป็น active แต่ยังไม่มี slug
+      let currentSlug = formData.slug;
+      if (formData.status === 'active' && !formData.slug && tour?.id) {
+        try {
+          const slugRes = await toursApi.generateSlug(tour.id);
+          if (slugRes.success && slugRes.data?.slug) {
+            currentSlug = slugRes.data.slug;
+            setFormData(prev => ({ ...prev, slug: currentSlug }));
+          }
+        } catch (slugErr) {
+          console.warn('Auto-generate slug failed:', slugErr);
+          // ไม่ block การบันทึก ถ้าสร้าง slug ไม่สำเร็จ
+        }
+      }
+
       const payload = {
         ...formData,
+        slug: currentSlug, // ใช้ slug ที่อาจถูก auto-generate
         wholesaler_id: parseInt(formData.wholesaler_id) || undefined,
         transport_id: formData.transport_id ? parseInt(formData.transport_id) : null,
         hotel_star: formData.hotel_star || null,
@@ -1117,7 +1146,10 @@ export default function EditTourPage() {
       
       if (response.success) {
         // แสดง toast หรือ notification แทนการ redirect
-        alert('บันทึกข้อมูลสำเร็จ');
+        const slugMsg = (formData.status === 'active' && !formData.slug && currentSlug) 
+          ? `\n🔗 Slug ถูกสร้างอัตโนมัติ: ${currentSlug}` 
+          : '';
+        alert('บันทึกข้อมูลสำเร็จ' + slugMsg);
         // อยู่หน้าเดิม ไม่ต้อง redirect
       } else {
         setErrors(response.errors || { general: [response.message || 'Failed to update tour'] });
@@ -4240,93 +4272,256 @@ export default function EditTourPage() {
   );
 
   const renderSeoTab = () => {
-    // Function to generate slug from title
-    const generateSlug = () => {
+    // Generate slug via API (translates Thai → English)
+    const handleGenerateSlug = async () => {
+      if (!tour?.id) return;
+      
+      // Confirm before changing slug (if already has slug)
+      if (formData.slug && !confirm('ต้องการสร้าง Slug ใหม่หรือไม่?\nการเปลี่ยน Slug จะทำให้ลิงก์เดิมใช้งานไม่ได้')) {
+        return;
+      }
+      
+      setGeneratingSlug(true);
+      try {
+        const res = await toursApi.generateSlug(tour.id);
+        if (res.success && res.data) {
+          setFormData(prev => ({ ...prev, slug: res.data!.slug }));
+          setSlugAvailable(true);
+          setSlugEditing(false);
+        } else {
+          alert('ไม่สามารถสร้าง Slug ได้: ' + (res.message || 'Unknown error'));
+        }
+      } catch {
+        alert('เกิดข้อผิดพลาดในการสร้าง Slug');
+      } finally {
+        setGeneratingSlug(false);
+      }
+    };
+
+    // Preview slug without saving (from title)
+    const handlePreviewSlug = async () => {
       if (!formData.title) {
         alert('กรุณากรอกชื่อทัวร์ก่อน');
         return;
       }
+      setGeneratingSlug(true);
+      try {
+        const res = await toursApi.previewSlug(formData.title, tour?.id);
+        if (res.success && res.data) {
+          setSlugPreview(res.data.slug);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setGeneratingSlug(false);
+      }
+    };
+
+    // Check slug uniqueness with debounce
+    const handleSlugChange = (value: string) => {
+      // Sanitize: only allow lowercase, numbers, hyphens
+      const sanitized = value
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-');
       
-      // Confirm before changing slug (if already has slug)
-      if (formData.slug && !confirm('ต้องการเปลี่ยน Slug ใหม่หรือไม่? การเปลี่ยน Slug อาจทำให้ลิงก์เดิมใช้งานไม่ได้')) {
-        return;
+      setFormData(prev => ({ ...prev, slug: sanitized }));
+      setSlugAvailable(null);
+      
+      if (slugCheckTimeout.current) {
+        clearTimeout(slugCheckTimeout.current);
       }
       
-      // Convert Thai and English title to slug
-      const slug = formData.title
-        .toLowerCase()
-        .trim()
-        .replace(/[ก-๙]/g, '') // Remove Thai characters for cleaner URL
-        .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
-        .replace(/\s+/g, '-') // Replace spaces with -
-        .replace(/-+/g, '-') // Replace multiple - with single -
-        .replace(/^-|-$/g, ''); // Remove leading/trailing -
-      
-      // If slug is empty (Thai-only title), use tour_code
-      const finalSlug = slug || formData.tour_code?.toLowerCase().replace(/_/g, '-') || 'tour';
-      
-      setFormData(prev => ({ ...prev, slug: finalSlug }));
+      if (sanitized.length >= 3) {
+        setCheckingSlug(true);
+        slugCheckTimeout.current = setTimeout(async () => {
+          try {
+            const res = await toursApi.checkSlug(sanitized, tour?.id);
+            if (res.success && res.data) {
+              setSlugAvailable(res.data.is_unique);
+            }
+          } catch {
+            setSlugAvailable(null);
+          } finally {
+            setCheckingSlug(false);
+          }
+        }, 500);
+      } else {
+        setCheckingSlug(false);
+      }
+    };
+
+    // Copy full URL to clipboard
+    const copySlugUrl = () => {
+      const url = `https://nexttripholiday.com/tours/${formData.slug}`;
+      navigator.clipboard.writeText(url);
+      alert('คัดลอก URL แล้ว!');
     };
 
     return (
     <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Slug (URL)</label>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-500 text-sm shrink-0">nexttripholiday.com/tours/</span>
-          <div className="flex-1 px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg font-mono text-gray-700">
-            {formData.slug || <span className="text-gray-400">ยังไม่มี slug</span>}
+      {/* Slug Section */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Link2 className="w-5 h-5 text-blue-500" />
+            <h3 className="text-base font-semibold text-gray-900">Slug (URL)</h3>
           </div>
+          {formData.slug && (
+            <button
+              type="button"
+              onClick={copySlugUrl}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 transition-colors"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              คัดลอก URL
+            </button>
+          )}
+        </div>
+
+        {/* Current Slug Display */}
+        <div className="mb-4">
+          <label className="block text-xs text-gray-500 mb-1.5">URL ปัจจุบัน</label>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm shrink-0">nexttripholiday.com/tours/</span>
+            {slugEditing ? (
+              <input
+                type="text"
+                value={formData.slug}
+                onChange={(e) => handleSlugChange(e.target.value)}
+                placeholder="พิมพ์ slug ที่ต้องการ..."
+                className={`flex-1 px-3 py-2 border rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  slugAvailable === false ? 'border-red-300 bg-red-50' : 
+                  slugAvailable === true ? 'border-green-300 bg-green-50' : 
+                  'border-gray-300'
+                }`}
+                autoFocus
+              />
+            ) : (
+              <div className={`flex-1 px-3 py-2 rounded-lg font-mono text-sm ${
+                formData.slug ? 'bg-gray-50 border border-gray-200 text-gray-800' : 'bg-gray-100 border border-dashed border-gray-300 text-gray-400'
+              }`}>
+                {formData.slug || 'ยังไม่มี slug — กดปุ่มสร้างอัตโนมัติ'}
+              </div>
+            )}
+            
+            {/* Status indicator */}
+            {slugEditing && (
+              <div className="shrink-0 w-6">
+                {checkingSlug ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                ) : slugAvailable === true ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                ) : slugAvailable === false ? (
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                ) : null}
+              </div>
+            )}
+          </div>
+          
+          {/* Uniqueness feedback */}
+          {slugEditing && slugAvailable === false && (
+            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              Slug นี้ถูกใช้แล้ว กรุณาเปลี่ยนใหม่
+            </p>
+          )}
+          {slugEditing && slugAvailable === true && (
+            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              Slug นี้ใช้ได้
+            </p>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={generateSlug}
+            onClick={handleGenerateSlug}
+            disabled={generatingSlug}
             className="shrink-0"
           >
-            <Sparkles className="w-4 h-4" />
-            {formData.slug ? 'สร้างใหม่' : 'สร้าง Slug'}
+            {generatingSlug ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {formData.slug ? 'สร้างใหม่อัตโนมัติ' : 'สร้าง Slug อัตโนมัติ'}
           </Button>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          Slug จะถูกสร้างจากชื่อทัวร์ และไม่สามารถซ้ำกับทัวร์อื่นได้
-        </p>
-        {formData.slug && (
-          <p className="text-xs text-orange-600 mt-1">
-            ⚠️ หากเปลี่ยน Slug ลิงก์เดิมจะใช้งานไม่ได้
-          </p>
-        )}
-        {/* Check if title changed but slug not updated */}
-        {formData.slug && formData.title && (() => {
-          const expectedSlug = formData.title
-            .toLowerCase()
-            .trim()
-            .replace(/[ก-๙]/g, '')
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '') || formData.tour_code?.toLowerCase().replace(/_/g, '-');
           
-          // Check if current slug doesn't match expected (might have been changed)
-          const slugBase = formData.slug.replace(/-\d+$/, ''); // Remove trailing number like -2, -3
-          if (expectedSlug && slugBase !== expectedSlug && !formData.slug.startsWith(expectedSlug)) {
-            return (
-              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  💡 <strong>ชื่อทัวร์อาจไม่ตรงกับ Slug</strong>
-                </p>
-                <p className="text-xs text-yellow-700 mt-1">
-                  ชื่อทัวร์ปัจจุบัน: &quot;{formData.title}&quot;<br/>
-                  Slug แนะนำ: <code className="bg-yellow-100 px-1 rounded">{expectedSlug}</code>
-                </p>
-                <p className="text-xs text-yellow-600 mt-1">
-                  คลิก &quot;สร้างใหม่&quot; หากต้องการอัปเดต Slug ให้ตรงกับชื่อทัวร์
-                </p>
-              </div>
-            );
-          }
-          return null;
-        })()}
+          {!slugEditing ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSlugEditing(true)}
+              className="shrink-0"
+            >
+              <Pencil className="w-4 h-4" />
+              แก้ไขเอง
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSlugEditing(false);
+                setSlugAvailable(null);
+              }}
+              className="shrink-0"
+            >
+              <Check className="w-4 h-4" />
+              เสร็จสิ้น
+            </Button>
+          )}
+
+          {!slugEditing && formData.title && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handlePreviewSlug}
+              disabled={generatingSlug}
+              className="shrink-0"
+            >
+              <Eye className="w-4 h-4" />
+              ดูตัวอย่าง Slug
+            </Button>
+          )}
+        </div>
+
+        {/* Preview Slug Result */}
+        {slugPreview && !slugEditing && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-600 mb-1">Slug ที่จะได้จากชื่อทัวร์:</p>
+            <p className="text-sm font-mono text-blue-900">{slugPreview}</p>
+            <p className="text-xs text-blue-500 mt-1">
+              กด &quot;{formData.slug ? 'สร้างใหม่อัตโนมัติ' : 'สร้าง Slug อัตโนมัติ'}&quot; เพื่อบันทึก Slug นี้ลง Database
+            </p>
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="mt-4 space-y-1">
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <Info className="w-3 h-3" />
+            Slug สร้างจากชื่อทัวร์ โดยแปลภาษาไทยเป็นอังกฤษอัตโนมัติ
+          </p>
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <Info className="w-3 h-3" />
+            ระบบจะตรวจสอบไม่ให้ซ้ำกับทัวร์อื่นโดยอัตโนมัติ
+          </p>
+          {formData.slug && (
+            <p className="text-xs text-orange-500 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              การเปลี่ยน Slug จะทำให้ลิงก์เดิมใช้งานไม่ได้
+            </p>
+          )}
+        </div>
       </div>
 
       <div>
