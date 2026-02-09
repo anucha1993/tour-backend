@@ -197,6 +197,45 @@ export interface TourTabConditionOptions {
   tour_types: Record<string, string>;
 }
 
+// ===================== Recommended Tours Types =====================
+
+export interface RecommendedTourSection {
+  id: number;
+  name: string;
+  description: string | null;
+  conditions: TourTabCondition[] | null;
+  display_limit: number;
+  sort_by: 'popular' | 'price_asc' | 'price_desc' | 'newest' | 'departure_date';
+  sort_order: number;
+  weight: number;
+  schedule_start: string | null;
+  schedule_end: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecommendedTourSettings {
+  id: number;
+  display_mode: 'ordered' | 'random' | 'weighted_random' | 'schedule';
+  title: string;
+  subtitle: string | null;
+  is_active: boolean;
+  cache_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecommendedTourConditionOptions {
+  condition_types: Record<string, string>;
+  sort_options: Record<string, string>;
+  display_modes: Record<string, string>;
+  countries: Array<{ id: number; name_th: string; name_en: string; iso2: string }>;
+  regions: Record<string, string>;
+  wholesalers: Array<{ id: number; name: string; code: string }>;
+  tour_types: Record<string, string>;
+}
+
 export interface GalleryImage {
   id: number;
   cloudflare_id: string | null;
@@ -297,6 +336,10 @@ export async function apiRequest<T = any>(
     return data;
   } catch (error) {
     if (error instanceof ApiError) {
+      throw error;
+    }
+    // Preserve AbortError so callers can detect cancelled requests
+    if (error instanceof DOMException && error.name === 'AbortError') {
       throw error;
     }
     throw new ApiError('Network error', 0);
@@ -894,14 +937,14 @@ export interface TourCounts {
 
 // Tours API
 export const toursApi = {
-  list: (params?: Record<string, string>) => {
+  list: (params?: Record<string, string>, signal?: AbortSignal) => {
     const searchParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value) searchParams.append(key, value);
       });
     }
-    return apiRequest<Tour[]>(`/tours?${searchParams.toString()}`);
+    return apiRequest<Tour[]>(`/tours?${searchParams.toString()}`, { signal });
   },
 
   get: (id: number) =>
@@ -2247,6 +2290,122 @@ export const tourTabsApi = {
       sort_by: string;
     }>(`/tour-tabs/${id}/preview${params}`);
   },
+
+  previewConditions: (data: {
+    conditions?: TourTabCondition[];
+    sort_by?: string;
+    display_limit?: number;
+  }) =>
+    apiRequest<{
+      tours: Array<{
+        id: number;
+        title: string;
+        tour_code: string;
+        country: string;
+        days: number;
+        nights: number;
+        price: number | null;
+        departure_date: string | null;
+        image_url: string | null;
+        view_count: number;
+      }>;
+      total: number;
+      conditions: TourTabCondition[] | null;
+      sort_by: string;
+    }>('/tour-tabs/preview-conditions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ===================== Recommended Tours API =====================
+
+export const recommendedToursApi = {
+  list: async (params?: { search?: string; is_active?: boolean }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.is_active !== undefined) searchParams.append('is_active', params.is_active ? '1' : '0');
+    return apiRequest<RecommendedTourSection[]>(`/recommended-tours?${searchParams.toString()}`);
+  },
+
+  get: (id: number) =>
+    apiRequest<RecommendedTourSection>(`/recommended-tours/${id}`),
+
+  create: (data: Partial<RecommendedTourSection>) =>
+    apiRequest<RecommendedTourSection>('/recommended-tours', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<RecommendedTourSection>) =>
+    apiRequest<RecommendedTourSection>(`/recommended-tours/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest<void>(`/recommended-tours/${id}`, { method: 'DELETE' }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<RecommendedTourSection>(`/recommended-tours/${id}/toggle-status`, { method: 'PATCH' }),
+
+  reorder: (items: Array<{ id: number; sort_order: number }>) =>
+    apiRequest<void>('/recommended-tours/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  getConditionOptions: () =>
+    apiRequest<RecommendedTourConditionOptions>('/recommended-tours/condition-options'),
+
+  getSettings: () =>
+    apiRequest<RecommendedTourSettings>('/recommended-tours/settings'),
+
+  updateSettings: (data: Partial<RecommendedTourSettings>) =>
+    apiRequest<RecommendedTourSettings>('/recommended-tours/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  preview: (id: number) =>
+    apiRequest<{
+      section: RecommendedTourSection;
+      tours: Array<{
+        id: number;
+        title: string;
+        tour_code: string;
+        country: { id: number; name: string; iso2?: string };
+        days: number;
+        nights: number;
+        price: number | null;
+        departure_date: string | null;
+        image_url: string | null;
+      }>;
+      total: number;
+    }>(`/recommended-tours/${id}/preview`),
+
+  previewConditions: (data: {
+    conditions?: TourTabCondition[];
+    display_limit?: number;
+    sort_by?: string;
+  }) =>
+    apiRequest<{
+      tours: Array<{
+        id: number;
+        title: string;
+        tour_code: string;
+        country: { id: number; name: string; iso2?: string };
+        days: number;
+        nights: number;
+        price: number | null;
+        departure_date: string | null;
+        image_url: string | null;
+      }>;
+      total: number;
+    }>('/recommended-tours/preview-conditions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // ===================== Dashboard API =====================

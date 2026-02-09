@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
@@ -21,10 +21,17 @@ import {
   Clock,
   Cloud,
   PenLine,
+  Flame,
+  CheckCircle,
+  XCircle,
+  FileEdit,
+  Map,
 } from 'lucide-react';
 import {
   toursApi,
   Tour,
+  TourCounts,
+  TourTransport,
   TOUR_STATUS,
   TOUR_THEMES,
   TOUR_TYPES,
@@ -33,71 +40,115 @@ import {
 import TourPreviewModal from './TourPreviewModal';
 import TourPeriodsModal from './TourPeriodsModal';
 
-// Filter labels
-const DATA_SOURCE_LABELS: Record<string, string> = {
-  'api': 'จาก API',
-  'manual': 'สร้างเอง',
-};
+// ─── Tab Definitions ─────────────────────────────────────────────
+// Each tab maps to a unique preset filter sent to the API
+type TabKey = 'all' | 'api' | 'manual' | 'active' | 'draft' | 'inactive' | 'fire_sale';
 
-const PROMOTION_TYPE_LABELS: Record<string, string> = {
-  'fire_sale': 'โปรไฟไหม้',
-  'normal': 'โปรโมชั่น',
-  'none': 'ไม่มีโปร',
-};
+interface TabDef {
+  key: TabKey;
+  label: string;
+  icon: React.ElementType;
+  /** Fixed params sent to API for this tab */
+  params: Record<string, string>;
+  /** Extract count from TourCounts */
+  getCount: (c: TourCounts) => number;
+}
+
+const TABS: TabDef[] = [
+  { key: 'all',       label: 'ทั้งหมด',    icon: Map,         params: {},                             getCount: c => c.total },
+  { key: 'api',       label: 'จาก API',     icon: Cloud,       params: { data_source: 'api' },         getCount: c => c.by_data_source.api },
+  { key: 'manual',    label: 'สร้างเอง',    icon: PenLine,     params: { data_source: 'manual' },      getCount: c => c.by_data_source.manual },
+  { key: 'active',    label: 'เปิดใช้งาน',  icon: CheckCircle, params: { status: 'active' },           getCount: c => c.by_status.active },
+  { key: 'draft',     label: 'แบบร่าง',     icon: FileEdit,    params: { status: 'draft' },            getCount: c => c.by_status.draft },
+  { key: 'inactive',  label: 'ปิดใช้งาน',   icon: XCircle,     params: { status: 'inactive' },         getCount: c => c.by_status.inactive },
+  { key: 'fire_sale', label: 'โปรไฟไหม้',   icon: Flame,       params: { promotion_type: 'fire_sale' }, getCount: c => c.by_promotion_type.fire_sale },
+];
+
+/** Determine active tab from URL searchParams */
+function resolveTab(searchParams: URLSearchParams): TabKey {
+  const status = searchParams.get('status');
+  const dataSource = searchParams.get('data_source');
+  const promoType = searchParams.get('promotion_type');
+
+  if (promoType === 'fire_sale') return 'fire_sale';
+  if (dataSource === 'api') return 'api';
+  if (dataSource === 'manual') return 'manual';
+  if (status === 'active') return 'active';
+  if (status === 'draft') return 'draft';
+  if (status === 'inactive') return 'inactive';
+  return 'all';
+}
 
 export default function ToursPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  
+
+  // ─── Active tab (derived from URL) ────────────────────────────
+  const activeTab = resolveTab(searchParams);
+  const activeTabDef = TABS.find(t => t.key === activeTab)!;
+
+  // ─── State ─────────────────────────────────────────────────────
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [tourTypeFilter, setTourTypeFilter] = useState('');
   const [themeFilter, setThemeFilter] = useState('');
-  const [dataSourceFilter, setDataSourceFilter] = useState('');
-  const [promotionTypeFilter, setPromotionTypeFilter] = useState('');
-  
-  // Read filters from URL on mount
-  useEffect(() => {
-    const status = searchParams.get('status') || '';
-    const dataSource = searchParams.get('data_source') || '';
-    const promotionType = searchParams.get('promotion_type') || '';
-    
-    setStatusFilter(status);
-    setDataSourceFilter(dataSource);
-    setPromotionTypeFilter(promotionType);
-  }, [searchParams]);
-  
+  const [counts, setCounts] = useState<TourCounts | null>(null);
+
   // Modals
   const [previewTour, setPreviewTour] = useState<Tour | null>(null);
   const [periodsTour, setPeriodsTour] = useState<Tour | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   // Mass Delete
   const [selectedTours, setSelectedTours] = useState<Set<number>>(new Set());
   const [massDeleteConfirm, setMassDeleteConfirm] = useState(false);
   const [isMassDeleting, setIsMassDeleting] = useState(false);
 
+  // ─── Request cancellation ──────────────────────────────────────
+  const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
+
+  // ─── Fetch counts (once on mount / after mutations) ────────────
+  const fetchCounts = useCallback(async () => {
+    try {
+      const res = await toursApi.getCounts();
+      if (res.success && res.data) setCounts(res.data);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchCounts(); }, [fetchCounts]);
+
+  // ─── Fetch tours ───────────────────────────────────────────────
   const fetchTours = useCallback(async () => {
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const thisRequestId = ++requestIdRef.current;
+
     setLoading(true);
     try {
+      // Merge tab preset params + additional dropdown filters
       const params: Record<string, string> = {
         page: currentPage.toString(),
         per_page: '20',
+        ...activeTabDef.params,
       };
       if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
       if (tourTypeFilter) params.tour_type = tourTypeFilter;
       if (themeFilter) params.theme = themeFilter;
-      if (dataSourceFilter) params.data_source = dataSourceFilter;
-      if (promotionTypeFilter) params.promotion_type = promotionTypeFilter;
 
-      const response = await toursApi.list(params);
+      const response = await toursApi.list(params, controller.signal);
+
+      // Guard: discard if a newer request was issued
+      if (thisRequestId !== requestIdRef.current) return;
+
       if (response.success) {
         setTours(response.data || []);
         if (response.meta) {
@@ -106,29 +157,58 @@ export default function ToursPage() {
           setTotal(response.meta.total);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      // Abort errors are expected — ignore
+      if (err?.name === 'AbortError' || err?.message === 'The user aborted a request.') return;
+      if (thisRequestId !== requestIdRef.current) return;
       console.error('Failed to fetch tours:', err);
     } finally {
-      setLoading(false);
+      if (thisRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [currentPage, search, statusFilter, tourTypeFilter, themeFilter, dataSourceFilter, promotionTypeFilter]);
+  }, [currentPage, search, tourTypeFilter, themeFilter, activeTabDef]);
 
-  useEffect(() => {
-    fetchTours();
-  }, [fetchTours]);
+  useEffect(() => { fetchTours(); }, [fetchTours]);
 
+  // Debounce search → reset page
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1);
-    }, 300);
+    const timer = setTimeout(() => { setCurrentPage(1); }, 300);
     return () => clearTimeout(timer);
   }, [search]);
 
+  // ─── Tab switch handler ─────────────────────────────────────────
+  const switchTab = (tab: TabDef) => {
+    // Clear additional filters when switching tabs
+    setSearch('');
+    setTourTypeFilter('');
+    setThemeFilter('');
+    setCurrentPage(1);
+    setSelectedTours(new Set());
+
+    // Build the URL
+    const params = new URLSearchParams(tab.params);
+    const qs = params.toString();
+    router.push(`/dashboard/tours${qs ? `?${qs}` : ''}`);
+  };
+
+  // Reset page & selection when tab changes from sidebar
+  const prevTabRef = useRef(activeTab);
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      setCurrentPage(1);
+      setSelectedTours(new Set());
+      prevTabRef.current = activeTab;
+    }
+  }, [activeTab]);
+
+  // ─── CRUD helpers ──────────────────────────────────────────────
   const handleDelete = async (id: number) => {
     setIsDeleting(true);
     try {
       await toursApi.delete(id);
       fetchTours();
+      fetchCounts();
       setDeleteConfirm(null);
     } catch (err) {
       console.error('Failed to delete tour:', err);
@@ -146,6 +226,7 @@ export default function ToursPage() {
       setSelectedTours(new Set());
       setMassDeleteConfirm(false);
       fetchTours();
+      fetchCounts();
     } catch (err) {
       console.error('Failed to mass delete tours:', err);
     } finally {
@@ -221,37 +302,26 @@ export default function ToursPage() {
     }
   };
 
-  // Check if any filter is active
-  const hasActiveFilters = statusFilter || dataSourceFilter || promotionTypeFilter || tourTypeFilter || themeFilter;
+  // Check if any additional filter is active (beyond tab preset)
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search;
   
-  // Clear all filters
-  const clearFilters = () => {
-    setStatusFilter('');
-    setDataSourceFilter('');
-    setPromotionTypeFilter('');
+  // Clear additional filters only
+  const clearAdditionalFilters = () => {
     setTourTypeFilter('');
     setThemeFilter('');
     setSearch('');
-    router.push('/dashboard/tours');
-  };
-
-  // Get active filter label
-  const getActiveFilterLabel = () => {
-    const labels: string[] = [];
-    if (statusFilter) labels.push(TOUR_STATUS[statusFilter] || statusFilter);
-    if (dataSourceFilter) labels.push(DATA_SOURCE_LABELS[dataSourceFilter] || dataSourceFilter);
-    if (promotionTypeFilter) labels.push(PROMOTION_TYPE_LABELS[promotionTypeFilter] || promotionTypeFilter);
-    return labels;
+    setCurrentPage(1);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">จัดการทัวร์</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {hasActiveFilters ? `พบ ${total} รายการ` : `ทั้งหมด ${total} รายการ`}
+            {activeTab !== 'all' ? `${activeTabDef.label} — ` : ''}
+            {total} รายการ
           </p>
         </div>
         <div className="flex gap-2">
@@ -265,7 +335,7 @@ export default function ToursPage() {
               ลบที่เลือก ({selectedTours.size})
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={fetchTours}>
+          <Button variant="outline" size="sm" onClick={() => { fetchTours(); fetchCounts(); }}>
             <RefreshCw className="w-4 h-4" />
           </Button>
           <Link href="/dashboard/tours/create">
@@ -277,25 +347,42 @@ export default function ToursPage() {
         </div>
       </div>
 
-      {/* Active Filters Badge */}
-      {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-gray-500">กำลังกรอง:</span>
-          {getActiveFilterLabel().map((label, idx) => (
-            <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-              {label}
-            </span>
-          ))}
-          <button
-            onClick={clearFilters}
-            className="text-sm text-red-600 hover:text-red-700 hover:underline"
-          >
-            ล้างตัวกรอง
-          </button>
-        </div>
-      )}
+      {/* ─── Inline Tab Bar ───────────────────────────────────────── */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-0 overflow-x-auto -mb-px" aria-label="Tabs">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const Icon = tab.icon;
+            const count = counts ? tab.getCount(counts) : null;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => switchTab(tab)}
+                className={`
+                  flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors
+                  ${isActive
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }
+                `}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+                {count !== null && (
+                  <span className={`
+                    ml-1 text-xs px-1.5 py-0.5 rounded-full
+                    ${isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
+                  `}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-      {/* Search & Filters */}
+      {/* ─── Search & Additional Filters ──────────────────────────── */}
       <Card className="p-4">
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Search */}
@@ -310,7 +397,7 @@ export default function ToursPage() {
             />
           </div>
 
-          {/* Quick Filters */}
+          {/* Additional dropdown filters (within current tab) */}
           <div className="flex flex-wrap gap-2">
             <select
               value={tourTypeFilter}
@@ -319,17 +406,6 @@ export default function ToursPage() {
             >
               <option value="">ทุกกลุ่ม</option>
               {Object.entries(TOUR_TYPES).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทุกสถานะ</option>
-              {Object.entries(TOUR_STATUS).map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
               ))}
             </select>
@@ -345,27 +421,14 @@ export default function ToursPage() {
               ))}
             </select>
 
-            <select
-              value={dataSourceFilter}
-              onChange={(e) => { setDataSourceFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทุกแหล่งข้อมูล</option>
-              {Object.entries(DATA_SOURCE_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-
-            <select
-              value={promotionTypeFilter}
-              onChange={(e) => { setPromotionTypeFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทุกโปรโมชั่น</option>
-              {Object.entries(PROMOTION_TYPE_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
+            {hasAdditionalFilters && (
+              <button
+                onClick={clearAdditionalFilters}
+                className="px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                ล้างตัวกรอง
+              </button>
+            )}
           </div>
         </div>
       </Card>
@@ -621,31 +684,33 @@ export default function ToursPage() {
 
                     {/* Transports (สายการบิน) */}
                     <td className="px-4 py-3 text-center">
-                      {tour.transports && tour.transports.length > 0 ? (
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {/* Get unique transports by transport id or transport_code */}
-                          {Array.from(
-                            new Map(
-                              tour.transports.map((t) => [t.transport?.id || t.transport_code, t])
-                            ).values()
-                          ).slice(0, 3).map((t, idx) => (
-                            <span 
-                              key={idx} 
-                              className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono"
-                              title={t.transport?.name || t.transport_name}
-                            >
-                              {t.transport?.name || t.transport_name}
-                            </span>
-                          ))}
-                          {Array.from(
-                            new Map(
-                              tour.transports.map((t) => [t.transport?.id || t.transport_code, t])
-                            ).values()
-                          ).length > 3 && (
-                            <span className="text-xs text-gray-400">+{Array.from(new Map(tour.transports.map((t) => [t.transport?.id || t.transport_code, t])).values()).length - 3}</span>
-                          )}
-                        </div>
-                      ) : (
+                      {tour.transports && tour.transports.length > 0 ? (() => {
+                        const seen = new Set<string | number>();
+                        const uniqueTransports: TourTransport[] = [];
+                        for (const t of tour.transports!) {
+                          const key = t.transport?.id || t.transport_code;
+                          if (!seen.has(key)) {
+                            seen.add(key);
+                            uniqueTransports.push(t);
+                          }
+                        }
+                        return (
+                          <div className="flex flex-wrap justify-center gap-1">
+                            {uniqueTransports.slice(0, 3).map((t, idx) => (
+                              <span 
+                                key={idx} 
+                                className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono"
+                                title={t.transport?.name || t.transport_name}
+                              >
+                                {t.transport?.name || t.transport_name}
+                              </span>
+                            ))}
+                            {uniqueTransports.length > 3 && (
+                              <span className="text-xs text-gray-400">+{uniqueTransports.length - 3}</span>
+                            )}
+                          </div>
+                        );
+                      })() : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
@@ -813,7 +878,7 @@ export default function ToursPage() {
         <TourPeriodsModal
           tour={periodsTour}
           onClose={() => setPeriodsTour(null)}
-          onUpdate={fetchTours}
+          onUpdate={() => { fetchTours(); fetchCounts(); }}
         />
       )}
 

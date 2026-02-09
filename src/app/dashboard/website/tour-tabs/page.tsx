@@ -58,7 +58,6 @@ const CONDITION_TYPE_INFO: Record<string, { label: string; icon: typeof DollarSi
   is_premium: { label: 'ทัวร์พรีเมียม', icon: Star, inputType: 'boolean' },
   created_within_days: { label: 'สร้างภายใน (วัน)', icon: Calendar, inputType: 'number', placeholder: 'เช่น 7' },
   has_available_seats: { label: 'มีที่ว่าง', icon: Filter, inputType: 'boolean' },
-  min_views: { label: 'ยอดคนเข้าชมขั้นต่ำ', icon: Eye, inputType: 'number', placeholder: 'เช่น 100' },
 };
 
 interface PreviewTour {
@@ -71,6 +70,7 @@ interface PreviewTour {
   price: number | null;
   departure_date: string | null;
   image_url: string | null;
+  view_count?: number;
 }
 
 export default function TourTabsPage() {
@@ -86,7 +86,11 @@ export default function TourTabsPage() {
   const [editTab, setEditTab] = useState<TourTab | null>(null);
   const [saving, setSaving] = useState(false);
   
-  // Preview modal
+  // Inline preview in modal
+  const [inlinePreviewTours, setInlinePreviewTours] = useState<PreviewTour[]>([]);
+  const [loadingInlinePreview, setLoadingInlinePreview] = useState(false);
+  
+  // Preview modal (for existing tabs)
   const [previewTab, setPreviewTab] = useState<TourTab | null>(null);
   const [previewTours, setPreviewTours] = useState<PreviewTour[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -178,6 +182,29 @@ export default function TourTabsPage() {
       is_active: true,
     });
     setEditTab(null);
+    setInlinePreviewTours([]);
+  };
+
+  // Preview conditions inline (in modal)
+  const handleInlinePreview = async () => {
+    setLoadingInlinePreview(true);
+    setInlinePreviewTours([]);
+
+    try {
+      const response = await tourTabsApi.previewConditions({
+        conditions: formData.conditions || [],
+        sort_by: formData.sort_by || 'popular',
+        display_limit: formData.display_limit || 12,
+      });
+      if (response && response.data) {
+        setInlinePreviewTours(response.data.tours || []);
+      }
+    } catch (error) {
+      console.error('Failed to preview:', error);
+      alert('เกิดข้อผิดพลาดในการดึงตัวอย่าง');
+    } finally {
+      setLoadingInlinePreview(false);
+    }
   };
 
   // Open create modal
@@ -599,7 +626,7 @@ export default function TourTabsPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold">
                 {editTab ? 'แก้ไข Tab' : 'เพิ่ม Tab ใหม่'}
               </h2>
@@ -719,7 +746,7 @@ export default function TourTabsPage() {
                 </div>
 
                 {/* Conditions */}
-                <div className="border-t pt-4 mt-4">
+                <div className="border-t pt-4 mt-4 border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <label className="block text-sm font-medium text-gray-700">
                       <Filter className="w-4 h-4 inline mr-1" />
@@ -768,10 +795,84 @@ export default function TourTabsPage() {
                       ยังไม่มีเงื่อนไขเพิ่มเติม (จะแสดงทัวร์ทั้งหมดที่ผ่านเงื่อนไขพื้นฐาน)
                     </p>
                   )}
+
+                  {/* Preview Button */}
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      onClick={handleInlinePreview}
+                      disabled={loadingInlinePreview}
+                      className="w-full"
+                    >
+                      {loadingInlinePreview ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Eye className="w-4 h-4 mr-2" />
+                      )}
+                      ดูตัวอย่างทัวร์ที่เข้าเงื่อนไข
+                    </Button>
+                  </div>
+
+                  {/* Inline Preview Results */}
+                  {inlinePreviewTours.length > 0 && (
+                    <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-gray-700">
+                          ตัวอย่างทัวร์ ({inlinePreviewTours.length} รายการ)
+                        </h4>
+                        <button
+                          onClick={() => setInlinePreviewTours([])}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto">
+                        {inlinePreviewTours.map((tour) => (
+                          <div
+                            key={tour.id}
+                            className="flex gap-2 p-2 bg-white rounded border border-gray-100"
+                          >
+                            <div className="w-16 h-12 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                              {tour.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={tour.image_url}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                                  No img
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-gray-500">{tour.tour_code}</p>
+                              <p className="text-sm font-medium truncate">{tour.title}</p>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span>{tour.country}</span>
+                                <span>•</span>
+                                <span className="text-orange-600 font-medium">
+                                  {tour.price ? new Intl.NumberFormat('th-TH').format(tour.price) + '฿' : '-'}
+                                </span>
+                                {tour.view_count !== undefined && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{tour.view_count} views</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Status */}
-                <div className="flex items-center gap-2 pt-4 border-t">
+                <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                   <input
                     type="checkbox"
                     id="is_active"
@@ -787,7 +888,7 @@ export default function TourTabsPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+            <div className="flex justify-end gap-2 p-4 border-t border-gray-200 bg-gray-50">
               <Button
                 variant="outline"
                 onClick={() => {

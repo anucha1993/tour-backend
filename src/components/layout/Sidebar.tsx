@@ -36,6 +36,7 @@ import {
   Smartphone,
   Tag,
   Layers,
+  Star,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -188,6 +189,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'Tour Tabs',
     href: '/dashboard/website/tour-tabs',
     icon: Layers,
+  },
+  {
+    title: 'ทัวร์แนะนำ',
+    href: '/dashboard/website/recommended-tours',
+    icon: Star,
   },
       {
         title: 'ทั่วไป',
