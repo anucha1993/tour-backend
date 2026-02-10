@@ -147,9 +147,16 @@ export default function IntegrationSettingsPage() {
   const [togglingSync, setTogglingSync] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  
+  const [smartSyncSettings, setSmartSyncSettings] = useState({
+    respect_manual_overrides: true,
+    always_sync_fields: ['cover_image_url', 'pdf_url', 'og_image_url', 'docx_url'],
+    never_sync_fields: ['status'],
+    auto_close_expired_periods: false,
+    auto_close_expired_tours: false,
+    skip_past_periods_on_sync: true,
+    skip_disabled_tours_on_sync: true,
+  });
 
-  
   // Form state
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   

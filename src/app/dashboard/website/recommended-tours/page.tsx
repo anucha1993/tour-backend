@@ -238,7 +238,17 @@ export default function RecommendedToursPage() {
     }
     setSaving(true);
     try {
-      const payload = { ...formData, display_limit: Math.min(50, Math.max(1, formData.display_limit || 8)) };
+      // กรอง conditions ที่ value ว่างออก เพื่อไม่ให้ validation fail
+      const cleanConditions = (formData.conditions || []).filter(c => {
+        if (c.value === '' || c.value === null || c.value === undefined) return false;
+        if (Array.isArray(c.value) && c.value.length === 0) return false;
+        return true;
+      });
+      const payload = {
+        ...formData,
+        conditions: cleanConditions,
+        display_limit: Math.min(50, Math.max(1, formData.display_limit || 8)),
+      };
       if (editSection) {
         await recommendedToursApi.update(editSection.id, payload);
       } else {
@@ -247,9 +257,10 @@ export default function RecommendedToursPage() {
       setShowModal(false);
       resetForm();
       fetchSections();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Save failed:', error);
-      alert('บันทึกไม่สำเร็จ');
+      const errMsg = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ';
+      alert(`บันทึกไม่สำเร็จ: ${errMsg}`);
     } finally {
       setSaving(false);
     }
