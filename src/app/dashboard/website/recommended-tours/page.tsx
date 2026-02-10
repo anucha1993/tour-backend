@@ -898,10 +898,24 @@ export default function RecommendedToursPage() {
                   </button>
                 </div>
 
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                    <div className="text-sm text-yellow-700">
+                      <strong>เงื่อนไขพื้นฐาน (ใช้กับทุก Section):</strong>
+                      <ul className="list-disc ml-4 mt-1 space-y-0.5">
+                        <li>แสดงเฉพาะทัวร์ที่ status = active</li>
+                        <li>ต้องมีรอบเดินทางในอนาคต (start_date &ge; วันนี้)</li>
+                        <li className="text-red-600 font-semibold">🚫 ทัวร์ที่ Sold Out (available_seats = 0) จะไม่แสดงโดยอัตโนมัติ</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
                 {(!formData.conditions || formData.conditions.length === 0) && (
-                  <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-300 border border-gray-300 border border-gray-300-gray-200">
+                  <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
                     <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">ยังไม่มีเงื่อนไข — จะแสดงทัวร์ทั้งหมด</p>
+                    <p className="text-sm text-gray-400">ยังไม่มีเงื่อนไขเพิ่มเติม — จะแสดงทัวร์ทั้งหมด (ตามเงื่อนไขพื้นฐาน)</p>
                     <button
                       type="button"
                       onClick={addCondition}

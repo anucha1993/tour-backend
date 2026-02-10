@@ -1792,6 +1792,55 @@ export const integrationsApi = {
     apiRequest<{ success: boolean; message: string }>(`/integrations/${id}/test-notification`, {
       method: 'POST',
     }),
+
+  // Get Smart Sync Settings
+  getSyncSettings: (id: number) =>
+    apiRequest<{
+      respect_manual_overrides: boolean;
+      always_sync_fields: string[];
+      never_sync_fields: string[];
+      auto_close_expired_periods: boolean;
+      auto_close_expired_tours: boolean;
+      skip_past_periods_on_sync: boolean;
+      skip_disabled_tours_on_sync: boolean;
+      past_period_handling: 'skip' | 'close' | 'keep';
+      past_period_threshold_days: number;
+    }>(`/integrations/${id}/sync-settings`),
+
+  // Update Smart Sync Settings
+  updateSyncSettings: (id: number, data: {
+    respect_manual_overrides?: boolean;
+    always_sync_fields?: string[];
+    never_sync_fields?: string[];
+    auto_close_expired_periods?: boolean;
+    auto_close_expired_tours?: boolean;
+    skip_past_periods_on_sync?: boolean;
+    skip_disabled_tours_on_sync?: boolean;
+    past_period_handling?: 'skip' | 'close' | 'keep';
+    past_period_threshold_days?: number;
+  }) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      data: Record<string, unknown>;
+    }>(`/integrations/${id}/sync-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Run Auto-Close for expired periods/tours
+  runAutoClose: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      data: {
+        periods_closed: number;
+        tours_closed: number;
+        threshold_date: string;
+      };
+    }>(`/integrations/${id}/auto-close-expired`, {
+      method: 'POST',
+    }),
 };
 
 // ============================================================
@@ -2471,4 +2520,90 @@ export interface DashboardSummary {
 export const dashboardApi = {
   getSummary: () =>
     apiRequest<DashboardSummary>('/dashboard/summary'),
+};
+
+// ============================================================
+// System Settings API (Global Settings)
+// ============================================================
+export interface SystemSettingValue {
+  value: boolean | string | number | string[];
+  type: 'boolean' | 'string' | 'integer' | 'json' | 'array';
+  description: string;
+}
+
+export interface SystemSettings {
+  sync: Record<string, SystemSettingValue>;
+  auto_close: Record<string, SystemSettingValue>;
+  [key: string]: Record<string, SystemSettingValue>;
+}
+
+export interface SyncSettings {
+  respect_manual_overrides: boolean;
+  always_sync_fields: string[];
+  never_sync_fields: string[];
+  skip_past_periods: boolean;
+  skip_disabled_tours: boolean;
+}
+
+export interface AutoCloseSettings {
+  enabled: boolean;
+  periods: boolean;
+  tours: boolean;
+  threshold_days: number;
+  run_time: string;
+}
+
+export const systemSettingsApi = {
+  // Get all settings grouped
+  getAll: () =>
+    apiRequest<SystemSettings>('/system-settings'),
+
+  // Get settings by group
+  getByGroup: (group: string) =>
+    apiRequest<Record<string, unknown>>(`/system-settings/group/${group}`),
+
+  // Get sync settings
+  getSyncSettings: () =>
+    apiRequest<SyncSettings>('/system-settings/sync'),
+
+  // Update sync settings
+  updateSyncSettings: (data: Partial<SyncSettings>) =>
+    apiRequest<SyncSettings>('/system-settings/sync', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Get auto-close settings
+  getAutoCloseSettings: () =>
+    apiRequest<AutoCloseSettings>('/system-settings/auto-close'),
+
+  // Update auto-close settings
+  updateAutoCloseSettings: (data: Partial<AutoCloseSettings>) =>
+    apiRequest<AutoCloseSettings>('/system-settings/auto-close', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Run auto-close manually
+  runAutoClose: () =>
+    apiRequest<{
+      periods_closed: number;
+      tours_closed: number;
+      threshold_date: string;
+    }>('/system-settings/auto-close/run', {
+      method: 'POST',
+    }),
+
+  // Update a single setting
+  update: (key: string, value: unknown, type?: string) =>
+    apiRequest('/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ key, value, type }),
+    }),
+
+  // Clear settings cache
+  clearCache: () =>
+    apiRequest('/system-settings/clear-cache', {
+      method: 'POST',
+    }),
 };

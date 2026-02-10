@@ -37,6 +37,7 @@ import {
   Tag,
   Layers,
   Star,
+  Shield,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -254,6 +255,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'ตั้งค่า',
     icon: Settings,
     children: [
+      {
+        title: 'Smart Sync',
+        href: '/dashboard/settings/smart-sync',
+        icon: Shield,
+      },
       {
         title: 'Aggregation',
         href: '/dashboard/settings/aggregation',

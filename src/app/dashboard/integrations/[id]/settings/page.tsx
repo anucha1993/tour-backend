@@ -148,6 +148,8 @@ export default function IntegrationSettingsPage() {
   const [resyncing, setResyncing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   
+
+  
   // Form state
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   
@@ -302,6 +304,24 @@ export default function IntegrationSettingsPage() {
 
         // Check initial schedule conflict
         checkConflict(integration.sync_schedule || '0 */2 * * *', integration.id);
+
+        // Load Smart Sync Settings
+        try {
+          const syncSettingsResponse = await integrationsApi.getSyncSettings(Number(params.id));
+          if (syncSettingsResponse.success && syncSettingsResponse.data) {
+            setSmartSyncSettings({
+              respect_manual_overrides: syncSettingsResponse.data.respect_manual_overrides ?? true,
+              always_sync_fields: syncSettingsResponse.data.always_sync_fields ?? ['cover_image_url', 'pdf_url', 'og_image_url', 'docx_url'],
+              never_sync_fields: syncSettingsResponse.data.never_sync_fields ?? ['status'],
+              auto_close_expired_periods: syncSettingsResponse.data.auto_close_expired_periods ?? false,
+              auto_close_expired_tours: syncSettingsResponse.data.auto_close_expired_tours ?? false,
+              skip_past_periods_on_sync: syncSettingsResponse.data.skip_past_periods_on_sync ?? true,
+              skip_disabled_tours_on_sync: syncSettingsResponse.data.skip_disabled_tours_on_sync ?? true,
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to load smart sync settings:', e);
+        }
 
       } catch (err) {
         console.error('Failed to load integration:', err);

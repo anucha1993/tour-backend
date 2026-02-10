@@ -761,9 +761,14 @@ export default function TourTabsPage() {
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                      <p className="text-sm text-yellow-700">
-                        <strong>เงื่อนไขพื้นฐาน (ใช้กับทุก Tab):</strong> แสดงเฉพาะทัวร์ที่ status=active และมีวันเดินทางในอนาคต
-                      </p>
+                      <div className="text-sm text-yellow-700">
+                        <strong>เงื่อนไขพื้นฐาน (ใช้กับทุก Tab):</strong>
+                        <ul className="list-disc ml-4 mt-1 space-y-0.5">
+                          <li>แสดงเฉพาะทัวร์ที่ status = active</li>
+                          <li>ต้องมีรอบเดินทางในอนาคต (start_date &ge; วันนี้)</li>
+                          <li className="text-red-600 font-semibold">🚫 ทัวร์ที่ Sold Out (available_seats = 0) จะไม่แสดงโดยอัตโนมัติ</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
 
