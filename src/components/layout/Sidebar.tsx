@@ -38,6 +38,9 @@ import {
   Layers,
   Star,
   Shield,
+  Megaphone,
+  Menu,
+  Phone,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -195,6 +198,36 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'ทัวร์แนะนำ',
     href: '/dashboard/website/recommended-tours',
     icon: Star,
+  },
+  {
+    title: 'ทัวร์ต่างประเทศ',
+    href: '/dashboard/website/international-tours',
+    icon: Globe,
+  },
+  {
+    title: 'ลูกค้าของเรา',
+    href: '/dashboard/website/our-clients',
+    icon: Users,
+  },
+  {
+    title: 'Popup',
+    href: '/dashboard/website/popups',
+    icon: Megaphone,
+  },
+  {
+    title: 'เมนูเว็บไซต์',
+    href: '/dashboard/website/menus',
+    icon: Menu,
+  },
+  {
+    title: 'SEO',
+    href: '/dashboard/website/seo',
+    icon: Search,
+  },
+  {
+    title: 'ข้อมูลติดต่อ',
+    href: '/dashboard/website/site-contacts',
+    icon: Phone,
   },
       {
         title: 'ทั่วไป',

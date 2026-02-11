@@ -2055,6 +2055,452 @@ export const heroSlidesApi = {
     apiRequest<HeroSlideStatistics>('/hero-slides/statistics'),
 };
 
+// ===================== Our Clients API =====================
+
+export interface OurClient {
+  id: number;
+  cloudflare_id: string | null;
+  url: string;
+  thumbnail_url: string | null;
+  filename: string;
+  name: string;
+  alt: string | null;
+  description: string | null;
+  website_url: string | null;
+  width: number;
+  height: number;
+  file_size: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OurClientStatistics {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
+export const ourClientsApi = {
+  // List all clients
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<OurClient[]>(`/our-clients?${searchParams.toString()}`);
+  },
+
+  // Get a single client
+  get: (id: number) => apiRequest<OurClient>(`/our-clients/${id}`),
+
+  // Upload new client
+  upload: async (
+    file: File,
+    data?: {
+      name?: string;
+      alt?: string;
+      description?: string;
+      website_url?: string;
+      custom_filename?: string;
+    }
+  ) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (data?.name) formData.append('name', data.name);
+    if (data?.alt) formData.append('alt', data.alt);
+    if (data?.description) formData.append('description', data.description);
+    if (data?.website_url) formData.append('website_url', data.website_url);
+    if (data?.custom_filename) formData.append('custom_filename', data.custom_filename);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/our-clients`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Upload failed');
+    }
+    return responseData as { success: boolean; data: OurClient; message: string };
+  },
+
+  // Update client details
+  update: (id: number, data: Partial<OurClient>) =>
+    apiRequest<OurClient>(`/our-clients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Replace client image
+  replaceImage: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/our-clients/${id}/replace-image`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Replace image failed');
+    }
+    return responseData as { success: boolean; data: OurClient; message: string };
+  },
+
+  // Toggle client status
+  toggleStatus: (id: number) =>
+    apiRequest<OurClient>(`/our-clients/${id}/toggle-status`, { method: 'PATCH' }),
+
+  // Reorder clients
+  reorder: (clients: { id: number; sort_order: number }[]) =>
+    apiRequest('/our-clients/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ clients }),
+    }),
+
+  // Delete client
+  delete: (id: number) =>
+    apiRequest(`/our-clients/${id}`, { method: 'DELETE' }),
+
+  // Get statistics
+  getStatistics: () =>
+    apiRequest<OurClientStatistics>('/our-clients/statistics'),
+};
+
+// Popup Types
+export interface Popup {
+  id: number;
+  title: string;
+  description: string | null;
+  cloudflare_id: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
+  alt_text: string | null;
+  button_text: string | null;
+  button_link: string | null;
+  button_color: string;
+  popup_type: 'image' | 'content' | 'promo' | 'newsletter' | 'announcement';
+  display_frequency: 'always' | 'once_per_session' | 'once_per_day' | 'once_per_week' | 'once';
+  delay_seconds: number;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  show_close_button: boolean;
+  close_on_overlay: boolean;
+  sort_order: number;
+  width: number | null;
+  height: number | null;
+  file_size: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PopupStatistics {
+  total: number;
+  active: number;
+  inactive: number;
+  by_type: Record<string, number>;
+  currently_showing: number;
+}
+
+export const popupsApi = {
+  // List all popups
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<Popup[]>(`/popups?${searchParams.toString()}`);
+  },
+
+  // Get a single popup
+  get: (id: number) => apiRequest<Popup>(`/popups/${id}`),
+
+  // Upload new popup with image
+  upload: async (
+    file: File | null,
+    data: {
+      title: string;
+      description?: string;
+      alt_text?: string;
+      button_text?: string;
+      button_link?: string;
+      button_color?: string;
+      popup_type?: string;
+      display_frequency?: string;
+      delay_seconds?: number;
+      start_date?: string;
+      end_date?: string;
+      is_active?: boolean;
+      show_close_button?: boolean;
+      close_on_overlay?: boolean;
+    }
+  ) => {
+    const formData = new FormData();
+    if (file) formData.append('image', file);
+    formData.append('title', data.title);
+    if (data.description) formData.append('description', data.description);
+    if (data.alt_text) formData.append('alt_text', data.alt_text);
+    if (data.button_text) formData.append('button_text', data.button_text);
+    if (data.button_link) formData.append('button_link', data.button_link);
+    if (data.button_color) formData.append('button_color', data.button_color);
+    if (data.popup_type) formData.append('popup_type', data.popup_type);
+    if (data.display_frequency) formData.append('display_frequency', data.display_frequency);
+    if (data.delay_seconds !== undefined) formData.append('delay_seconds', String(data.delay_seconds));
+    if (data.start_date) formData.append('start_date', data.start_date);
+    if (data.end_date) formData.append('end_date', data.end_date);
+    if (data.is_active !== undefined) formData.append('is_active', data.is_active ? '1' : '0');
+    if (data.show_close_button !== undefined) formData.append('show_close_button', data.show_close_button ? '1' : '0');
+    if (data.close_on_overlay !== undefined) formData.append('close_on_overlay', data.close_on_overlay ? '1' : '0');
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/popups`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Upload failed');
+    }
+    return responseData as { success: boolean; data: Popup; message: string };
+  },
+
+  // Update popup details
+  update: (id: number, data: Partial<Popup>) =>
+    apiRequest<Popup>(`/popups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Replace popup image
+  replaceImage: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/popups/${id}/replace-image`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Replace image failed');
+    }
+    return responseData as { success: boolean; data: Popup; message: string };
+  },
+
+  // Toggle popup status
+  toggleStatus: (id: number) =>
+    apiRequest<Popup>(`/popups/${id}/toggle-status`, { method: 'PATCH' }),
+
+  // Reorder popups
+  reorder: (popups: { id: number; sort_order: number }[]) =>
+    apiRequest('/popups/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ popups }),
+    }),
+
+  // Delete popup
+  delete: (id: number) =>
+    apiRequest(`/popups/${id}`, { method: 'DELETE' }),
+
+  // Get statistics
+  getStatistics: () =>
+    apiRequest<PopupStatistics>('/popups/statistics'),
+};
+
+// ==================== Menu Types ====================
+export interface MenuItem {
+  id: number;
+  location: 'header' | 'footer_col1' | 'footer_col2' | 'footer_col3';
+  title: string;
+  url: string | null;
+  target: '_self' | '_blank';
+  icon: string | null;
+  parent_id: number | null;
+  sort_order: number;
+  is_active: boolean;
+  css_class: string | null;
+  all_children?: MenuItem[];
+  children?: MenuItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const menusApi = {
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<MenuItem[]>(`/menus?${searchParams.toString()}`);
+  },
+
+  get: (id: number) => apiRequest<MenuItem>(`/menus/${id}`),
+
+  create: (data: Partial<MenuItem>) =>
+    apiRequest<MenuItem>('/menus', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<MenuItem>) =>
+    apiRequest<MenuItem>(`/menus/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/menus/${id}`, { method: 'DELETE' }),
+
+  reorder: (menus: { id: number; sort_order: number; parent_id?: number | null }[]) =>
+    apiRequest('/menus/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ menus }),
+    }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<MenuItem>(`/menus/${id}/toggle-status`, { method: 'PATCH' }),
+
+  getLocations: () =>
+    apiRequest<Record<string, string>>('/menus/locations'),
+};
+
+// ==================== SEO Types ====================
+export interface SeoSetting {
+  id: number;
+  page_slug: string;
+  page_name: string;
+  meta_title: string | null;
+  meta_description: string | null;
+  meta_keywords: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  og_image: string | null;
+  og_image_cloudflare_id: string | null;
+  canonical_url: string | null;
+  robots_index: boolean;
+  robots_follow: boolean;
+  structured_data: string | null;
+  custom_head_tags: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const seoApi = {
+  list: () => apiRequest<SeoSetting[]>('/seo'),
+
+  get: (slug: string) => apiRequest<SeoSetting>(`/seo/${slug}`),
+
+  update: (slug: string, data: Partial<SeoSetting>) =>
+    apiRequest<SeoSetting>(`/seo/${slug}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  uploadOgImage: async (slug: string, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+    const response = await fetch(`${API_BASE_URL}/seo/${slug}/og-image`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Upload failed');
+    }
+    return responseData as { success: boolean; data: SeoSetting; message: string };
+  },
+
+  getPages: () => apiRequest<Record<string, string>>('/seo/pages'),
+};
+
+// ==================== Site Contact Types ====================
+export interface SiteContact {
+  id: number;
+  key: string;
+  label: string;
+  value: string;
+  icon: string | null;
+  url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  group: 'contact' | 'social' | 'business_hours';
+  created_at: string;
+  updated_at: string;
+}
+
+export const siteContactsApi = {
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<SiteContact[]>(`/site-contacts?${searchParams.toString()}`);
+  },
+
+  create: (data: Partial<SiteContact>) =>
+    apiRequest<SiteContact>('/site-contacts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<SiteContact>) =>
+    apiRequest<SiteContact>(`/site-contacts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/site-contacts/${id}`, { method: 'DELETE' }),
+
+  toggle: (id: number) =>
+    apiRequest<SiteContact>(`/site-contacts/${id}/toggle`, { method: 'PATCH' }),
+};
+
 // Popular Country Setting Types
 export interface PopularCountryItem {
   id: number;
@@ -2605,5 +3051,106 @@ export const systemSettingsApi = {
   clearCache: () =>
     apiRequest('/system-settings/clear-cache', {
       method: 'POST',
+    }),
+};
+
+// ===================== International Tour Settings Types =====================
+
+export interface InternationalTourSetting {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  conditions: TourTabCondition[] | null;
+  display_limit: number;
+  per_page: number;
+  sort_by: string;
+  show_periods: boolean;
+  max_periods_display: number;
+  show_transport: boolean;
+  show_hotel_star: boolean;
+  show_meal_count: boolean;
+  show_commission: boolean;
+  filter_country: boolean;
+  filter_city: boolean;
+  filter_search: boolean;
+  filter_airline: boolean;
+  filter_departure_month: boolean;
+  filter_price_range: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InternationalTourConditionOptions {
+  condition_types: Record<string, string>;
+  sort_options: Record<string, string>;
+  countries: Array<{ id: number; name_th: string; name_en: string; iso2: string; region: string }>;
+  regions: Record<string, string>;
+  wholesalers: Array<{ id: number; name: string; code: string }>;
+  tour_types: Record<string, string>;
+  airlines: Array<{ id: number; code: string; name: string; image: string | null }>;
+}
+
+export interface InternationalTourPreview {
+  total_count: number;
+  preview_tours: Array<{
+    id: number;
+    title: string;
+    tour_code: string;
+    country: { id: number; name: string; iso2: string } | null;
+    days: number;
+    nights: number;
+    price: number | null;
+    departure_date: string | null;
+    image_url: string | null;
+  }>;
+}
+
+export const internationalTourSettingsApi = {
+  // List all settings
+  list: () =>
+    apiRequest<{ data: InternationalTourSetting[] }>('/international-tour-settings'),
+
+  // Get single setting
+  get: (id: number) =>
+    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}`),
+
+  // Create setting
+  create: (data: Partial<InternationalTourSetting>) =>
+    apiRequest<{ data: InternationalTourSetting }>('/international-tour-settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update setting
+  update: (id: number, data: Partial<InternationalTourSetting>) =>
+    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete setting
+  delete: (id: number) =>
+    apiRequest(`/international-tour-settings/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Toggle active status
+  toggleStatus: (id: number) =>
+    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}/toggle-status`, {
+      method: 'PATCH',
+    }),
+
+  // Get condition options
+  getConditionOptions: () =>
+    apiRequest<{ data: InternationalTourConditionOptions }>('/international-tour-settings/condition-options'),
+
+  // Preview conditions
+  previewConditions: (data: { conditions: TourTabCondition[]; sort_by?: string; display_limit?: number }) =>
+    apiRequest<{ data: InternationalTourPreview }>('/international-tour-settings/preview-conditions', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };
