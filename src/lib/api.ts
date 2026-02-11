@@ -3145,7 +3145,7 @@ export const internationalTourSettingsApi = {
 
   // Get condition options
   getConditionOptions: () =>
-    apiRequest<{ data: InternationalTourConditionOptions }>('/international-tour-settings/condition-options'),
+    apiRequest<InternationalTourConditionOptions>('/international-tour-settings/condition-options'),
 
   // Preview conditions
   previewConditions: (data: { conditions: TourTabCondition[]; sort_by?: string; display_limit?: number }) =>
