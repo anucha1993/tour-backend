@@ -3149,7 +3149,7 @@ export const internationalTourSettingsApi = {
 
   // Preview conditions
   previewConditions: (data: { conditions: TourTabCondition[]; sort_by?: string; display_limit?: number }) =>
-    apiRequest<{ data: InternationalTourPreview }>('/international-tour-settings/preview-conditions', {
+    apiRequest<InternationalTourPreview>('/international-tour-settings/preview-conditions', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
