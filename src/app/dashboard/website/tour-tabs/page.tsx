@@ -35,6 +35,15 @@ const BADGE_COLORS = [
   { value: 'pink', label: 'ชมพู', bgClass: 'bg-pink-500' },
 ];
 
+const DISPLAY_MODE_OPTIONS = [
+  { value: 'tab', label: 'แท็บหน้าแรก', desc: 'แสดงเป็นแท็บในหน้าแรกเท่านั้น' },
+  { value: 'badge', label: 'Badge ทุกหน้า', desc: 'แสดง badge บนการ์ดทัวร์ทั่วทั้งเว็บ' },
+  { value: 'both', label: 'ทั้งแท็บ + Badge', desc: 'แสดงทั้งแท็บและ badge' },
+  { value: 'period', label: 'แสดงในรอบเดินทาง', desc: 'แสดง badge เฉพาะในตารางรอบเดินทาง' },
+];
+
+const BADGE_ICONS = ['🔥', '✨', '👑', '🌟', '💥', '🎁', '❤️', '🚀'];
+
 const SORT_OPTIONS = {
   popular: 'ยอดนิยม',
   price_asc: 'ราคาต่ำ-สูง',
@@ -52,6 +61,8 @@ const CONDITION_TYPE_INFO: Record<string, { label: string; icon: typeof DollarSi
   departure_within_days: { label: 'เดินทางภายใน (วัน)', icon: Calendar, inputType: 'number', placeholder: 'เช่น 30' },
   has_discount: { label: 'มีส่วนลด', icon: Percent, inputType: 'boolean' },
   discount_min_percent: { label: 'ส่วนลดขั้นต่ำ (%)', icon: Percent, inputType: 'number', placeholder: 'เช่น 10' },
+  discount_min_amount: { label: 'ส่วนลดรอบเดินทางขั้นต่ำ (บาท)', icon: DollarSign, inputType: 'number', placeholder: 'เช่น 2000' },
+  discount_total_min_amount: { label: 'ส่วนลดรวมขั้นต่ำ (บาท)', icon: DollarSign, inputType: 'number', placeholder: 'เช่น 1000' },
   tour_type: { label: 'ประเภททัวร์', icon: Filter, inputType: 'select' },
   min_days: { label: 'จำนวนวันขั้นต่ำ', icon: Clock, inputType: 'number', placeholder: 'เช่น 3' },
   max_days: { label: 'จำนวนวันสูงสุด', icon: Clock, inputType: 'number', placeholder: 'เช่น 7' },
@@ -103,6 +114,9 @@ export default function TourTabsPage() {
     icon: '',
     badge_text: '',
     badge_color: 'orange',
+    display_mode: 'tab' as const,
+    badge_icon: '',
+    badge_expires_at: null as string | null | undefined,
     conditions: [],
     display_limit: 12,
     sort_by: 'popular',
@@ -175,6 +189,9 @@ export default function TourTabsPage() {
       icon: '',
       badge_text: '',
       badge_color: 'orange',
+      display_mode: 'tab' as const,
+      badge_icon: '',
+      badge_expires_at: null as string | null | undefined,
       conditions: [],
       display_limit: 12,
       sort_by: 'popular',
@@ -222,6 +239,9 @@ export default function TourTabsPage() {
       icon: tab.icon || '',
       badge_text: tab.badge_text || '',
       badge_color: tab.badge_color || 'orange',
+      display_mode: tab.display_mode || 'tab',
+      badge_icon: tab.badge_icon || '',
+      badge_expires_at: tab.badge_expires_at || null,
       conditions: tab.conditions || [],
       display_limit: tab.display_limit || 12,
       sort_by: tab.sort_by || 'popular',
@@ -248,6 +268,9 @@ export default function TourTabsPage() {
         icon: formData.icon?.trim() || undefined,
         badge_text: formData.badge_text?.trim() || undefined,
         badge_color: formData.badge_color || undefined,
+        display_mode: formData.display_mode || 'tab',
+        badge_icon: formData.badge_icon?.trim() || undefined,
+        badge_expires_at: formData.badge_expires_at || null,
       };
 
       if (editTab) {
@@ -559,6 +582,22 @@ export default function TourTabsPage() {
                   </div>
                   <p className="text-sm text-gray-500">
                     Slug: {tab.slug} | แสดง: {tab.display_limit} รายการ | เรียงตาม: {SORT_OPTIONS[tab.sort_by]}
+                    {' | '}
+                    <span className={`font-medium ${
+                      tab.display_mode === 'badge' ? 'text-purple-600' :
+                      tab.display_mode === 'both' ? 'text-blue-600' :
+                      tab.display_mode === 'period' ? 'text-teal-600' :
+                      'text-gray-600'
+                    }`}>
+                      {DISPLAY_MODE_OPTIONS.find(m => m.value === (tab.display_mode || 'tab'))?.label || 'แท็บหน้าแรก'}
+                    </span>
+                    {tab.badge_expires_at && (
+                      <span className={`ml-1 text-xs ${
+                        new Date(tab.badge_expires_at) < new Date() ? 'text-red-500' : 'text-gray-400'
+                      }`}>
+                        | {new Date(tab.badge_expires_at) < new Date() ? '⚠️ หมดอายุแล้ว' : `หมดอายุ ${new Date(tab.badge_expires_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                      </span>
+                    )}
                   </p>
                   {tab.conditions && tab.conditions.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
@@ -715,6 +754,123 @@ export default function TourTabsPage() {
                   </div>
                 </div>
 
+                {/* Display Mode */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ประเภทการแสดงผล
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DISPLAY_MODE_OPTIONS.map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, display_mode: mode.value as 'tab' | 'badge' | 'both' | 'period' })}
+                        className={`p-3 rounded-lg border-2 text-left transition-all ${
+                          formData.display_mode === mode.value
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="text-sm font-medium">{mode.label}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{mode.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Badge Icon - show when badge or both mode */}
+                {(formData.display_mode === 'badge' || formData.display_mode === 'both' || formData.display_mode === 'period') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Badge Icon
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-2 flex-wrap">
+                        {BADGE_ICONS.map((icon) => (
+                          <button
+                            key={icon}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, badge_icon: icon })}
+                            className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg transition-all ${
+                              formData.badge_icon === icon
+                                ? 'border-orange-500 bg-orange-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                      <Input
+                        value={formData.badge_icon || ''}
+                        onChange={(e) => setFormData({ ...formData, badge_icon: e.target.value })}
+                        placeholder="หรือพิมพ์เอง"
+                        className="w-24"
+                      />
+                    </div>
+                    {/* Badge Preview */}
+                    {formData.badge_text && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-gray-500">ตัวอย่าง:</span>
+                        <span className={`text-[10px] font-bold text-white px-2 py-0.5 rounded flex items-center gap-0.5 ${
+                          BADGE_COLORS.find(c => c.value === formData.badge_color)?.bgClass || 'bg-orange-500'
+                        }`}>
+                          {formData.badge_icon && <span>{formData.badge_icon}</span>}
+                          {formData.badge_text}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Badge Expiry - show when badge or both mode */}
+                {(formData.display_mode === 'badge' || formData.display_mode === 'both' || formData.display_mode === 'period') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      วันหมดอายุ
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="badge_expiry"
+                          checked={!formData.badge_expires_at}
+                          onChange={() => setFormData({ ...formData, badge_expires_at: null })}
+                          className="text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-sm">ไม่หมดอายุ</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="badge_expiry"
+                          checked={!!formData.badge_expires_at}
+                          onChange={() => {
+                            const defaultDate = new Date();
+                            defaultDate.setDate(defaultDate.getDate() + 7);
+                            setFormData({ ...formData, badge_expires_at: defaultDate.toISOString().slice(0, 16) });
+                          }}
+                          className="text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-sm">กำหนดวันหมดอายุ</span>
+                      </label>
+                    </div>
+                    {formData.badge_expires_at && (
+                      <div className="mt-2">
+                        <Input
+                          type="datetime-local"
+                          value={typeof formData.badge_expires_at === 'string' ? formData.badge_expires_at.slice(0, 16) : ''}
+                          onChange={(e) => setFormData({ ...formData, badge_expires_at: e.target.value })}
+                          className="w-64"
+                        />
+                        {new Date(formData.badge_expires_at) < new Date() && (
+                          <p className="text-xs text-red-500 mt-1">⚠️ Badge นี้หมดอายุแล้ว</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Display Settings */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -724,7 +880,6 @@ export default function TourTabsPage() {
                     <Input
                       type="number"
                       min={1}
-                      max={50}
                       value={formData.display_limit || 12}
                       onChange={(e) => setFormData({ ...formData, display_limit: Number(e.target.value) })}
                     />

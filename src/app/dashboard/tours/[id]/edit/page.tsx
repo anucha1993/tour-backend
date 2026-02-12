@@ -61,7 +61,6 @@ import {
   TOUR_STATUS,
   TOUR_TYPES,
   SALE_STATUS,
-  PROMOTION_TYPES,
 } from '@/lib/api';
 import { getTravelDateRange } from '@/lib/date-utils';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -528,9 +527,7 @@ export default function EditTourPage() {
     conditions: string;
     hashtags: string[];
     themes: string[];
-    tour_category: '' | 'budget' | 'premium';
     status: 'draft' | 'active' | 'inactive';
-    promotion_type: 'none' | 'normal' | 'fire_sale';
     sync_locked: boolean;
     cover_image_url: string;
     cover_image_alt: string;
@@ -564,9 +561,7 @@ export default function EditTourPage() {
     conditions: '',
     hashtags: [],
     themes: [],
-    tour_category: '',
     status: 'draft',
-    promotion_type: 'none',
     sync_locked: false,
     cover_image_url: '',
     cover_image_alt: '',
@@ -697,13 +692,11 @@ export default function EditTourPage() {
           
           const t = tourRes.data;
           const tourData = t as unknown as { 
-            tour_category?: string; 
             description?: string;
             price_adult?: number | string;
             discount_adult?: number | string;
             hotel_star?: number;
             transport_id?: number;
-            promotion_type?: 'none' | 'normal' | 'fire_sale';
             sync_locked?: boolean;
           };
           setFormData({
@@ -728,9 +721,7 @@ export default function EditTourPage() {
             conditions: t.conditions || '',
             hashtags: Array.isArray(t.hashtags) ? t.hashtags : [],
             themes: Array.isArray(t.themes) ? t.themes : [],
-            tour_category: (tourData.tour_category || '') as '' | 'budget' | 'premium',
             status: t.status || 'draft',
-            promotion_type: t.promotion_type || tourData.promotion_type || 'none',
             sync_locked: t.sync_locked || tourData.sync_locked || false,
             cover_image_url: t.cover_image_url || '',
             cover_image_alt: t.cover_image_alt || '',
@@ -1642,82 +1633,27 @@ export default function EditTourPage() {
               ))}
             </select>
           </div>
-          <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
-              ประเภทโปร
-            </label>
-            <select
-              name="promotion_type"
-              value={formData.promotion_type}
-              onChange={handleChange}
-              className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                formData.promotion_type === 'fire_sale' 
-                  ? 'border-red-300 bg-red-50 text-red-700' 
-                  : formData.promotion_type === 'normal'
-                  ? 'border-orange-300 bg-orange-50 text-orange-700'
-                  : 'border-gray-300'
-              }`}
-            >
-              {Object.entries(PROMOTION_TYPES).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-          </div>
 
           {/* Row 5.5 - Sync Lock (only for API tours) */}
           {tour?.data_source === 'api' && (
-            <>
-              <div className="flex items-center">
-                <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
-                  ล็อค Sync
-                </label>
-                <div className="flex-1 flex items-center gap-3">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.sync_locked}
-                      onChange={(e) => setFormData(prev => ({ ...prev, sync_locked: e.target.checked }))}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
-                  </label>
-                  <span className={`text-sm ${formData.sync_locked ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
-                    {formData.sync_locked ? '🔒 ไม่ sync จาก API' : '🔓 sync ปกติ'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center">
-                <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
-                  ประเภททัวร์
-                </label>
-                <select
-                  name="tour_category"
-                  value={formData.tour_category || ''}
-                  onChange={handleChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">เลือกประเภททัวร์</option>
-                  <option value="budget">ทัวร์ราคาถูก</option>
-                  <option value="premium">ทัวร์พรีเมียม</option>
-                </select>
-              </div>
-            </>
-          )}
-          {tour?.data_source !== 'api' && (
             <div className="flex items-center">
               <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
-                ประเภททัวร์
+                ล็อค Sync
               </label>
-              <select
-                name="tour_category"
-                value={formData.tour_category || ''}
-                onChange={handleChange}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">เลือกประเภททัวร์</option>
-                <option value="budget">ทัวร์ราคาถูก</option>
-                <option value="premium">ทัวร์พรีเมียม</option>
-              </select>
+              <div className="flex-1 flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.sync_locked}
+                    onChange={(e) => setFormData(prev => ({ ...prev, sync_locked: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+                <span className={`text-sm ${formData.sync_locked ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                  {formData.sync_locked ? '🔒 ไม่ sync จาก API' : '🔓 sync ปกติ'}
+                </span>
+              </div>
             </div>
           )}
 
@@ -3746,17 +3682,6 @@ export default function EditTourPage() {
               )}
               
               {/* Tour Category Badge - Small, Corner */}
-              {formData.tour_category && (
-                <div className="absolute top-3 left-3">
-                  <span className={`px-3 py-1 text-white text-xs font-bold rounded-full shadow-md ${
-                    formData.tour_category === 'premium' 
-                      ? 'bg-purple-500' 
-                      : 'bg-emerald-500'
-                  }`}>
-                    {formData.tour_category === 'premium' ? '✨ พรีเมียม' : '💰 ราคาดี'}
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Content Section - All Info Here */}
@@ -3924,15 +3849,6 @@ export default function EditTourPage() {
                     )}
                   </div>
                 )}
-              </span>
-              <span className={`ml-auto px-2 py-0.5 text-xs font-medium rounded ${
-                formData.tour_category === 'premium' 
-                  ? 'bg-purple-100 text-purple-700 border border-purple-300' 
-                  : formData.tour_category === 'budget'
-                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                    : 'bg-gray-100 text-gray-600 border border-gray-300'
-              }`}>
-                {formData.tour_category === 'premium' ? '✨ พรีเมียม' : formData.tour_category === 'budget' ? '💰 ราคาดี' : 'ทั่วไป'}
               </span>
             </div>
           </div>

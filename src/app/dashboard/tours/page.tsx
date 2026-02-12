@@ -21,7 +21,6 @@ import {
   Clock,
   Cloud,
   PenLine,
-  Flame,
   CheckCircle,
   XCircle,
   FileEdit,
@@ -42,7 +41,7 @@ import TourPeriodsModal from './TourPeriodsModal';
 
 // ─── Tab Definitions ─────────────────────────────────────────────
 // Each tab maps to a unique preset filter sent to the API
-type TabKey = 'all' | 'api' | 'manual' | 'active' | 'draft' | 'inactive' | 'fire_sale';
+type TabKey = 'all' | 'api' | 'manual' | 'active' | 'draft' | 'inactive';
 
 interface TabDef {
   key: TabKey;
@@ -61,16 +60,13 @@ const TABS: TabDef[] = [
   { key: 'active',    label: 'เปิดใช้งาน',  icon: CheckCircle, params: { status: 'active' },           getCount: c => c.by_status.active },
   { key: 'draft',     label: 'แบบร่าง',     icon: FileEdit,    params: { status: 'draft' },            getCount: c => c.by_status.draft },
   { key: 'inactive',  label: 'ปิดใช้งาน',   icon: XCircle,     params: { status: 'inactive' },         getCount: c => c.by_status.inactive },
-  { key: 'fire_sale', label: 'โปรไฟไหม้',   icon: Flame,       params: { promotion_type: 'fire_sale' }, getCount: c => c.by_promotion_type.fire_sale },
 ];
 
 /** Determine active tab from URL searchParams */
 function resolveTab(searchParams: URLSearchParams): TabKey {
   const status = searchParams.get('status');
   const dataSource = searchParams.get('data_source');
-  const promoType = searchParams.get('promotion_type');
 
-  if (promoType === 'fire_sale') return 'fire_sale';
   if (dataSource === 'api') return 'api';
   if (dataSource === 'manual') return 'manual';
   if (status === 'active') return 'active';

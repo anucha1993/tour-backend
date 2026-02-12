@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Card, Input } from '@/components/ui';
 import {
   Globe,
@@ -26,6 +26,8 @@ import {
   List,
   ToggleLeft,
   ToggleRight,
+  ImageIcon,
+  Upload,
 } from 'lucide-react';
 import {
   internationalTourSettingsApi,
@@ -86,6 +88,11 @@ export default function InternationalToursSettingsPage() {
   const [previewCount, setPreviewCount] = useState(0);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  // Cover image
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [deletingCover, setDeletingCover] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
   // Form
   const [formData, setFormData] = useState<Partial<InternationalTourSetting>>({
     name: '',
@@ -139,11 +146,13 @@ export default function InternationalToursSettingsPage() {
   const resetForm = () => {
     setFormData({
       name: '',
+      slug: '',
       description: '',
       conditions: [],
       display_limit: 50,
       per_page: 10,
       sort_by: 'popular',
+      sort_order: 0,
       show_periods: true,
       max_periods_display: 6,
       show_transport: true,
@@ -190,11 +199,16 @@ export default function InternationalToursSettingsPage() {
     setEditItem(item);
     setFormData({
       name: item.name,
+      slug: item.slug || '',
       description: item.description || '',
+      cover_image_url: item.cover_image_url,
+      cover_image_cf_id: item.cover_image_cf_id,
+      cover_image_position: item.cover_image_position || 'center',
       conditions: item.conditions || [],
       display_limit: item.display_limit,
       per_page: item.per_page,
       sort_by: item.sort_by,
+      sort_order: item.sort_order ?? 0,
       show_periods: item.show_periods,
       max_periods_display: item.max_periods_display,
       show_transport: item.show_transport,
@@ -534,21 +548,171 @@ export default function InternationalToursSettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">คำอธิบาย</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Slug (URL)</label>
                   <Input
-                    value={formData.description || ''}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="รายละเอียดเพิ่มเติม"
+                    value={formData.slug || ''}
+                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                    placeholder="auto-generate จากชื่อ"
                   />
+                  <p className="text-xs text-gray-400 mt-0.5">เว้นว่างจะสร้างอัตโนมัติจากชื่อ</p>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">คำอธิบาย</label>
+                <Input
+                  value={formData.description || ''}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="รายละเอียดเพิ่มเติม"
+                />
+              </div>
+
+              {/* Cover Image */}
+              {editItem && (
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" /> ภาพ Cover พื้นหลัง
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-3">ภาพ Cover จะแสดงเป็นพื้นหลังส่วนหัวของหน้ารายการทัวร์ (แนะนำขนาด 1920×400 px)</p>
+
+                  {editItem.cover_image_url ? (
+                    <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                      <div
+                        className="w-full h-48"
+                        style={{
+                          backgroundImage: `url(${editItem.cover_image_url})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: formData.cover_image_position || editItem.cover_image_position || 'center',
+                          backgroundRepeat: 'no-repeat',
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      <div className="absolute bottom-3 right-3 flex gap-2">
+                        <button
+                          onClick={() => coverInputRef.current?.click()}
+                          disabled={uploadingCover}
+                          className="px-3 py-1.5 bg-white/90 hover:bg-white text-gray-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                        >
+                          {uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                          เปลี่ยนภาพ
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('ลบภาพ Cover?')) return;
+                            setDeletingCover(true);
+                            try {
+                              await internationalTourSettingsApi.deleteCoverImage(editItem.id);
+                              setEditItem({ ...editItem, cover_image_url: null, cover_image_cf_id: null });
+                              fetchSettings();
+                            } catch (e) { console.error(e); }
+                            finally { setDeletingCover(false); }
+                          }}
+                          disabled={deletingCover}
+                          className="px-3 py-1.5 bg-red-500/90 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                        >
+                          {deletingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          ลบ
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => coverInputRef.current?.click()}
+                      disabled={uploadingCover}
+                      className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
+                    >
+                      {uploadingCover ? (
+                        <div className="flex flex-col items-center">
+                          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
+                          <span className="text-sm text-gray-500">กำลังอัปโหลด...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <ImageIcon className="w-8 h-8 text-gray-300 mb-2" />
+                          <span className="text-sm text-gray-500">คลิกเพื่ออัปโหลดภาพ Cover</span>
+                          <span className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP (สูงสุด 10MB)</span>
+                        </div>
+                      )}
+                    </button>
+                  )}
+
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingCover(true);
+                      try {
+                        const res = await internationalTourSettingsApi.uploadCoverImage(editItem.id, file) as any;
+                        if (res?.data) {
+                          const updated = res.data?.data || res.data;
+                          setEditItem({ ...editItem, cover_image_url: updated.cover_image_url, cover_image_cf_id: updated.cover_image_cf_id });
+                          fetchSettings();
+                        }
+                      } catch (err) { console.error(err); alert('อัปโหลดไม่สำเร็จ'); }
+                      finally { setUploadingCover(false); if (coverInputRef.current) coverInputRef.current.value = ''; }
+                    }}
+                  />
+
+                  {/* Position selector */}
+                  {editItem.cover_image_url && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">ตำแหน่งภาพ (object-position)</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { value: 'top', label: 'บน' },
+                          { value: 'center', label: 'กลาง' },
+                          { value: 'bottom', label: 'ล่าง' },
+                          { value: 'left top', label: 'ซ้ายบน' },
+                          { value: 'left center', label: 'ซ้ายกลาง' },
+                          { value: 'left bottom', label: 'ซ้ายล่าง' },
+                          { value: 'right top', label: 'ขวาบน' },
+                          { value: 'right center', label: 'ขวากลาง' },
+                          { value: 'right bottom', label: 'ขวาล่าง' },
+                        ].map(pos => (
+                          <button
+                            key={pos.value}
+                            type="button"
+                            onClick={async () => {
+                              setFormData({ ...formData, cover_image_position: pos.value });
+                              try {
+                                await internationalTourSettingsApi.update(editItem.id, { cover_image_position: pos.value });
+                                setEditItem({ ...editItem, cover_image_position: pos.value });
+                              } catch (e) { console.error(e); }
+                            }}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                              (formData.cover_image_position || editItem.cover_image_position || 'center') === pos.value
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                            }`}
+                          >
+                            {pos.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1.5">ปรับตำแหน่งการครอปภาพในส่วน Hero</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!editItem && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    สามารถอัปโหลดภาพ Cover ได้หลังจากสร้างการตั้งค่าแล้ว
+                  </p>
+                </div>
+              )}
 
               {/* Display Settings */}
               <div>
                 <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
                   <Settings className="w-4 h-4" /> การแสดงผล
                 </h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">จำนวนทัวร์สูงสุด</label>
                     <Input
@@ -577,6 +741,16 @@ export default function InternationalToursSettingsPage() {
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ลำดับการแสดง</label>
+                    <Input
+                      type="number"
+                      value={formData.sort_order ?? 0}
+                      onChange={(e) => setFormData({ ...formData, sort_order: Number(e.target.value) })}
+                      min={0}
+                    />
+                    <p className="text-xs text-gray-400 mt-0.5">ยิ่งน้อยยิ่งแสดงก่อน</p>
+                  </div>
                 </div>
               </div>
 
@@ -593,7 +767,7 @@ export default function InternationalToursSettingsPage() {
                     { key: 'show_meal_count', label: 'แสดงจำนวนมื้ออาหาร', icon: List },
                     { key: 'show_commission', label: 'แสดงคอมมิชชั่น (Agent)', icon: DollarSign },
                   ].map(({ key, label, icon: Icon }) => (
-                    <label key={key} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <label key={key} className="flex items-center gap-3 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
                       <input
                         type="checkbox"
                         checked={formData[key as keyof typeof formData] as boolean}
@@ -605,7 +779,7 @@ export default function InternationalToursSettingsPage() {
                     </label>
                   ))}
                   {formData.show_periods && (
-                    <div className="flex items-center gap-3 p-3 border rounded-lg">
+                    <div className="flex items-center gap-3 p-3 border border-gray-300 rounded-lg">
                       <Calendar className="w-4 h-4 text-gray-500" />
                       <span className="text-sm">จำนวนรอบสูงสุด</span>
                       <Input
@@ -621,27 +795,30 @@ export default function InternationalToursSettingsPage() {
                 </div>
               </div>
 
-              {/* User Filters */}
+
+              {/* Filter Toggles */}
               <div>
                 <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <Filter className="w-4 h-4" /> ตัวกรองที่แสดงให้ผู้ใช้
+                  <Filter className="w-4 h-4" /> ตัวกรองในหน้าค้นหา (สำหรับผู้ใช้)
                 </h3>
-                <div className="grid grid-cols-3 gap-3">
+                <p className="text-xs text-gray-500 mb-3">เลือกตัวกรองที่จะแสดงให้ผู้ใช้ค้นหาทัวร์ได้</p>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
-                    { key: 'filter_country', label: 'ประเทศ' },
-                    { key: 'filter_city', label: 'เมือง' },
-                    { key: 'filter_search', label: 'ค้นหาข้อความ' },
-                    { key: 'filter_airline', label: 'สายการบิน' },
-                    { key: 'filter_departure_month', label: 'เดือนเดินทาง' },
-                    { key: 'filter_price_range', label: 'ช่วงราคา' },
-                  ].map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    { key: 'filter_search', label: 'ค้นหาด้วยชื่อ', icon: '🔍' },
+                    { key: 'filter_country', label: 'กรองตามประเทศ', icon: '🌏' },
+                    { key: 'filter_city', label: 'กรองตามเมือง', icon: '🏙️' },
+                    { key: 'filter_airline', label: 'กรองตามสายการบิน', icon: '✈️' },
+                    { key: 'filter_departure_month', label: 'กรองตามเดือนเดินทาง', icon: '📅' },
+                    { key: 'filter_price_range', label: 'กรองตามช่วงราคา', icon: '💰' },
+                  ].map(({ key, label, icon }) => (
+                    <label key={key} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         checked={formData[key as keyof typeof formData] as boolean}
                         onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })}
                         className="w-4 h-4 text-blue-600 rounded"
                       />
+                      <span className="text-base">{icon}</span>
                       <span className="text-sm">{label}</span>
                     </label>
                   ))}

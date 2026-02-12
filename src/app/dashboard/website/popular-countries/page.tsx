@@ -93,7 +93,6 @@ export default function PopularCountriesPage() {
     country_ids: [],
     filters: {
       wholesaler_ids: [],
-      promotion_types: [],
       themes: [],
       regions: [],
     },
@@ -258,7 +257,6 @@ export default function PopularCountriesPage() {
       country_ids: setting.country_ids || [],
       filters: setting.filters || {
         wholesaler_ids: [],
-        promotion_types: [],
         themes: [],
         regions: [],
       },
@@ -327,7 +325,6 @@ export default function PopularCountriesPage() {
       country_ids: [],
       filters: {
         wholesaler_ids: [],
-        promotion_types: [],
         themes: [],
         regions: [],
       },
@@ -354,7 +351,7 @@ export default function PopularCountriesPage() {
 
   // Update filter array
   const updateFilterArray = (
-    field: 'wholesaler_ids' | 'promotion_types' | 'themes' | 'regions',
+    field: 'wholesaler_ids' | 'themes' | 'regions',
     value: string | number,
     checked: boolean
   ) => {
@@ -1247,39 +1244,6 @@ export default function PopularCountriesPage() {
                                 {w.name}
                               </label>
                             ))}
-                          </div>
-                        </div>
-
-                        {/* Promotion Types */}
-                        <div>
-                          <label className="block text-sm font-medium mb-2 flex items-center gap-1">
-                            <Tag className="w-4 h-4" />
-                            ประเภทโปรโมชัน
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(filterOptions.promotion_types).map(
-                              ([key, label]) => (
-                                <label
-                                  key={key}
-                                  className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-50"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={(
-                                      formData.filters?.promotion_types || []
-                                    ).includes(key)}
-                                    onChange={(e) =>
-                                      updateFilterArray(
-                                        'promotion_types',
-                                        key,
-                                        e.target.checked
-                                      )
-                                    }
-                                  />
-                                  {label}
-                                </label>
-                              )
-                            )}
                           </div>
                         </div>
 

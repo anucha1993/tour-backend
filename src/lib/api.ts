@@ -179,6 +179,9 @@ export interface TourTab {
   icon: string | null | undefined;
   badge_text: string | null | undefined;
   badge_color: string | null | undefined;
+  display_mode: 'tab' | 'badge' | 'both' | 'period';
+  badge_icon: string | null | undefined;
+  badge_expires_at: string | null | undefined;
   conditions: TourTabCondition[] | null | undefined;
   display_limit: number;
   sort_by: 'popular' | 'price_asc' | 'price_desc' | 'newest' | 'departure_date';
@@ -191,6 +194,7 @@ export interface TourTab {
 export interface TourTabConditionOptions {
   condition_types: Record<string, string>;
   sort_options: Record<string, string>;
+  display_modes: Record<string, string>;
   countries: Array<{ id: number; name_th: string; name_en: string; iso2: string }>;
   regions: Record<string, string>;
   wholesalers: Array<{ id: number; name: string; code: string }>;
@@ -824,15 +828,11 @@ export interface Tour {
   popularity_score: number;
   sort_order: number;
   status: 'draft' | 'active' | 'inactive';
-  is_published: boolean;
-  published_at: string | null;
   // Sync fields
   data_source: 'api' | 'manual' | null;
   last_synced_at: string | null;
   sync_status: string | null;
   sync_locked: boolean;
-  // Promotion fields
-  promotion_type: 'none' | 'normal' | 'fire_sale' | null;
   max_discount_percent: string | null;
   created_at: string;
   updated_at: string;
@@ -865,12 +865,6 @@ export const TOUR_TYPES: Record<string, string> = {
   'join': 'Join Tour',
   'incentive': 'Incentive',
   'collective': 'Collective',
-};
-
-export const PROMOTION_TYPES: Record<string, string> = {
-  'none': 'ไม่มีโปร',
-  'normal': 'โปรโมชั่น',
-  'fire_sale': 'โปรไฟไหม้',
 };
 
 export const TOUR_SUITABLE_FOR: Record<string, string> = {
@@ -913,7 +907,6 @@ export interface TourStatistics {
   total: number;
   by_status: Record<string, number>;
   by_region: Record<string, number>;
-  published: number;
   with_promotion: number;
 }
 
@@ -927,11 +920,6 @@ export interface TourCounts {
     active: number;
     draft: number;
     inactive: number;
-  };
-  by_promotion_type: {
-    fire_sale: number;
-    normal: number;
-    none: number;
   };
 }
 
@@ -2536,7 +2524,6 @@ export interface PopularCountrySetting {
   country_ids: number[] | null;
   filters: {
     wholesaler_ids?: number[];
-    promotion_types?: string[];
     themes?: string[];
     regions?: string[];
     min_price?: number;
@@ -2604,7 +2591,6 @@ export interface PopularCountryResult {
 export interface PopularCountryFilterOptions {
   selection_modes: Record<string, string>;
   sort_options: Record<string, string>;
-  promotion_types: Record<string, string>;
   themes: Record<string, string>;
   regions: Record<string, string>;
   wholesalers: { id: number; name: string; code: string }[];
@@ -3061,6 +3047,9 @@ export interface InternationalTourSetting {
   name: string;
   slug: string;
   description: string | null;
+  cover_image_url: string | null;
+  cover_image_cf_id: string | null;
+  cover_image_position: string;
   conditions: TourTabCondition[] | null;
   display_limit: number;
   per_page: number;
@@ -3152,5 +3141,26 @@ export const internationalTourSettingsApi = {
     apiRequest<InternationalTourPreview>('/international-tour-settings/preview-conditions', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  // Upload cover image
+  uploadCoverImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('cover_image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/international-tour-settings/${id}/cover-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: InternationalTourSetting }>>;
+  },
+
+  // Delete cover image
+  deleteCoverImage: (id: number) =>
+    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}/cover-image`, {
+      method: 'DELETE',
     }),
 };

@@ -115,7 +115,6 @@ const ALL_FIELDS: FieldDefinition[] = [
     { value: '5', label: '5 ดาว' },
     { value: '0', label: 'ไม่ระบุ' },
   ]},
-  { section: 'tour', key: 'tour_category', label: 'หมวดหมู่', type: 'string', required: false, description: 'หมวดหมู่ทัวร์' },
   { section: 'tour', key: 'themes', label: 'ธีม', type: 'array<string>', required: false, description: 'ธีมทัวร์ เช่น ["ธรรมชาติ", "วัฒนธรรม"]' },
   { section: 'tour', key: 'suitable_for', label: 'เหมาะสำหรับ', type: 'array<string>', required: false, description: 'กลุ่มเป้าหมาย เช่น ["ครอบครัว", "คู่รัก"]' },
   

@@ -5,7 +5,6 @@ import {
   X, 
   Calendar, 
   Plane, 
-  Flame,
   Star,
   Building2,
   ChevronRight,
@@ -72,14 +71,7 @@ export default function TourPreviewModal({ tour, onClose }: TourPreviewModalProp
               )}
               
               {/* Badge - Small, Corner */}
-              {tour.promotion_type === 'fire_sale' && (
-                <div className="absolute top-3 left-3">
-                  <span className="px-3 py-1 text-white text-xs font-bold rounded-full shadow-md bg-gradient-to-r from-orange-500 to-red-600 animate-pulse flex items-center gap-1">
-                    <Flame className="w-3 h-3" /> โปรไฟไหม้
-                  </span>
-                </div>
-              )}
-              {tour.badge && tour.promotion_type !== 'fire_sale' && (
+              {tour.badge && (
                 <div className="absolute top-3 left-3">
                   <span className={`px-3 py-1 text-white text-xs font-bold rounded-full shadow-md ${
                     tour.badge === 'HOT' ? 'bg-red-500' :
