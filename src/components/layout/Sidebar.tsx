@@ -165,6 +165,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     icon: Users,
   },
   {
+    title: 'รีวิวทัวร์',
+    href: '/dashboard/reviews',
+    icon: Star,
+  },
+  {
     title: 'จัดการเว็บไซต์',
     icon: FileText,
     children: [

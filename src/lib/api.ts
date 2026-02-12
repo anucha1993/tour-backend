@@ -3164,3 +3164,162 @@ export const internationalTourSettingsApi = {
       method: 'DELETE',
     }),
 };
+
+// ===================== Tour Reviews (Admin) =====================
+
+export interface TourReviewAdmin {
+  id: number;
+  tour_id: number;
+  user_id: number | null;
+  order_id: number | null;
+  reviewer_name: string;
+  reviewer_avatar_url: string | null;
+  rating: number;
+  category_ratings: Record<string, number> | null;
+  tags: string[] | null;
+  comment: string | null;
+  review_source: 'self' | 'assisted' | 'internal';
+  approved_by_customer: boolean;
+  approval_screenshot_url: string | null;
+  assisted_by_admin_id: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  moderated_by: number | null;
+  moderated_at: string | null;
+  rejection_reason: string | null;
+  admin_reply: string | null;
+  replied_by: number | null;
+  replied_at: string | null;
+  incentive_type: string | null;
+  incentive_value: string | null;
+  incentive_claimed: boolean;
+  is_featured: boolean;
+  helpful_count: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  tour?: { id: number; tour_name: string; slug: string };
+  user?: { id: number; first_name: string; last_name: string; avatar: string | null };
+  moderator?: { id: number; name: string };
+  replier?: { id: number; name: string };
+  assisted_by_admin?: { id: number; name: string };
+}
+
+export interface ReviewTagAdmin {
+  id: number;
+  name: string;
+  slug: string;
+  icon: string | null;
+  usage_count: number;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReviewStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  featured: number;
+}
+
+export const tourReviewApi = {
+  // List reviews
+  list: (params?: Record<string, string | number | undefined>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '' && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const qs = searchParams.toString();
+    return apiRequest<{ data: TourReviewAdmin[]; current_page: number; last_page: number; total: number; per_page: number }>(`/tour-reviews${qs ? `?${qs}` : ''}`) as Promise<ApiResponse<{ data: TourReviewAdmin[]; current_page: number; last_page: number; total: number; per_page: number }> & { stats?: ReviewStats }>;
+  },
+
+  // Get single review
+  get: (id: number) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}`),
+
+  // Approve review
+  approve: (id: number) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/approve`, { method: 'PATCH' }),
+
+  // Reject review
+  reject: (id: number, reason: string) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+
+  // Reply to review
+  reply: (id: number, admin_reply: string) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_reply }),
+    }),
+
+  // Toggle featured
+  toggleFeatured: (id: number) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/toggle-featured`, { method: 'PATCH' }),
+
+  // Delete review
+  delete: (id: number) =>
+    apiRequest(`/tour-reviews/${id}`, { method: 'DELETE' }),
+
+  // Bulk approve
+  bulkApprove: (ids: number[]) =>
+    apiRequest('/tour-reviews/bulk-approve', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+
+  // Create assisted review
+  createAssisted: (data: FormData) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/tour-reviews/assisted`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: data,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: TourReviewAdmin }>>;
+  },
+};
+
+export const reviewTagApi = {
+  // List all tags
+  list: () => apiRequest<{ data: ReviewTagAdmin[] }>('/admin/review-tags'),
+
+  // Create tag
+  create: (data: { name: string; icon?: string }) =>
+    apiRequest<{ data: ReviewTagAdmin }>('/admin/review-tags', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update tag
+  update: (id: number, data: { name: string; icon?: string; is_active?: boolean; sort_order?: number }) =>
+    apiRequest<{ data: ReviewTagAdmin }>(`/admin/review-tags/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete tag
+  delete: (id: number) =>
+    apiRequest(`/admin/review-tags/${id}`, { method: 'DELETE' }),
+
+  // Toggle active
+  toggle: (id: number) =>
+    apiRequest<{ data: ReviewTagAdmin }>(`/admin/review-tags/${id}/toggle`, { method: 'PATCH' }),
+
+  // Reorder
+  reorder: (ids: number[]) =>
+    apiRequest('/admin/review-tags/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+};
