@@ -204,6 +204,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     icon: Globe,
   },
   {
+    title: 'ทำไมต้องเลือกเรา',
+    href: '/dashboard/website/why-choose-us',
+    icon: Star,
+  },
+  {
     title: 'ลูกค้าของเรา',
     href: '/dashboard/website/our-clients',
     icon: Users,
@@ -227,6 +232,11 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'ข้อมูลติดต่อ',
     href: '/dashboard/website/site-contacts',
     icon: Phone,
+  },
+  {
+    title: 'Subscribers & Newsletter',
+    href: '/dashboard/subscribers',
+    icon: Mail,
   },
       {
         title: 'ทั่วไป',

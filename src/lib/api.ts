@@ -2985,6 +2985,195 @@ export interface AutoCloseSettings {
   run_time: string;
 }
 
+// Footer Config
+export interface FooterFeature {
+  icon: string;
+  label: string;
+}
+
+export interface FooterConfig {
+  newsletter_title: string;
+  newsletter_show: boolean;
+  scam_warning_title: string;
+  scam_warning_text: string;
+  scam_warning_show: boolean;
+  company_description: string;
+  license_number: string;
+  line_id: string;
+  line_url: string;
+  line_qr_image: string;
+  col1_title: string;
+  col2_title: string;
+  col3_title: string;
+  features: FooterFeature[];
+}
+
+export const footerSettingsApi = {
+  get: () =>
+    apiRequest<FooterConfig>('/settings/footer'),
+  update: (data: Partial<FooterConfig>) =>
+    apiRequest<FooterConfig>('/settings/footer', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  uploadQrImage: async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const response = await fetch(`${API_BASE_URL}/settings/footer/upload-qr`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    return response.json() as Promise<ApiResponse<{ line_qr_image: string }>>;
+  },
+};
+
+// ==================== Why Choose Us ====================
+
+export interface WhyChooseUsItem {
+  icon: string;
+  title: string;
+  description: string;
+}
+
+export interface WhyChooseUsConfig {
+  title: string;
+  subtitle: string;
+  show: boolean;
+  items: WhyChooseUsItem[];
+}
+
+export const whyChooseUsApi = {
+  get: () =>
+    apiRequest<WhyChooseUsConfig>('/settings/why-choose-us'),
+  update: (data: Partial<WhyChooseUsConfig>) =>
+    apiRequest<WhyChooseUsConfig>('/settings/why-choose-us', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== Subscribers & Newsletters ====================
+
+export interface Subscriber {
+  id: number;
+  email: string;
+  status: 'pending' | 'active' | 'unsubscribed';
+  source_page: string | null;
+  interest_country: string | null;
+  confirmed_at: string | null;
+  subscribed_at: string | null;
+  unsubscribed_at: string | null;
+  ip_address: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriberStats {
+  total: number;
+  active: number;
+  pending: number;
+  unsubscribed: number;
+  new_this_month: number;
+  sources: Record<string, number>;
+}
+
+export interface NewsletterItem {
+  id: number;
+  subject: string;
+  content_html: string;
+  content_text: string | null;
+  status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled';
+  template: string;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  expires_at: string | null;
+  recipient_filter: { type?: string; country?: string; subscriber_ids?: number[] } | null;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  opened_count: number;
+  batch_size: number;
+  batch_delay_seconds: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriberSmtpConfig {
+  host: string;
+  port: number;
+  encryption: string;
+  username: string;
+  password?: string;
+  password_masked?: string;
+  has_password?: boolean;
+  from_address: string;
+  from_name: string;
+  reply_to: string;
+  enabled: boolean;
+}
+
+export const subscriberApi = {
+  // Subscriber CRUD
+  list: (params?: Record<string, string | number>) => {
+    const query = params ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+    return apiRequest<Subscriber[]>(`/subscribers${query}`);
+  },
+  stats: () =>
+    apiRequest<SubscriberStats>('/subscribers/stats'),
+  show: (id: number) =>
+    apiRequest<Subscriber>(`/subscribers/${id}`),
+  destroy: (id: number) =>
+    apiRequest<void>(`/subscribers/${id}`, { method: 'DELETE' }),
+
+  // Newsletter CRUD
+  newsletters: (params?: Record<string, string | number>) => {
+    const query = params ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+    return apiRequest<NewsletterItem[]>(`/newsletters${query}`);
+  },
+  createNewsletter: (data: Partial<NewsletterItem>) =>
+    apiRequest<NewsletterItem>('/newsletters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  showNewsletter: (id: number) =>
+    apiRequest<NewsletterItem>(`/newsletters/${id}`),
+  updateNewsletter: (id: number, data: Partial<NewsletterItem>) =>
+    apiRequest<NewsletterItem>(`/newsletters/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteNewsletter: (id: number) =>
+    apiRequest<void>(`/newsletters/${id}`, { method: 'DELETE' }),
+  sendNewsletter: (id: number) =>
+    apiRequest<NewsletterItem>(`/newsletters/${id}/send`, { method: 'POST' }),
+  cancelNewsletter: (id: number) =>
+    apiRequest<void>(`/newsletters/${id}/cancel`, { method: 'POST' }),
+  previewCount: (filter: Record<string, unknown>) =>
+    apiRequest<{ count: number }>('/newsletters/preview-count', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_filter: filter }),
+    }),
+
+  // Subscriber SMTP
+  getSmtp: () =>
+    apiRequest<SubscriberSmtpConfig>('/settings/subscriber-smtp'),
+  updateSmtp: (data: Partial<SubscriberSmtpConfig>) =>
+    apiRequest<void>('/settings/subscriber-smtp', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  testSmtp: (toEmail: string) =>
+    apiRequest<void>('/settings/subscriber-smtp/test', {
+      method: 'POST',
+      body: JSON.stringify({ to_email: toEmail }),
+    }),
+};
+
 export const systemSettingsApi = {
   // Get all settings grouped
   getAll: () =>
@@ -3165,7 +3354,9 @@ export const internationalTourSettingsApi = {
     }),
 };
 
-// ===================== Tour Reviews (Admin) =====================
+// =====================
+// Tour Reviews (Admin)
+// =====================
 
 export interface TourReviewAdmin {
   id: number;
@@ -3177,7 +3368,7 @@ export interface TourReviewAdmin {
   rating: number;
   category_ratings: Record<string, number> | null;
   tags: string[] | null;
-  comment: string | null;
+  comment: string;
   review_source: 'self' | 'assisted' | 'internal';
   approved_by_customer: boolean;
   approval_screenshot_url: string | null;
@@ -3190,18 +3381,35 @@ export interface TourReviewAdmin {
   replied_by: number | null;
   replied_at: string | null;
   incentive_type: string | null;
-  incentive_value: string | null;
+  incentive_value: number | null;
   incentive_claimed: boolean;
   is_featured: boolean;
   helpful_count: number;
   sort_order: number;
   created_at: string;
   updated_at: string;
-  tour?: { id: number; tour_name: string; slug: string };
-  user?: { id: number; first_name: string; last_name: string; avatar: string | null };
-  moderator?: { id: number; name: string };
-  replier?: { id: number; name: string };
-  assisted_by_admin?: { id: number; name: string };
+  tour?: { id: number; title: string; slug: string; tour_code?: string; cover_image_url?: string } | null;
+  user?: { id: number; first_name: string; last_name: string; avatar?: string } | null;
+  moderator?: { id: number; name: string } | null;
+  replier?: { id: number; name: string } | null;
+  assistedByAdmin?: { id: number; name: string } | null;
+  images?: ReviewImageItem[];
+}
+
+export interface ReviewImageItem {
+  id: number;
+  tour_review_id: number;
+  image_url: string;
+  thumbnail_url: string | null;
+  sort_order: number;
+}
+
+export interface ReviewStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  featured: number;
 }
 
 export interface ReviewTagAdmin {
@@ -3216,68 +3424,14 @@ export interface ReviewTagAdmin {
   updated_at: string;
 }
 
-export interface ReviewStats {
-  total: number;
-  pending: number;
-  approved: number;
-  rejected: number;
-  featured: number;
-}
-
 export const tourReviewApi = {
-  // List reviews
-  list: (params?: Record<string, string | number | undefined>) => {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== '' && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-    }
-    const qs = searchParams.toString();
-    return apiRequest<{ data: TourReviewAdmin[]; current_page: number; last_page: number; total: number; per_page: number }>(`/tour-reviews${qs ? `?${qs}` : ''}`) as Promise<ApiResponse<{ data: TourReviewAdmin[]; current_page: number; last_page: number; total: number; per_page: number }> & { stats?: ReviewStats }>;
-  },
+  list: (params?: Record<string, string | number>) =>
+    apiRequest<any>(`/tour-reviews${params ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : ''}`),
 
-  // Get single review
-  get: (id: number) =>
+  show: (id: number) =>
     apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}`),
 
-  // Approve review
-  approve: (id: number) =>
-    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/approve`, { method: 'PATCH' }),
-
-  // Reject review
-  reject: (id: number, reason: string) =>
-    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ reason }),
-    }),
-
-  // Reply to review
-  reply: (id: number, admin_reply: string) =>
-    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reply`, {
-      method: 'POST',
-      body: JSON.stringify({ admin_reply }),
-    }),
-
-  // Toggle featured
-  toggleFeatured: (id: number) =>
-    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/toggle-featured`, { method: 'PATCH' }),
-
-  // Delete review
-  delete: (id: number) =>
-    apiRequest(`/tour-reviews/${id}`, { method: 'DELETE' }),
-
-  // Bulk approve
-  bulkApprove: (ids: number[]) =>
-    apiRequest('/tour-reviews/bulk-approve', {
-      method: 'POST',
-      body: JSON.stringify({ ids }),
-    }),
-
-  // Create assisted review
-  createAssisted: (data: FormData) => {
+  createAssisted: (formData: FormData) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     return fetch(`${API_BASE_URL}/tour-reviews/assisted`, {
       method: 'POST',
@@ -3285,40 +3439,84 @@ export const tourReviewApi = {
         'Accept': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      body: data,
+      body: formData,
     }).then(res => res.json()) as Promise<ApiResponse<{ data: TourReviewAdmin }>>;
   },
+
+  update: (id: number, formData: FormData) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/tour-reviews/${id}/update`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: TourReviewAdmin }>>;
+  },
+
+  approve: (id: number) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/approve`, {
+      method: 'PATCH',
+    }),
+
+  reject: (id: number, reason: string) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ rejection_reason: reason }),
+    }),
+
+  reply: (id: number, replyText: string) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_reply: replyText }),
+    }),
+
+  toggleFeatured: (id: number) =>
+    apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/toggle-featured`, {
+      method: 'PATCH',
+    }),
+
+  bulkApprove: (ids: number[]) =>
+    apiRequest<any>('/tour-reviews/bulk-approve', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+
+  delete: (id: number) =>
+    apiRequest<any>(`/tour-reviews/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const reviewTagApi = {
-  // List all tags
-  list: () => apiRequest<{ data: ReviewTagAdmin[] }>('/admin/review-tags'),
+  list: (params?: Record<string, string | number>) =>
+    apiRequest<{ data: ReviewTagAdmin[] }>(`/admin/review-tags${params ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : ''}`),
 
-  // Create tag
-  create: (data: { name: string; icon?: string }) =>
+  create: (data: Record<string, unknown>) =>
     apiRequest<{ data: ReviewTagAdmin }>('/admin/review-tags', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  // Update tag
-  update: (id: number, data: { name: string; icon?: string; is_active?: boolean; sort_order?: number }) =>
+  update: (id: number, data: Record<string, unknown>) =>
     apiRequest<{ data: ReviewTagAdmin }>(`/admin/review-tags/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
 
-  // Delete tag
   delete: (id: number) =>
-    apiRequest(`/admin/review-tags/${id}`, { method: 'DELETE' }),
+    apiRequest<any>(`/admin/review-tags/${id}`, {
+      method: 'DELETE',
+    }),
 
-  // Toggle active
   toggle: (id: number) =>
-    apiRequest<{ data: ReviewTagAdmin }>(`/admin/review-tags/${id}/toggle`, { method: 'PATCH' }),
+    apiRequest<{ data: ReviewTagAdmin }>(`/admin/review-tags/${id}/toggle`, {
+      method: 'PATCH',
+    }),
 
-  // Reorder
   reorder: (ids: number[]) =>
-    apiRequest('/admin/review-tags/reorder', {
+    apiRequest<any>('/admin/review-tags/reorder', {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),

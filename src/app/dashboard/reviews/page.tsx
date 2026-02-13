@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Star, Search, Filter, Check, X, MessageSquare,
+  Star, StarHalf, Search, Filter, Check, X, MessageSquare,
   Sparkles, Trash2, Eye, ChevronDown, AlertCircle,
-  ThumbsUp, ThumbsDown, Users, Clock, Plus, Upload, Image as ImageIcon,
+  ThumbsUp, ThumbsDown, Users, Clock, Plus, Upload, Image as ImageIcon, Pencil, Hash,
 } from 'lucide-react';
-import { tourReviewApi, reviewTagApi, toursApi, TourReviewAdmin, ReviewStats, ReviewTagAdmin, Tour } from '@/lib/api';
+import { tourReviewApi, reviewTagApi, toursApi, TourReviewAdmin, ReviewStats, ReviewTagAdmin, Tour, API_BASE_URL, ReviewImageItem } from '@/lib/api';
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: 'รอตรวจสอบ', color: 'text-yellow-700', bg: 'bg-yellow-100' },
@@ -20,15 +20,23 @@ const SOURCE_MAP: Record<string, { label: string; color: string }> = {
   internal: { label: 'Internal', color: 'text-gray-600' },
 };
 
-function StarDisplay({ rating }: { rating: number }) {
+function StarDisplay({ rating, categoryRatings }: { rating: number; categoryRatings?: Record<string, number> | null }) {
+  // Compute from category_ratings if available, otherwise use rating field
+  let displayRating = rating;
+  if (categoryRatings && Object.keys(categoryRatings).length > 0) {
+    const vals = Object.values(categoryRatings).map(Number);
+    displayRating = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+  }
+  const full = Math.floor(displayRating);
+  const hasHalf = displayRating !== full;
   return (
     <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <Star
-          key={s}
-          className={`w-3.5 h-3.5 ${s <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`}
-        />
-      ))}
+      {[1, 2, 3, 4, 5].map((s) => {
+        if (s <= full) return <Star key={s} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />;
+        if (s === full + 1 && hasHalf) return <StarHalf key={s} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />;
+        return <Star key={s} className="w-3.5 h-3.5 text-gray-200" />;
+      })}
+      <span className="ml-1 text-xs font-medium text-yellow-600">{displayRating}</span>
     </div>
   );
 }
@@ -50,6 +58,56 @@ export default function ReviewsPage() {
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [detailReview, setDetailReview] = useState<TourReviewAdmin | null>(null);
+
+  // Tags state
+  const [availableTags, setAvailableTags] = useState<ReviewTagAdmin[]>([]);
+
+  // Helper: convert tag slug (English) to Thai name
+  const resolveTagName = useCallback((tag: string) => {
+    const found = availableTags.find(t => t.slug === tag || t.name === tag);
+    return found ? found.name : tag;
+  }, [availableTags]);
+
+  // Create review modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [tourSearch, setTourSearch] = useState('');
+  const [tourResults, setTourResults] = useState<Tour[]>([]);
+  const [tourSearching, setTourSearching] = useState(false);
+  const tourSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [createForm, setCreateForm] = useState({
+    tour_id: 0,
+    tour_title: '',
+    reviewer_name: '',
+    rating: 5,
+    comment: '',
+    approved_by_customer: true,
+    tags: [] as string[],
+    category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 } as Record<string, number>,
+    review_source: 'assisted' as 'self' | 'assisted' | 'internal',
+    status: 'approved' as 'pending' | 'approved' | 'rejected',
+  });
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [reviewImages, setReviewImages] = useState<File[]>([]);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  // Edit review modal state
+  const [editingReview, setEditingReview] = useState<TourReviewAdmin | null>(null);
+  const [editForm, setEditForm] = useState({
+    reviewer_name: '',
+    rating: 5,
+    comment: '',
+    tags: [] as string[],
+    category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 } as Record<string, number>,
+    review_source: 'assisted' as 'self' | 'assisted' | 'internal',
+    status: 'approved' as 'pending' | 'approved' | 'rejected',
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editAvatarFile, setEditAvatarFile] = useState<File | null>(null);
+  const [editNewImages, setEditNewImages] = useState<File[]>([]);
+  const [editRemoveImageIds, setEditRemoveImageIds] = useState<number[]>([]);
+  const [editRemoveAvatar, setEditRemoveAvatar] = useState(false);
+  const [editExistingImages, setEditExistingImages] = useState<ReviewImageItem[]>([]);
 
   const fetchReviews = useCallback(async () => {
     setLoading(true);
@@ -77,6 +135,17 @@ export default function ReviewsPage() {
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  // Fetch available tags on mount
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const res = await reviewTagApi.list() as any;
+        setAvailableTags(res.data || []);
+      } catch { /* ignore */ }
+    };
+    fetchTags();
+  }, []);
 
   const handleApprove = async (id: number) => {
     try {
@@ -155,6 +224,185 @@ export default function ReviewsPage() {
     }
   };
 
+  // Search tours for create modal
+  const handleTourSearch = (query: string) => {
+    setTourSearch(query);
+    if (tourSearchTimeout.current) clearTimeout(tourSearchTimeout.current);
+    if (!query.trim()) { setTourResults([]); return; }
+    tourSearchTimeout.current = setTimeout(async () => {
+      setTourSearching(true);
+      try {
+        const res = await toursApi.list({ search: query, per_page: '10' }) as any;
+        setTourResults(res?.data || []);
+      } catch { setTourResults([]); }
+      finally { setTourSearching(false); }
+    }, 300);
+  };
+
+  const handleSelectTour = (tour: Tour) => {
+    setCreateForm(f => ({ ...f, tour_id: tour.id, tour_title: tour.title }));
+    setTourSearch('');
+    setTourResults([]);
+  };
+
+  const resetCreateForm = () => {
+    setCreateForm({
+      tour_id: 0, tour_title: '', reviewer_name: '', rating: 5, comment: '',
+      approved_by_customer: true, tags: [],
+      category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
+      review_source: 'assisted', status: 'approved',
+    });
+    setScreenshotFile(null);
+    setReviewImages([]);
+    setAvatarFile(null);
+    setTourSearch('');
+    setTourResults([]);
+  };
+
+  const handleCreateReview = async () => {
+    if (!createForm.tour_id || !createForm.reviewer_name.trim() || !createForm.comment.trim()) {
+      alert('กรุณากรอกข้อมูลให้ครบ');
+      return;
+    }
+    setCreateSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append('tour_id', String(createForm.tour_id));
+      fd.append('reviewer_name', createForm.reviewer_name);
+      // Compute average rating from category ratings
+      const catVals = Object.values(createForm.category_ratings).map(Number);
+      const avgRating = catVals.length ? Math.round(catVals.reduce((a, b) => a + b, 0) / catVals.length) : 5;
+      fd.append('rating', String(avgRating));
+      fd.append('comment', createForm.comment);
+      fd.append('approved_by_customer', createForm.approved_by_customer ? '1' : '0');
+      fd.append('review_source', createForm.review_source);
+      fd.append('status', createForm.status);
+      Object.entries(createForm.category_ratings).forEach(([k, v]) => {
+        fd.append(`category_ratings[${k}]`, String(v));
+      });
+      createForm.tags.forEach(tag => {
+        fd.append('tags[]', tag);
+      });
+      if (screenshotFile) fd.append('approval_screenshot', screenshotFile);
+      if (avatarFile) fd.append('reviewer_avatar', avatarFile);
+      reviewImages.forEach((file) => {
+        fd.append('images[]', file);
+      });
+
+      const res = await tourReviewApi.createAssisted(fd) as any;
+      if (res.success) {
+        setShowCreateModal(false);
+        resetCreateForm();
+        fetchReviews();
+      } else {
+        const errors = res.errors ? Object.values(res.errors).flat().join('\n') : 'เกิดข้อผิดพลาด';
+        alert(errors);
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาด');
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
+
+  const openEditModal = (review: TourReviewAdmin) => {
+    setEditingReview(review);
+    // Convert old English slug tags to Thai names
+    const resolvedTags = Array.isArray(review.tags)
+      ? review.tags.map(tag => {
+          const found = availableTags.find(t => t.slug === tag || t.name === tag);
+          return found ? found.name : tag;
+        })
+      : [];
+    setEditForm({
+      reviewer_name: review.reviewer_name || '',
+      rating: review.rating || 5,
+      comment: review.comment || '',
+      tags: resolvedTags,
+      category_ratings: review.category_ratings || { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
+      review_source: review.review_source || 'assisted',
+      status: review.status || 'approved',
+    });
+    setEditExistingImages(review.images || []);
+    setEditRemoveImageIds([]);
+    setEditNewImages([]);
+    setEditAvatarFile(null);
+    setEditRemoveAvatar(false);
+  };
+
+  const closeEditModal = () => {
+    setEditingReview(null);
+    setEditForm({
+      reviewer_name: '',
+      rating: 5,
+      comment: '',
+      tags: [],
+      category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
+      review_source: 'assisted', status: 'approved',
+    });
+    setEditExistingImages([]);
+    setEditRemoveImageIds([]);
+    setEditNewImages([]);
+    setEditAvatarFile(null);
+    setEditRemoveAvatar(false);
+  };
+
+  const handleUpdateReview = async () => {
+    if (!editingReview) return;
+    if (!editForm.reviewer_name.trim() || !editForm.comment.trim()) {
+      alert('กรุณากรอกข้อมูลให้ครบ');
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append('reviewer_name', editForm.reviewer_name);
+      // Compute average rating from category ratings
+      const editCatVals = Object.values(editForm.category_ratings).map(Number);
+      const editAvgRating = editCatVals.length ? Math.round(editCatVals.reduce((a, b) => a + b, 0) / editCatVals.length) : 5;
+      fd.append('rating', String(editAvgRating));
+      fd.append('comment', editForm.comment);
+      fd.append('review_source', editForm.review_source);
+      fd.append('status', editForm.status);
+      Object.entries(editForm.category_ratings).forEach(([k, v]) => {
+        fd.append(`category_ratings[${k}]`, String(v));
+      });
+      editForm.tags.forEach(tag => {
+        fd.append('tags[]', tag);
+      });
+      if (editAvatarFile) fd.append('reviewer_avatar', editAvatarFile);
+      if (editRemoveAvatar) fd.append('remove_avatar', '1');
+      editRemoveImageIds.forEach(id => {
+        fd.append('remove_image_ids[]', String(id));
+      });
+      editNewImages.forEach(file => {
+        fd.append('images[]', file);
+      });
+
+      const res = await tourReviewApi.update(editingReview.id, fd) as any;
+      if (res.success) {
+        closeEditModal();
+        fetchReviews();
+      } else {
+        const errors = res.errors ? Object.values(res.errors).flat().join('\n') : 'เกิดข้อผิดพลาด';
+        alert(errors);
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาด');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const imageBaseUrl = API_BASE_URL.replace('/api', '');
+
+  // Helper: resolve image URL (R2 URLs are already absolute, legacy /storage/ paths need base prefix)
+  const resolveImageUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return imageBaseUrl + url;
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -166,6 +414,13 @@ export default function ReviewsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">ตรวจสอบ อนุมัติ และตอบกลับรีวิวจากลูกค้า</p>
         </div>
+        <button
+          onClick={() => { resetCreateForm(); setShowCreateModal(true); }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          เขียนรีวิว
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -178,7 +433,7 @@ export default function ReviewsPage() {
             { label: 'ปฏิเสธ', value: stats.rejected, icon: X, color: 'text-red-600 bg-red-50' },
             { label: 'แนะนำ', value: stats.featured, icon: Sparkles, color: 'text-amber-600 bg-amber-50' },
           ].map((s) => (
-            <div key={s.label} className={`rounded-xl p-4 ${s.color.split(' ')[1]}`}>
+            <div key={s.label} className={`rounded-xl p-4 border border-gray-300 ${s.color.split(' ')[1]}`}>
               <div className="flex items-center gap-2 mb-1">
                 <s.icon className={`w-4 h-4 ${s.color.split(' ')[0]}`} />
                 <span className="text-xs text-gray-500">{s.label}</span>
@@ -190,7 +445,7 @@ export default function ReviewsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4 ">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -198,13 +453,13 @@ export default function ReviewsPage() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             placeholder="ค้นหาชื่อ, ความคิดเห็น, ทัวร์..."
-            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">สถานะทั้งหมด</option>
           <option value="pending">รอตรวจสอบ</option>
@@ -214,7 +469,7 @@ export default function ReviewsPage() {
         <select
           value={sourceFilter}
           onChange={(e) => { setSourceFilter(e.target.value); setCurrentPage(1); }}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">แหล่งที่มาทั้งหมด</option>
           <option value="self">สมาชิก</option>
@@ -224,7 +479,7 @@ export default function ReviewsPage() {
         <select
           value={ratingFilter}
           onChange={(e) => { setRatingFilter(e.target.value); setCurrentPage(1); }}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">คะแนนทั้งหมด</option>
           {[5, 4, 3, 2, 1].map((r) => (
@@ -253,12 +508,12 @@ export default function ReviewsPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="bg-white rounded-xl border overflow-hidden border-gray-300">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-gray-50 border-b border-gray-300">
               <tr>
-                <th className="px-4 py-3 text-left">
+                <th className="px-4 py-3 text-left border-gray-300">
                   <input
                     type="checkbox"
                     checked={selectedIds.length === reviews.length && reviews.length > 0}
@@ -307,11 +562,15 @@ export default function ReviewsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-semibold text-blue-600">
-                              {review.reviewer_name.charAt(0)}
-                            </span>
-                          </div>
+                          {review.reviewer_avatar_url ? (
+                            <img src={resolveImageUrl(review.reviewer_avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-semibold text-blue-600">
+                                {review.reviewer_name.charAt(0)}
+                              </span>
+                            </div>
+                          )}
                           <div>
                             <div className="font-medium text-gray-900 text-sm">{review.reviewer_name}</div>
                             {review.is_featured && (
@@ -323,16 +582,32 @@ export default function ReviewsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="max-w-[200px] truncate text-sm text-gray-700">
-                          {review.tour?.tour_name || '-'}
+                        <div className="max-w-[200px]">
+                          <div className="truncate text-sm text-gray-700">{review.tour?.title || '-'}</div>
+                          {review.tour?.tour_code && (
+                            <div className="text-[10px] text-gray-400 mt-0.5">รหัส: {review.tour.tour_code}</div>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <StarDisplay rating={review.rating} />
+                        <StarDisplay rating={review.rating} categoryRatings={review.category_ratings} />
                       </td>
                       <td className="px-4 py-3">
-                        <div className="max-w-[250px] truncate text-sm text-gray-600">
-                          {review.comment || '-'}
+                        <div className="max-w-[250px]">
+                          <div className="truncate text-sm text-gray-600">{review.comment || '-'}</div>
+                          {review.images && review.images.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <ImageIcon className="w-3 h-3 text-gray-400" />
+                              <span className="text-[10px] text-gray-400">{review.images.length} รูป</span>
+                            </div>
+                          )}
+                          {review.tags && review.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {review.tags.map((tag, i) => (
+                                <span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">#{resolveTagName(tag)}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -383,6 +658,13 @@ export default function ReviewsPage() {
                             title={review.is_featured ? 'ยกเลิกแนะนำ' : 'ตั้งเป็นแนะนำ'}
                           >
                             <Sparkles className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openEditModal(review)}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                            title="แก้ไข"
+                          >
+                            <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(review.id)}
@@ -440,12 +722,12 @@ export default function ReviewsPage() {
               onChange={(e) => setReplyText(e.target.value)}
               placeholder="พิมพ์ข้อความตอบกลับ..."
               rows={4}
-              className="w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
             <div className="flex items-center gap-3 mt-4">
               <button
                 onClick={() => setReplyingId(null)}
-                className="flex-1 py-2 border rounded-xl text-sm text-gray-600 hover:bg-gray-50"
+                className="flex-1 py-2 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50"
               >
                 ยกเลิก
               </button>
@@ -474,12 +756,12 @@ export default function ReviewsPage() {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="ระบุเหตุผล..."
               rows={3}
-              className="w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
             />
             <div className="flex items-center gap-3 mt-4">
               <button
                 onClick={() => setRejectingId(null)}
-                className="flex-1 py-2 border rounded-xl text-sm text-gray-600 hover:bg-gray-50"
+                className="flex-1 py-2 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50"
               >
                 ยกเลิก
               </button>
@@ -489,6 +771,691 @@ export default function ReviewsPage() {
                 className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm hover:bg-red-700 disabled:opacity-50"
               >
                 ปฏิเสธ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Review Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-y-auto py-8">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border border-gray-300 border-b px-6 py-4 rounded-t-2xl flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-600" />
+                เขียนรีวิวจากหลังบ้าน
+              </h3>
+              <button onClick={() => setShowCreateModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Tour Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">เลือกทัวร์ <span className="text-red-500">*</span></label>
+                {createForm.tour_id ? (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                    <div className="flex-1 text-sm text-blue-800 font-medium">{createForm.tour_title}</div>
+                    <button onClick={() => setCreateForm(f => ({ ...f, tour_id: 0, tour_title: '' }))} className="p-1 hover:bg-blue-100 rounded">
+                      <X className="w-4 h-4 text-blue-500" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={tourSearch}
+                      onChange={(e) => handleTourSearch(e.target.value)}
+                      placeholder="พิมพ์ชื่อทัวร์หรือรหัสทัวร์เพื่อค้นหา..."
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {(tourResults.length > 0 || tourSearching) && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+                        {tourSearching ? (
+                          <div className="px-4 py-3 text-sm text-gray-400 text-center">กำลังค้นหา...</div>
+                        ) : (
+                          tourResults.map(t => (
+                            <div
+                              key={t.id}
+                              onClick={() => handleSelectTour(t)}
+                              className="px-4 py-2.5 hover:bg-blue-50 cursor-pointer text-sm border-b last:border-0"
+                            >
+                              <div className="font-medium text-gray-900">{t.title}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">รหัส: {t.tour_code}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Reviewer Name + Avatar */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ชื่อผู้รีวิว <span className="text-red-500">*</span></label>
+                <div className="flex items-start gap-4">
+                  {/* Avatar Upload */}
+                  <div className="flex-shrink-0">
+                    <label className="relative block w-16 h-16 rounded-full overflow-hidden border-2 border-dashed border-gray-300 cursor-pointer hover:border-blue-400 transition-colors bg-gray-50">
+                      {avatarFile ? (
+                        <img src={URL.createObjectURL(avatarFile)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center">
+                          <ImageIcon className="w-5 h-5 text-gray-300" />
+                          <span className="text-[8px] text-gray-400 mt-0.5">รูปโปรไฟล์</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                    </label>
+                    {avatarFile && (
+                      <button
+                        type="button"
+                        onClick={() => setAvatarFile(null)}
+                        className="mt-1 text-[10px] text-red-400 hover:text-red-600 w-full text-center"
+                      >ลบรูป</button>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={createForm.reviewer_name}
+                      onChange={(e) => setCreateForm(f => ({ ...f, reviewer_name: e.target.value }))}
+                      placeholder="เช่น คุณสมชาย ใจดี"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">อัปโหลดรูปโปรไฟล์ของผู้รีวิว (ไม่เกิน 2MB)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Overall Rating (auto-computed) */}
+              {(() => {
+                const vals = Object.values(createForm.category_ratings).map(Number);
+                const avg = vals.length ? parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)) : 5;
+                const full = Math.floor(avg);
+                const hasHalf = avg !== full;
+                return (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">คะแนนรวม <span className="text-xs text-gray-400">(คำนวณจากค่าเฉลี่ย)</span></label>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map(s => {
+                        if (s <= full) return <Star key={s} className="w-7 h-7 fill-yellow-400 text-yellow-400" />;
+                        if (s === full + 1 && hasHalf) return <StarHalf key={s} className="w-7 h-7 fill-yellow-400 text-yellow-400" />;
+                        return <Star key={s} className="w-7 h-7 text-gray-200" />;
+                      })}
+                      <span className="ml-2 text-sm font-semibold text-yellow-600">{avg}/5</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Category Ratings */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">คะแนนตามหมวดหมู่ <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'guide', label: 'ไกด์นำเที่ยว' },
+                    { key: 'food', label: 'อาหาร' },
+                    { key: 'hotel', label: 'โรงแรม' },
+                    { key: 'value', label: 'ความคุ้มค่า' },
+                    { key: 'program_accuracy', label: 'โปรแกรมตรงปก' },
+                    { key: 'would_return', label: 'กลับมาอีก' },
+                  ].map(cat => (
+                    <div key={cat.key} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                      <span className="text-sm text-gray-600">{cat.label}</span>
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setCreateForm(f => ({
+                              ...f,
+                              category_ratings: { ...f.category_ratings, [cat.key]: s },
+                            }))}
+                            className="p-0"
+                          >
+                            <Star className={`w-4 h-4 ${s <= (createForm.category_ratings[cat.key] || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Comment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ความคิดเห็น <span className="text-red-500">*</span></label>
+                <textarea
+                  value={createForm.comment}
+                  onChange={(e) => setCreateForm(f => ({ ...f, comment: e.target.value }))}
+                  placeholder="เขียนรีวิว..."
+                  rows={4}
+                  maxLength={200}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                <div className="text-xs text-gray-400 text-right mt-1">{createForm.comment.length}/200</div>
+              </div>
+
+              {/* Hashtags */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Hash className="w-4 h-4" />
+                  แฮชแท็ก
+                </label>
+                {/* Selected tags */}
+                {(createForm.tags || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {(createForm.tags || []).map(tag => (
+                      <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                        #{tag}
+                        <button type="button" onClick={() => setCreateForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }))} className="p-0.5 hover:bg-blue-200 rounded-full">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Suggested tags */}
+                {availableTags.filter(t => t.is_active).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {availableTags.filter(t => t.is_active).map(tag => {
+                      const isSelected = (createForm.tags || []).includes(tag.name);
+                      if (isSelected) return null;
+                      return (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => setCreateForm(f => ({ ...f, tags: [...(f.tags || []), tag.name] }))}
+                          className="px-2.5 py-1 rounded-full text-xs border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors"
+                        >
+                          #{tag.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Custom tag input */}
+                <input
+                  type="text"
+                  placeholder="พิมพ์แฮชแท็กแล้วกด Enter เช่น ญี่ปุ่น, ครอบครัว"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      const val = (e.target as HTMLInputElement).value.replace(/[#,]/g, '').trim();
+                      if (val && !(createForm.tags || []).includes(val)) {
+                        setCreateForm(f => ({ ...f, tags: [...(f.tags || []), val] }));
+                      }
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Review Images */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">รูปภาพรีวิว <span className="text-xs text-gray-400">(สูงสุด 6 ภาพ, ภาพละไม่เกิน 5MB)</span></label>
+                <div className="grid grid-cols-3 gap-3">
+                  {reviewImages.map((file, idx) => (
+                    <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                      <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setReviewImages(imgs => imgs.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] text-center py-0.5">{idx + 1}</div>
+                    </div>
+                  ))}
+                  {reviewImages.length < 6 && (
+                    <label className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors">
+                      <ImageIcon className="w-6 h-6 text-gray-300 mb-1" />
+                      <span className="text-xs text-gray-400">เพิ่มรูป</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          setReviewImages(prev => [...prev, ...files].slice(0, 6));
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Source & Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">แหล่งที่มา</label>
+                  <select
+                    value={createForm.review_source}
+                    onChange={(e) => setCreateForm(f => ({ ...f, review_source: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="assisted">Assisted (แอดมินสร้าง)</option>
+                    <option value="self">สมาชิก</option>
+                    <option value="internal">Internal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">สถานะ</label>
+                  <select
+                    value={createForm.status}
+                    onChange={(e) => setCreateForm(f => ({ ...f, status: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="approved">อนุมัติ</option>
+                    <option value="pending">รอตรวจสอบ</option>
+                    <option value="rejected">ปฏิเสธ</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Customer Approval */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ลูกค้ายินยอม</label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={createForm.approved_by_customer}
+                      onChange={() => setCreateForm(f => ({ ...f, approved_by_customer: true }))}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">ยินยอม</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={!createForm.approved_by_customer}
+                      onChange={() => setCreateForm(f => ({ ...f, approved_by_customer: false }))}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">ไม่ได้ยินยอม</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Screenshot Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ภาพหลักฐานการยินยอม (ถ้ามี)</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <Upload className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-500">{screenshotFile ? screenshotFile.name : 'เลือกไฟล์...'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                  {screenshotFile && (
+                    <button onClick={() => setScreenshotFile(null)} className="p-1 hover:bg-red-50 rounded text-red-400">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-300 px-6 py-4 rounded-b-2xl flex items-center gap-3">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-white transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleCreateReview}
+                disabled={createSubmitting || !createForm.tour_id || !createForm.reviewer_name.trim() || !createForm.comment.trim()}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {createSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    บันทึกรีวิว
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Review Modal */}
+      {editingReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-y-auto py-8">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border border-gray-300 border-b px-6 py-4 rounded-t-2xl flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-indigo-600" />
+                แก้ไขรีวิว
+              </h3>
+              <button onClick={closeEditModal} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Tour Name (read-only) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ทัวร์</label>
+                <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                  <div className="flex-1 text-sm text-gray-700 font-medium">{editingReview.tour?.title || `Tour #${editingReview.tour_id}`}</div>
+                </div>
+              </div>
+
+              {/* Reviewer Name + Avatar */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ชื่อผู้รีวิว <span className="text-red-500">*</span></label>
+                <div className="flex items-start gap-4">
+                  {/* Avatar Upload */}
+                  <div className="flex-shrink-0">
+                    <label className="relative block w-16 h-16 rounded-full overflow-hidden border-2 border-dashed border-gray-300 cursor-pointer hover:border-indigo-400 transition-colors bg-gray-50">
+                      {editAvatarFile ? (
+                        <img src={URL.createObjectURL(editAvatarFile)} alt="" className="w-full h-full object-cover" />
+                      ) : !editRemoveAvatar && editingReview.reviewer_avatar_url ? (
+                        <img src={resolveImageUrl(editingReview.reviewer_avatar_url!)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center">
+                          <ImageIcon className="w-5 h-5 text-gray-300" />
+                          <span className="text-[8px] text-gray-400 mt-0.5">รูปโปรไฟล์</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setEditAvatarFile(file);
+                          if (file) setEditRemoveAvatar(false);
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                    {(editAvatarFile || (!editRemoveAvatar && editingReview.reviewer_avatar_url)) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditAvatarFile(null);
+                          if (editingReview.reviewer_avatar_url) setEditRemoveAvatar(true);
+                        }}
+                        className="mt-1 text-[10px] text-red-400 hover:text-red-600 w-full text-center"
+                      >ลบรูป</button>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={editForm.reviewer_name}
+                      onChange={(e) => setEditForm(f => ({ ...f, reviewer_name: e.target.value }))}
+                      placeholder="เช่น คุณสมชาย ใจดี"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">อัปโหลดรูปโปรไฟล์ของผู้รีวิว (ไม่เกิน 2MB)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Overall Rating (auto-computed) */}
+              {(() => {
+                const vals = Object.values(editForm.category_ratings).map(Number);
+                const avg = vals.length ? parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)) : 5;
+                const full = Math.floor(avg);
+                const hasHalf = avg !== full;
+                return (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">คะแนนรวม <span className="text-xs text-gray-400">(คำนวณจากค่าเฉลี่ย)</span></label>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map(s => {
+                        if (s <= full) return <Star key={s} className="w-7 h-7 fill-yellow-400 text-yellow-400" />;
+                        if (s === full + 1 && hasHalf) return <StarHalf key={s} className="w-7 h-7 fill-yellow-400 text-yellow-400" />;
+                        return <Star key={s} className="w-7 h-7 text-gray-200" />;
+                      })}
+                      <span className="ml-2 text-sm font-semibold text-yellow-600">{avg}/5</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Category Ratings */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">คะแนนตามหมวดหมู่ <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'guide', label: 'ไกด์นำเที่ยว' },
+                    { key: 'food', label: 'อาหาร' },
+                    { key: 'hotel', label: 'โรงแรม' },
+                    { key: 'value', label: 'ความคุ้มค่า' },
+                    { key: 'program_accuracy', label: 'โปรแกรมตรงปก' },
+                    { key: 'would_return', label: 'กลับมาอีก' },
+                  ].map(cat => (
+                    <div key={cat.key} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                      <span className="text-sm text-gray-600">{cat.label}</span>
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setEditForm(f => ({
+                              ...f,
+                              category_ratings: { ...f.category_ratings, [cat.key]: s },
+                            }))}
+                            className="p-0"
+                          >
+                            <Star className={`w-4 h-4 ${s <= (editForm.category_ratings[cat.key] || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Comment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ความคิดเห็น <span className="text-red-500">*</span></label>
+                <textarea
+                  value={editForm.comment}
+                  onChange={(e) => setEditForm(f => ({ ...f, comment: e.target.value }))}
+                  placeholder="เขียนรีวิว..."
+                  rows={4}
+                  maxLength={200}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+                <div className="text-xs text-gray-400 text-right mt-1">{editForm.comment.length}/200</div>
+              </div>
+
+              {/* Hashtags */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Hash className="w-4 h-4" />
+                  แฮชแท็ก
+                </label>
+                {/* Selected tags */}
+                {(editForm.tags || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {(editForm.tags || []).map(tag => (
+                      <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">
+                        #{tag}
+                        <button type="button" onClick={() => setEditForm(f => ({ ...f, tags: (f.tags || []).filter(t => t !== tag) }))} className="p-0.5 hover:bg-indigo-200 rounded-full">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Suggested tags */}
+                {availableTags.filter(t => t.is_active).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {availableTags.filter(t => t.is_active).map(tag => {
+                      const isSelected = (editForm.tags || []).includes(tag.name);
+                      if (isSelected) return null;
+                      return (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => setEditForm(f => ({ ...f, tags: [...(f.tags || []), tag.name] }))}
+                          className="px-2.5 py-1 rounded-full text-xs border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors"
+                        >
+                          #{tag.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Custom tag input */}
+                <input
+                  type="text"
+                  placeholder="พิมพ์แฮชแท็กแล้วกด Enter เช่น ญี่ปุ่น, ครอบครัว"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      const val = (e.target as HTMLInputElement).value.replace(/[#,]/g, '').trim();
+                      if (val && !(editForm.tags || []).includes(val)) {
+                        setEditForm(f => ({ ...f, tags: [...(f.tags || []), val] }));
+                      }
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Source & Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">แหล่งที่มา</label>
+                  <select
+                    value={editForm.review_source}
+                    onChange={(e) => setEditForm(f => ({ ...f, review_source: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="assisted">Assisted (แอดมินสร้าง)</option>
+                    <option value="self">สมาชิก</option>
+                    <option value="internal">Internal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">สถานะ</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="approved">อนุมัติ</option>
+                    <option value="pending">รอตรวจสอบ</option>
+                    <option value="rejected">ปฏิเสธ</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Existing Images */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  รูปภาพรีวิว <span className="text-xs text-gray-400">(สูงสุด 6 ภาพ, ภาพละไม่เกิน 5MB)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Existing images (from server) */}
+                  {editExistingImages
+                    .filter(img => !editRemoveImageIds.includes(img.id))
+                    .map((img) => (
+                      <div key={`existing-${img.id}`} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                        <img src={resolveImageUrl(img.image_url)} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setEditRemoveImageIds(ids => [...ids, img.id])}
+                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] text-center py-0.5">เดิม</div>
+                      </div>
+                    ))}
+                  {/* New images to upload */}
+                  {editNewImages.map((file, idx) => (
+                    <div key={`new-${idx}`} className="relative group aspect-square rounded-xl overflow-hidden border border-indigo-200 bg-indigo-50">
+                      <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setEditNewImages(imgs => imgs.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-indigo-600/70 text-white text-[10px] text-center py-0.5">ใหม่</div>
+                    </div>
+                  ))}
+                  {/* Add button */}
+                  {(editExistingImages.filter(img => !editRemoveImageIds.includes(img.id)).length + editNewImages.length) < 6 && (
+                    <label className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-indigo-400 transition-colors">
+                      <ImageIcon className="w-6 h-6 text-gray-300 mb-1" />
+                      <span className="text-xs text-gray-400">เพิ่มรูป</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          const remaining = 6 - editExistingImages.filter(img => !editRemoveImageIds.includes(img.id)).length - editNewImages.length;
+                          setEditNewImages(prev => [...prev, ...files].slice(0, prev.length + remaining));
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-300 px-6 py-4 rounded-b-2xl flex items-center gap-3">
+              <button
+                onClick={closeEditModal}
+                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-white transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleUpdateReview}
+                disabled={editSubmitting || !editForm.reviewer_name.trim() || !editForm.comment.trim()}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {editSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    บันทึกการแก้ไข
+                  </>
+                )}
               </button>
             </div>
           </div>
