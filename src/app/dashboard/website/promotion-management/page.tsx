@@ -36,10 +36,10 @@ const BADGE_COLORS = [
 ];
 
 const DISPLAY_MODE_OPTIONS = [
-  { value: 'tab', label: 'แท็บหน้าแรก', desc: 'แสดงเป็นแท็บในหน้าแรกเท่านั้น' },
+  { value: 'tab', label: 'แท็บหน้าแรก', desc: 'แสดงเป็นแท็บในหน้าแรก' },
   { value: 'badge', label: 'Badge ทุกหน้า', desc: 'แสดง badge บนการ์ดทัวร์ทั่วทั้งเว็บ' },
-  { value: 'both', label: 'ทั้งแท็บ + Badge', desc: 'แสดงทั้งแท็บและ badge' },
   { value: 'period', label: 'แสดงในรอบเดินทาง', desc: 'แสดง badge เฉพาะในตารางรอบเดินทาง' },
+  { value: 'promotion', label: 'แสดงหน้า ทัวร์โปรโมชั่น', desc: 'แสดงในหน้า ทัวร์โปรโมชั่น ของเว็บไซต์' },
 ];
 
 const BADGE_ICONS = ['🔥', '✨', '👑', '🌟', '💥', '🎁', '❤️', '🚀'];
@@ -114,7 +114,7 @@ export default function TourTabsPage() {
     icon: '',
     badge_text: '',
     badge_color: 'orange',
-    display_mode: 'tab' as const,
+    display_modes: ['tab'],
     badge_icon: '',
     badge_expires_at: null as string | null | undefined,
     conditions: [],
@@ -189,7 +189,7 @@ export default function TourTabsPage() {
       icon: '',
       badge_text: '',
       badge_color: 'orange',
-      display_mode: 'tab' as const,
+      display_modes: ['tab'],
       badge_icon: '',
       badge_expires_at: null as string | null | undefined,
       conditions: [],
@@ -239,7 +239,7 @@ export default function TourTabsPage() {
       icon: tab.icon || '',
       badge_text: tab.badge_text || '',
       badge_color: tab.badge_color || 'orange',
-      display_mode: tab.display_mode || 'tab',
+      display_modes: tab.display_modes || ['tab'],
       badge_icon: tab.badge_icon || '',
       badge_expires_at: tab.badge_expires_at || null,
       conditions: tab.conditions || [],
@@ -268,7 +268,7 @@ export default function TourTabsPage() {
         icon: formData.icon?.trim() || undefined,
         badge_text: formData.badge_text?.trim() || undefined,
         badge_color: formData.badge_color || undefined,
-        display_mode: formData.display_mode || 'tab',
+        display_modes: formData.display_modes || ['tab'],
         badge_icon: formData.badge_icon?.trim() || undefined,
         badge_expires_at: formData.badge_expires_at || null,
       };
@@ -493,7 +493,7 @@ export default function TourTabsPage() {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">จัดการ Tour Tabs</h1>
+          <h1 className="text-2xl font-bold text-gray-800">การจัดการโปรโมชั่น</h1>
           <p className="text-gray-500 mt-1">
             เลือกทัวร์ที่ใช่ในสไตล์คุณ - จัดการ Tab และเงื่อนไขการแสดงทัวร์
           </p>
@@ -583,13 +583,8 @@ export default function TourTabsPage() {
                   <p className="text-sm text-gray-500">
                     Slug: {tab.slug} | แสดง: {tab.display_limit} รายการ | เรียงตาม: {SORT_OPTIONS[tab.sort_by]}
                     {' | '}
-                    <span className={`font-medium ${
-                      tab.display_mode === 'badge' ? 'text-purple-600' :
-                      tab.display_mode === 'both' ? 'text-blue-600' :
-                      tab.display_mode === 'period' ? 'text-teal-600' :
-                      'text-gray-600'
-                    }`}>
-                      {DISPLAY_MODE_OPTIONS.find(m => m.value === (tab.display_mode || 'tab'))?.label || 'แท็บหน้าแรก'}
+                    <span className="font-medium text-gray-600">
+                      {(tab.display_modes || ['tab']).map(m => DISPLAY_MODE_OPTIONS.find(o => o.value === m)?.label || m).join(', ')}
                     </span>
                     {tab.badge_expires_at && (
                       <span className={`ml-1 text-xs ${
@@ -757,29 +752,50 @@ export default function TourTabsPage() {
                 {/* Display Mode */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ประเภทการแสดงผล
+                    ประเภทการแสดงผล <span className="text-xs text-gray-400 font-normal">(เลือกได้หลายรายการ)</span>
                   </label>
                   <div className="grid grid-cols-2 gap-2">
-                    {DISPLAY_MODE_OPTIONS.map((mode) => (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, display_mode: mode.value as 'tab' | 'badge' | 'both' | 'period' })}
-                        className={`p-3 rounded-lg border-2 text-left transition-all ${
-                          formData.display_mode === mode.value
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="text-sm font-medium">{mode.label}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{mode.desc}</div>
-                      </button>
-                    ))}
+                    {DISPLAY_MODE_OPTIONS.map((mode) => {
+                      const currentModes = formData.display_modes || ['tab'];
+                      const isSelected = currentModes.includes(mode.value as typeof currentModes[number]);
+                      return (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          onClick={() => {
+                            let newModes: typeof currentModes;
+                            if (isSelected) {
+                              // Don't allow deselecting if it's the last one
+                              if (currentModes.length <= 1) return;
+                              newModes = currentModes.filter(m => m !== mode.value) as typeof currentModes;
+                            } else {
+                              newModes = [...currentModes, mode.value as typeof currentModes[number]];
+                            }
+                            setFormData({ ...formData, display_modes: newModes });
+                          }}
+                          className={`p-3 rounded-lg border-2 text-left transition-all ${
+                            isSelected
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                              isSelected ? 'border-orange-500 bg-orange-500' : 'border-gray-300'
+                            }`}>
+                              {isSelected && <span className="text-white text-xs">✓</span>}
+                            </div>
+                            <div className="text-sm font-medium">{mode.label}</div>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5 ml-6">{mode.desc}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Badge Icon - show when badge or both mode */}
-                {(formData.display_mode === 'badge' || formData.display_mode === 'both' || formData.display_mode === 'period') && (
+                {/* Badge Icon - show when badge or period mode is selected */}
+                {(formData.display_modes?.includes('badge') || formData.display_modes?.includes('period')) && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Badge Icon
@@ -823,8 +839,8 @@ export default function TourTabsPage() {
                   </div>
                 )}
 
-                {/* Badge Expiry - show when badge or both mode */}
-                {(formData.display_mode === 'badge' || formData.display_mode === 'both' || formData.display_mode === 'period') && (
+                {/* Badge Expiry - show when badge or period mode is selected */}
+                {(formData.display_modes?.includes('badge') || formData.display_modes?.includes('period')) && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       วันหมดอายุ

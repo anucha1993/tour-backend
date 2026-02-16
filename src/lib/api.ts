@@ -179,7 +179,7 @@ export interface TourTab {
   icon: string | null | undefined;
   badge_text: string | null | undefined;
   badge_color: string | null | undefined;
-  display_mode: 'tab' | 'badge' | 'both' | 'period';
+  display_modes: ('tab' | 'badge' | 'period' | 'promotion')[];
   badge_icon: string | null | undefined;
   badge_expires_at: string | null | undefined;
   conditions: TourTabCondition[] | null | undefined;
@@ -3355,6 +3355,120 @@ export const internationalTourSettingsApi = {
 };
 
 // =====================
+// Domestic Tour Settings (Admin)
+// =====================
+
+export interface DomesticTourSetting {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  cover_image_url: string | null;
+  cover_image_cf_id: string | null;
+  cover_image_position: string;
+  conditions: TourTabCondition[] | null;
+  display_limit: number;
+  per_page: number;
+  sort_by: string;
+  show_periods: boolean;
+  max_periods_display: number;
+  show_transport: boolean;
+  show_hotel_star: boolean;
+  show_meal_count: boolean;
+  show_commission: boolean;
+  filter_search: boolean;
+  filter_city: boolean;
+  filter_airline: boolean;
+  filter_departure_month: boolean;
+  filter_price_range: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DomesticTourConditionOptions {
+  condition_types: Record<string, string>;
+  sort_options: Record<string, string>;
+  wholesalers: Array<{ id: number; name: string; code: string }>;
+  tour_types: Record<string, string>;
+  airlines: Array<{ id: number; code: string; name: string; image: string | null }>;
+}
+
+export interface DomesticTourPreview {
+  total_count: number;
+  preview_tours: Array<{
+    id: number;
+    title: string;
+    tour_code: string;
+    country: { id: number; name: string; iso2: string } | null;
+    days: number;
+    nights: number;
+    price: number | null;
+    departure_date: string | null;
+    image_url: string | null;
+  }>;
+}
+
+export const domesticTourSettingsApi = {
+  list: () =>
+    apiRequest<{ data: DomesticTourSetting[] }>('/domestic-tour-settings'),
+
+  get: (id: number) =>
+    apiRequest<{ data: DomesticTourSetting }>(`/domestic-tour-settings/${id}`),
+
+  create: (data: Partial<DomesticTourSetting>) =>
+    apiRequest<{ data: DomesticTourSetting }>('/domestic-tour-settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<DomesticTourSetting>) =>
+    apiRequest<{ data: DomesticTourSetting }>(`/domestic-tour-settings/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/domestic-tour-settings/${id}`, {
+      method: 'DELETE',
+    }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<{ data: DomesticTourSetting }>(`/domestic-tour-settings/${id}/toggle-status`, {
+      method: 'PATCH',
+    }),
+
+  getConditionOptions: () =>
+    apiRequest<DomesticTourConditionOptions>('/domestic-tour-settings/condition-options'),
+
+  previewConditions: (data: { conditions: TourTabCondition[]; sort_by?: string; display_limit?: number }) =>
+    apiRequest<DomesticTourPreview>('/domestic-tour-settings/preview-conditions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  uploadCoverImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('cover_image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/domestic-tour-settings/${id}/cover-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: DomesticTourSetting }>>;
+  },
+
+  deleteCoverImage: (id: number) =>
+    apiRequest<{ data: DomesticTourSetting }>(`/domestic-tour-settings/${id}/cover-image`, {
+      method: 'DELETE',
+    }),
+};
+
+// =====================
 // Tour Reviews (Admin)
 // =====================
 
@@ -3519,5 +3633,158 @@ export const reviewTagApi = {
     apiRequest<any>('/admin/review-tags/reorder', {
       method: 'POST',
       body: JSON.stringify({ ids }),
+    }),
+};
+
+// =====================
+// Festival Holidays
+// =====================
+
+export interface FestivalHoliday {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  image_url: string | null;
+  image_cf_id: string | null;
+  cover_image_url: string | null;
+  cover_image_cf_id: string | null;
+  cover_image_position: string;
+  badge_text: string | null;
+  badge_color: string;
+  badge_icon: string | null;
+  display_modes: string[];
+  is_active: boolean;
+  sort_order: number;
+  tour_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FestivalHolidayPreview {
+  total_count: number;
+  preview_tours: Array<{
+    id: number;
+    title: string;
+    tour_code: string;
+    country: { id: number; name: string; iso2: string } | null;
+    days: number;
+    nights: number;
+    price: number | null;
+    departure_date: string | null;
+    image_url: string | null;
+  }>;
+}
+
+export const festivalHolidaysApi = {
+  list: () =>
+    apiRequest<{ data: FestivalHoliday[] }>('/festival-holidays'),
+
+  get: (id: number) =>
+    apiRequest<{ data: FestivalHoliday }>(`/festival-holidays/${id}`),
+
+  create: (data: Partial<FestivalHoliday>) =>
+    apiRequest<{ data: FestivalHoliday }>('/festival-holidays', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<FestivalHoliday>) =>
+    apiRequest<{ data: FestivalHoliday }>(`/festival-holidays/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest<any>(`/festival-holidays/${id}`, {
+      method: 'DELETE',
+    }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<{ data: FestivalHoliday }>(`/festival-holidays/${id}/toggle-status`, {
+      method: 'PATCH',
+    }),
+
+  uploadImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/festival-holidays/${id}/image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: FestivalHoliday }>>;
+  },
+
+  deleteImage: (id: number) =>
+    apiRequest<{ data: FestivalHoliday }>(`/festival-holidays/${id}/image`, {
+      method: 'DELETE',
+    }),
+
+  uploadCoverImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('cover_image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/festival-holidays/${id}/cover-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: FestivalHoliday }>>;
+  },
+
+  deleteCoverImage: (id: number) =>
+    apiRequest<{ data: FestivalHoliday }>(`/festival-holidays/${id}/cover-image`, {
+      method: 'DELETE',
+    }),
+
+  previewTours: (id: number) =>
+    apiRequest<FestivalHolidayPreview>(`/festival-holidays/${id}/preview`),
+};
+
+// Festival Page Settings (cover image for listing page)
+export interface FestivalPageSetting {
+  id: number;
+  cover_image_url: string | null;
+  cover_image_cf_id: string | null;
+  cover_image_position: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const festivalPageSettingsApi = {
+  get: () =>
+    apiRequest<{ data: FestivalPageSetting }>('/festival-page-settings'),
+
+  update: (data: Partial<FestivalPageSetting>) =>
+    apiRequest<{ data: FestivalPageSetting }>('/festival-page-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  uploadCoverImage: (file: File) => {
+    const formData = new FormData();
+    formData.append('cover_image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/festival-page-settings/cover-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: FestivalPageSetting }>>;
+  },
+
+  deleteCoverImage: () =>
+    apiRequest<{ data: FestivalPageSetting }>('/festival-page-settings/cover-image', {
+      method: 'DELETE',
     }),
 };

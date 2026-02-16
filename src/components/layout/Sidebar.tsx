@@ -189,8 +189,8 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     icon: Tag,
   },
   {
-    title: 'Tour Tabs',
-    href: '/dashboard/website/tour-tabs',
+    title: 'การจัดการโปรโมชั่น',
+    href: '/dashboard/website/promotion-management',
     icon: Layers,
   },
   {
@@ -202,6 +202,16 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'ทัวร์ต่างประเทศ',
     href: '/dashboard/website/international-tours',
     icon: Globe,
+  },
+  {
+    title: 'ทัวร์ในประเทศ',
+    href: '/dashboard/website/domestic-tours',
+    icon: MapPin,
+  },
+  {
+    title: 'ทัวร์ตามเทศกาล',
+    href: '/dashboard/website/festival-tours',
+    icon: Calendar,
   },
   {
     title: 'ทำไมต้องเลือกเรา',
