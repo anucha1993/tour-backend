@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Star, StarHalf, Search, Filter, Check, X, MessageSquare,
   Sparkles, Trash2, Eye, ChevronDown, AlertCircle,
@@ -18,6 +19,12 @@ const SOURCE_MAP: Record<string, { label: string; color: string }> = {
   self: { label: 'สมาชิก', color: 'text-blue-600' },
   assisted: { label: 'Assisted', color: 'text-purple-600' },
   internal: { label: 'Internal', color: 'text-gray-600' },
+};
+
+const TOUR_TYPE_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  individual: { label: '👤 บุคคล/ทั่วไป', color: 'text-gray-700', bg: 'bg-gray-100' },
+  private: { label: '👨‍👩‍👧‍👦 เหมาส่วนตัว', color: 'text-blue-700', bg: 'bg-blue-100' },
+  corporate: { label: '🏢 กรุ๊ปบริษัท', color: 'text-purple-700', bg: 'bg-purple-100' },
 };
 
 function StarDisplay({ rating, categoryRatings }: { rating: number; categoryRatings?: Record<string, number> | null }) {
@@ -42,6 +49,7 @@ function StarDisplay({ rating, categoryRatings }: { rating: number; categoryRati
 }
 
 export default function ReviewsPage() {
+  const searchParams = useSearchParams();
   const [reviews, setReviews] = useState<TourReviewAdmin[]>([]);
   const [stats, setStats] = useState<ReviewStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +92,7 @@ export default function ReviewsPage() {
     tags: [] as string[],
     category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 } as Record<string, number>,
     review_source: 'assisted' as 'self' | 'assisted' | 'internal',
+    tour_type: 'individual' as 'individual' | 'private' | 'corporate',
     status: 'approved' as 'pending' | 'approved' | 'rejected',
   });
   const [createSubmitting, setCreateSubmitting] = useState(false);
@@ -100,6 +109,7 @@ export default function ReviewsPage() {
     tags: [] as string[],
     category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 } as Record<string, number>,
     review_source: 'assisted' as 'self' | 'assisted' | 'internal',
+    tour_type: 'individual' as 'individual' | 'private' | 'corporate',
     status: 'approved' as 'pending' | 'approved' | 'rejected',
   });
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -146,6 +156,18 @@ export default function ReviewsPage() {
     };
     fetchTags();
   }, []);
+
+  // Auto-open create modal when ?create=group is in URL
+  useEffect(() => {
+    const createParam = searchParams.get('create');
+    if (createParam === 'group') {
+      resetCreateForm();
+      setCreateForm(f => ({ ...f, tour_type: 'private', review_source: 'assisted', status: 'approved' }));
+      setShowCreateModal(true);
+      // Clean up URL without reload
+      window.history.replaceState({}, '', '/dashboard/reviews');
+    }
+  }, [searchParams]);
 
   const handleApprove = async (id: number) => {
     try {
@@ -250,7 +272,7 @@ export default function ReviewsPage() {
       tour_id: 0, tour_title: '', reviewer_name: '', rating: 5, comment: '',
       approved_by_customer: true, tags: [],
       category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
-      review_source: 'assisted', status: 'approved',
+      review_source: 'assisted', tour_type: 'individual', status: 'approved',
     });
     setScreenshotFile(null);
     setReviewImages([]);
@@ -276,6 +298,7 @@ export default function ReviewsPage() {
       fd.append('comment', createForm.comment);
       fd.append('approved_by_customer', createForm.approved_by_customer ? '1' : '0');
       fd.append('review_source', createForm.review_source);
+      fd.append('tour_type', createForm.tour_type);
       fd.append('status', createForm.status);
       Object.entries(createForm.category_ratings).forEach(([k, v]) => {
         fd.append(`category_ratings[${k}]`, String(v));
@@ -321,6 +344,7 @@ export default function ReviewsPage() {
       tags: resolvedTags,
       category_ratings: review.category_ratings || { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
       review_source: review.review_source || 'assisted',
+      tour_type: review.tour_type || 'individual',
       status: review.status || 'approved',
     });
     setEditExistingImages(review.images || []);
@@ -338,7 +362,7 @@ export default function ReviewsPage() {
       comment: '',
       tags: [],
       category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
-      review_source: 'assisted', status: 'approved',
+      review_source: 'assisted', tour_type: 'individual', status: 'approved',
     });
     setEditExistingImages([]);
     setEditRemoveImageIds([]);
@@ -363,6 +387,7 @@ export default function ReviewsPage() {
       fd.append('rating', String(editAvgRating));
       fd.append('comment', editForm.comment);
       fd.append('review_source', editForm.review_source);
+      fd.append('tour_type', editForm.tour_type);
       fd.append('status', editForm.status);
       Object.entries(editForm.category_ratings).forEach(([k, v]) => {
         fd.append(`category_ratings[${k}]`, String(v));
@@ -526,6 +551,7 @@ export default function ReviewsPage() {
                 <th className="px-4 py-3 text-center font-medium text-gray-600">คะแนน</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">ความคิดเห็น</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-600">แหล่งที่มา</th>
+                <th className="px-4 py-3 text-center font-medium text-gray-600">ประเภท</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-600">สถานะ</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-600">วันที่</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-600">จัดการ</th>
@@ -534,14 +560,14 @@ export default function ReviewsPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                     <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                     กำลังโหลด...
                   </td>
                 </tr>
               ) : reviews.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     ไม่พบรีวิว
                   </td>
@@ -614,6 +640,16 @@ export default function ReviewsPage() {
                         <span className={`text-xs font-medium ${sourceInfo.color}`}>
                           {sourceInfo.label}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const typeInfo = TOUR_TYPE_MAP[review.tour_type] || TOUR_TYPE_MAP.individual;
+                          return (
+                            <span className={`text-[10px] font-medium px-2 py-1 rounded-full ${typeInfo.bg} ${typeInfo.color}`}>
+                              {typeInfo.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusInfo.bg} ${statusInfo.color}`}>
@@ -1039,6 +1075,31 @@ export default function ReviewsPage() {
                 </div>
               </div>
 
+              {/* Tour Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ประเภทการซื้อทัวร์</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'individual', label: '👤 บุคคล/ทั่วไป', activeColor: 'border-gray-500 bg-gray-50 text-gray-700' },
+                    { value: 'private', label: '👨‍👩‍👧‍👦 เหมาส่วนตัว', activeColor: 'border-blue-500 bg-blue-50 text-blue-700' },
+                    { value: 'corporate', label: '🏢 กรุ๊ปบริษัท', activeColor: 'border-purple-500 bg-purple-50 text-purple-700' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setCreateForm(f => ({ ...f, tour_type: opt.value as any }))}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-medium border-2 transition-all ${
+                        createForm.tour_type === opt.value
+                          ? opt.activeColor
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Source & Status */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1345,6 +1406,31 @@ export default function ReviewsPage() {
                 />
               </div>
 
+              {/* Tour Type (Edit) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ประเภทการซื้อทัวร์</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'individual', label: '👤 บุคคล/ทั่วไป', activeColor: 'border-gray-500 bg-gray-50 text-gray-700' },
+                    { value: 'private', label: '👨‍👩‍👧‍👦 เหมาส่วนตัว', activeColor: 'border-blue-500 bg-blue-50 text-blue-700' },
+                    { value: 'corporate', label: '🏢 กรุ๊ปบริษัท', activeColor: 'border-purple-500 bg-purple-50 text-purple-700' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setEditForm(f => ({ ...f, tour_type: opt.value as any }))}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-medium border-2 transition-all ${
+                        editForm.tour_type === opt.value
+                          ? opt.activeColor
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Source & Status */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1372,8 +1458,6 @@ export default function ReviewsPage() {
                   </select>
                 </div>
               </div>
-
-              {/* Existing Images */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   รูปภาพรีวิว <span className="text-xs text-gray-400">(สูงสุด 6 ภาพ, ภาพละไม่เกิน 5MB)</span>

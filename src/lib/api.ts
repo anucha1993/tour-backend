@@ -3484,6 +3484,7 @@ export interface TourReviewAdmin {
   tags: string[] | null;
   comment: string;
   review_source: 'self' | 'assisted' | 'internal';
+  tour_type: 'individual' | 'private' | 'corporate';
   approved_by_customer: boolean;
   approval_screenshot_url: string | null;
   assisted_by_admin_id: number | null;
@@ -3956,6 +3957,15 @@ export interface GroupTourPageSettings {
   seo_description: string | null;
   seo_keywords: string | null;
   is_active: boolean;
+  // Testimonial display settings
+  testimonial_title: string;
+  testimonial_subtitle: string | null;
+  testimonial_limit: number;
+  testimonial_pinned_ids: number[] | null;
+  testimonial_show_section: boolean;
+  testimonial_tour_types: string[] | null;
+  testimonial_sort_by: string;
+  testimonial_min_rating: number;
 }
 
 export interface GroupTourPortfolio {
@@ -3966,19 +3976,9 @@ export interface GroupTourPortfolio {
   destination: string | null;
   image_url: string | null;
   image_cf_id: string | null;
-  sort_order: number;
-  is_active: boolean;
-}
-
-export interface GroupTourTestimonial {
-  id: number;
-  company_name: string;
-  reviewer_name: string | null;
-  reviewer_position: string | null;
   logo_url: string | null;
   logo_cf_id: string | null;
-  content: string;
-  rating: number;
+  group_type: string | null;
   sort_order: number;
   is_active: boolean;
 }
@@ -4086,37 +4086,20 @@ export const groupTourPortfoliosApi = {
       body: formData,
     }).then(res => res.json()) as Promise<ApiResponse<{ data: GroupTourPortfolio }>>;
   },
-};
-
-export const groupTourTestimonialsApi = {
-  list: () =>
-    apiRequest<{ data: GroupTourTestimonial[] }>('/group-tour-testimonials'),
-
-  create: (data: Partial<GroupTourTestimonial>) =>
-    apiRequest<{ data: GroupTourTestimonial }>('/group-tour-testimonials', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  update: (id: number, data: Partial<GroupTourTestimonial>) =>
-    apiRequest<{ data: GroupTourTestimonial }>(`/group-tour-testimonials/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  delete: (id: number) =>
-    apiRequest(`/group-tour-testimonials/${id}`, { method: 'DELETE' }),
 
   uploadLogo: (id: number, file: File) => {
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('logo', file);
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    return fetch(`${API_BASE_URL}/group-tour-testimonials/${id}/logo`, {
+    return fetch(`${API_BASE_URL}/group-tour-portfolios/${id}/logo`, {
       method: 'POST',
       headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
       body: formData,
-    }).then(res => res.json()) as Promise<ApiResponse<{ data: GroupTourTestimonial }>>;
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: GroupTourPortfolio }>>;
   },
+
+  deleteLogo: (id: number) =>
+    apiRequest(`/group-tour-portfolios/${id}/logo`, { method: 'DELETE' }),
 };
 
 export const groupTourInquiriesApi = {
