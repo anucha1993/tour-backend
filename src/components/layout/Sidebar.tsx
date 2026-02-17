@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { toursApi, TourCounts } from '@/lib/api';
+import { toursApi, TourCounts, groupTourInquiriesApi } from '@/lib/api';
 import QueueStatus from './QueueStatus';
 import {
   LayoutDashboard,
@@ -40,6 +40,9 @@ import {
   Megaphone,
   Menu,
   Phone,
+  Package,
+  BookOpen,
+  FolderOpen,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -48,10 +51,11 @@ interface MenuItem {
   icon: React.ComponentType<{ className?: string }>;
   children?: MenuItem[];
   countKey?: string; // Key to lookup count from TourCounts
+  badge?: number; // Badge count to display
 }
 
 // Function to build menu items with counts
-const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
+const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem[] => [
   {
     title: 'แดชบอร์ด',
     href: '/dashboard',
@@ -170,6 +174,58 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     icon: Star,
   },
   {
+    title: 'รอบรู้เรื่องเที่ยว',
+    icon: BookOpen,
+    children: [
+      {
+        title: 'บทความ',
+        href: '/dashboard/blog/posts',
+        icon: FileText,
+      },
+      {
+        title: 'หมวดหมู่',
+        href: '/dashboard/blog/categories',
+        icon: FolderOpen,
+      },
+      {
+        title: 'ตั้งค่าหน้าบล็อก',
+        href: '/dashboard/blog/settings',
+        icon: Settings,
+      },
+    ],
+  },
+  {
+    title: 'เกี่ยวกับเรา',
+    icon: Building2,
+    children: [
+      {
+        title: 'ตั้งค่าหน้า',
+        href: '/dashboard/about/settings',
+        icon: Settings,
+      },
+      {
+        title: 'บริการหลัก',
+        href: '/dashboard/about/services',
+        icon: Star,
+      },
+      {
+        title: 'กลุ่มลูกค้า',
+        href: '/dashboard/about/customer-groups',
+        icon: Users,
+      },
+      {
+        title: 'สมาคม',
+        href: '/dashboard/about/associations',
+        icon: Shield,
+      },
+      {
+        title: 'รางวัล',
+        href: '/dashboard/about/awards',
+        icon: Star,
+      },
+    ],
+  },
+  {
     title: 'จัดการเว็บไซต์',
     icon: FileText,
     children: [
@@ -212,6 +268,17 @@ const buildMenuItems = (counts?: TourCounts): MenuItem[] => [
     title: 'ทัวร์ตามเทศกาล',
     href: '/dashboard/website/festival-tours',
     icon: Calendar,
+  },
+  {
+    title: 'แพ็คเกจทัวร์',
+    href: '/dashboard/website/tour-packages',
+    icon: Package,
+  },
+  {
+    title: 'รับจัดกลุ่มทัวร์',
+    href: '/dashboard/website/group-tours',
+    icon: Users,
+    badge: newInquiryCount,
   },
   {
     title: 'ทำไมต้องเลือกเรา',
@@ -342,6 +409,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [tourCounts, setTourCounts] = useState<TourCounts | null>(null);
+  const [newInquiryCount, setNewInquiryCount] = useState(0);
   
   // Fetch tour counts
   useEffect(() => {
@@ -355,15 +423,25 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
         console.error('Failed to fetch tour counts:', error);
       }
     };
+    const fetchInquiryCount = async () => {
+      try {
+        const res = await groupTourInquiriesApi.countNew();
+        const r = res as unknown as { count: number };
+        if (r?.count !== undefined) setNewInquiryCount(r.count);
+      } catch (error) {
+        console.error('Failed to fetch inquiry count:', error);
+      }
+    };
     fetchCounts();
+    fetchInquiryCount();
     
     // Refresh counts every 60 seconds
-    const interval = setInterval(fetchCounts, 60000);
+    const interval = setInterval(() => { fetchCounts(); fetchInquiryCount(); }, 60000);
     return () => clearInterval(interval);
   }, []);
   
   // Build menu items with counts
-  const menuItems = buildMenuItems(tourCounts || undefined);
+  const menuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined);
   
   // Build current full URL for matching
   const currentUrl = searchParams.toString() 
@@ -615,6 +693,11 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
                               isChildActive ? 'text-blue-600' : 'text-gray-500'
                             )} />
                             <span className="truncate">{child.title}</span>
+                            {child.badge && child.badge > 0 && (
+                              <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                                {child.badge > 99 ? '99+' : child.badge}
+                              </span>
+                            )}
                           </Link>
                         );
                       })}
@@ -630,7 +713,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
                 href={item.href!}
                 onClick={closeMobile}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative',
                   isActive
                     ? 'bg-blue-50 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
@@ -643,7 +726,19 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
                   isActive ? 'text-blue-600' : 'text-gray-500'
                 )} />
                 {(!collapsed || mobileOpen) && (
-                  <span className="truncate">{item.title}</span>
+                  <>
+                    <span className="truncate">{item.title}</span>
+                    {item.badge && item.badge > 0 && (
+                      <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+                {collapsed && !mobileOpen && item.badge && item.badge > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
                 )}
               </Link>
             );

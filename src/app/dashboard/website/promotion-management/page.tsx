@@ -97,6 +97,10 @@ export default function TourTabsPage() {
   const [editTab, setEditTab] = useState<TourTab | null>(null);
   const [saving, setSaving] = useState(false);
   
+  // Drag-and-drop reorder
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   // Inline preview in modal
   const [inlinePreviewTours, setInlinePreviewTours] = useState<PreviewTour[]>([]);
   const [loadingInlinePreview, setLoadingInlinePreview] = useState(false);
@@ -333,6 +337,50 @@ export default function TourTabsPage() {
     }
   };
 
+  // Drag-and-drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newTabs = [...tabs];
+    const [draggedItem] = newTabs.splice(draggedIndex, 1);
+    newTabs.splice(dropIndex, 0, draggedItem);
+
+    // Update local state immediately for visual feedback
+    setTabs(newTabs);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+
+    // Send reorder to API
+    try {
+      const items = newTabs.map((tab, idx) => ({ id: tab.id, sort_order: idx }));
+      await tourTabsApi.reorder(items);
+    } catch (error) {
+      console.error('Failed to reorder:', error);
+      alert('เกิดข้อผิดพลาดในการเรียงลำดับ');
+      fetchTabs(); // Revert on error
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   // Add condition
   const addCondition = () => {
     const conditions = [...(formData.conditions || [])];
@@ -546,14 +594,25 @@ export default function TourTabsPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {tabs.map((tab) => (
+          {tabs.map((tab, index) => (
             <Card
               key={tab.id}
-              className={`p-4 ${!tab.is_active ? 'opacity-60 bg-gray-50' : ''}`}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e: React.DragEvent) => handleDragOver(e, index)}
+              onDrop={(e: React.DragEvent) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              className={`p-4 transition-all duration-150 ${
+                !tab.is_active ? 'opacity-60 bg-gray-50' : ''
+              } ${
+                draggedIndex === index ? 'opacity-40 scale-95' : ''
+              } ${
+                dragOverIndex === index ? 'border-2 border-orange-400 border-dashed' : ''
+              }`}
             >
               <div className="flex items-start gap-4">
                 {/* Drag Handle */}
-                <div className="cursor-move text-gray-400 hover:text-gray-600 pt-1">
+                <div className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 pt-1">
                   <GripVertical className="w-5 h-5" />
                 </div>
 

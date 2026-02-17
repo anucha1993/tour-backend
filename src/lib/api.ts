@@ -3788,3 +3788,716 @@ export const festivalPageSettingsApi = {
       method: 'DELETE',
     }),
 };
+
+// =====================
+// Tour Packages
+// =====================
+
+export interface TourPackage {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  terms: string | null;
+  remarks: string | null;
+  cancellation_policy: string | null;
+  inclusions: string[] | null;
+  exclusions: string[] | null;
+  timeline: Array<{ day_number: number; detail: string }> | null;
+  image_url: string | null;
+  image_cf_id: string | null;
+  pdf_url: string | null;
+  pdf_path: string | null;
+  hashtags: string[] | null;
+  expires_at: string | null;
+  is_never_expire: boolean;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  is_active: boolean;
+  sort_order: number;
+  countries?: Array<{ id: number; name_th: string; iso2: string; slug: string }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export const tourPackagesApi = {
+  list: () =>
+    apiRequest<{ data: TourPackage[] }>('/tour-packages'),
+
+  get: (id: number) =>
+    apiRequest<{ data: TourPackage }>(`/tour-packages/${id}`),
+
+  create: (data: Partial<TourPackage> & { country_ids?: number[] }) =>
+    apiRequest<{ data: TourPackage }>('/tour-packages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<TourPackage> & { country_ids?: number[] }) =>
+    apiRequest<{ data: TourPackage }>(`/tour-packages/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest<any>(`/tour-packages/${id}`, {
+      method: 'DELETE',
+    }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<{ data: TourPackage }>(`/tour-packages/${id}/toggle-status`, {
+      method: 'PATCH',
+    }),
+
+  uploadImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/tour-packages/${id}/image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: TourPackage }>>;
+  },
+
+  deleteImage: (id: number) =>
+    apiRequest<{ data: TourPackage }>(`/tour-packages/${id}/image`, {
+      method: 'DELETE',
+    }),
+
+  uploadPdf: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('pdf', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/tour-packages/${id}/pdf`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: TourPackage }>>;
+  },
+
+  deletePdf: (id: number) =>
+    apiRequest<{ data: TourPackage }>(`/tour-packages/${id}/pdf`, {
+      method: 'DELETE',
+    }),
+};
+
+// Tour Package Page Settings
+export interface TourPackagePageSetting {
+  id: number;
+  cover_image_url: string | null;
+  cover_image_cf_id: string | null;
+  cover_image_position: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const tourPackagePageSettingsApi = {
+  get: () =>
+    apiRequest<{ data: TourPackagePageSetting }>('/tour-package-page-settings'),
+
+  update: (data: Partial<TourPackagePageSetting>) =>
+    apiRequest<{ data: TourPackagePageSetting }>('/tour-package-page-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  uploadCoverImage: (file: File) => {
+    const formData = new FormData();
+    formData.append('cover_image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/tour-package-page-settings/cover-image`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: TourPackagePageSetting }>>;
+  },
+
+  deleteCoverImage: () =>
+    apiRequest<{ data: TourPackagePageSetting }>('/tour-package-page-settings/cover-image', {
+      method: 'DELETE',
+    }),
+};
+
+// ===================== Group Tours =====================
+
+export interface GroupTourPageSettings {
+  id: number;
+  hero_title: string;
+  hero_subtitle: string | null;
+  hero_image_url: string | null;
+  hero_image_cf_id: string | null;
+  hero_image_position: string;
+  content: string | null;
+  stats: Array<{ icon: string; value: string; label: string }> | null;
+  group_types: Array<{ icon: string; title: string; description: string }> | null;
+  advantages_title: string;
+  advantages_image_url: string | null;
+  advantages_image_cf_id: string | null;
+  advantages: Array<{ text: string }> | null;
+  process_steps: Array<{ step_number: number; title: string; description: string }> | null;
+  faqs: Array<{ question: string; answer: string }> | null;
+  cta_title: string;
+  cta_description: string | null;
+  cta_phone: string | null;
+  cta_email: string | null;
+  cta_line_id: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  is_active: boolean;
+}
+
+export interface GroupTourPortfolio {
+  id: number;
+  title: string;
+  caption: string | null;
+  group_size: string | null;
+  destination: string | null;
+  image_url: string | null;
+  image_cf_id: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface GroupTourTestimonial {
+  id: number;
+  company_name: string;
+  reviewer_name: string | null;
+  reviewer_position: string | null;
+  logo_url: string | null;
+  logo_cf_id: string | null;
+  content: string;
+  rating: number;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface GroupTourInquiry {
+  id: number;
+  name: string;
+  organization: string | null;
+  phone: string | null;
+  email: string | null;
+  line_id: string | null;
+  group_type: string | null;
+  group_size: string | null;
+  destination: string | null;
+  travel_date_start: string | null;
+  travel_date_end: string | null;
+  details: string | null;
+  status: 'new' | 'contacted' | 'quoted' | 'confirmed' | 'cancelled';
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const groupTourSettingsApi = {
+  get: () =>
+    apiRequest<{ data: GroupTourPageSettings }>('/group-tour-settings'),
+
+  update: (data: Partial<GroupTourPageSettings>) =>
+    apiRequest<{ data: GroupTourPageSettings }>('/group-tour-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  uploadHeroImage: async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const response = await fetch(`${API_BASE_URL}/group-tour-settings/hero-image`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Upload failed');
+    }
+    return responseData as { success: boolean; data: GroupTourPageSettings; message: string };
+  },
+
+  deleteHeroImage: () =>
+    apiRequest('/group-tour-settings/hero-image', { method: 'DELETE' }),
+
+  uploadAdvantagesImage: async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const response = await fetch(`${API_BASE_URL}/group-tour-settings/advantages-image`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || 'Upload failed');
+    }
+    return responseData as { success: boolean; data: GroupTourPageSettings; message: string };
+  },
+
+  deleteAdvantagesImage: () =>
+    apiRequest('/group-tour-settings/advantages-image', { method: 'DELETE' }),
+};
+
+export const groupTourPortfoliosApi = {
+  list: () =>
+    apiRequest<{ data: GroupTourPortfolio[] }>('/group-tour-portfolios'),
+
+  create: (data: Partial<GroupTourPortfolio>) =>
+    apiRequest<{ data: GroupTourPortfolio }>('/group-tour-portfolios', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<GroupTourPortfolio>) =>
+    apiRequest<{ data: GroupTourPortfolio }>(`/group-tour-portfolios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/group-tour-portfolios/${id}`, { method: 'DELETE' }),
+
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest<{ data: GroupTourPortfolio[] }>('/group-tour-portfolios/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  uploadImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/group-tour-portfolios/${id}/image`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: GroupTourPortfolio }>>;
+  },
+};
+
+export const groupTourTestimonialsApi = {
+  list: () =>
+    apiRequest<{ data: GroupTourTestimonial[] }>('/group-tour-testimonials'),
+
+  create: (data: Partial<GroupTourTestimonial>) =>
+    apiRequest<{ data: GroupTourTestimonial }>('/group-tour-testimonials', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<GroupTourTestimonial>) =>
+    apiRequest<{ data: GroupTourTestimonial }>(`/group-tour-testimonials/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/group-tour-testimonials/${id}`, { method: 'DELETE' }),
+
+  uploadLogo: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/group-tour-testimonials/${id}/logo`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ data: GroupTourTestimonial }>>;
+  },
+};
+
+export const groupTourInquiriesApi = {
+  countNew: () =>
+    apiRequest<{ count: number }>('/group-tour-inquiries/count-new'),
+
+  list: (params?: { status?: string; search?: string; page?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.page) searchParams.append('page', String(params.page));
+    const qs = searchParams.toString();
+    return apiRequest<{ data: GroupTourInquiry[]; current_page: number; last_page: number; total: number }>(
+      `/group-tour-inquiries${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  get: (id: number) =>
+    apiRequest<{ data: GroupTourInquiry }>(`/group-tour-inquiries/${id}`),
+
+  update: (id: number, data: { status?: string; admin_notes?: string }) =>
+    apiRequest<{ data: GroupTourInquiry }>(`/group-tour-inquiries/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/group-tour-inquiries/${id}`, { method: 'DELETE' }),
+};
+
+// ===================== Blog =====================
+
+export interface BlogCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  sort_order: number;
+  is_active: boolean;
+  posts_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlogPost {
+  id: number;
+  category_id: number | null;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  content: string | null;
+  cover_image_url: string | null;
+  cover_image_cf_id: string | null;
+  author_name: string;
+  author_avatar_url: string | null;
+  status: 'draft' | 'published' | 'archived';
+  is_featured: boolean;
+  published_at: string | null;
+  view_count: number;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  tags: string[] | null;
+  reading_time_min: number | null;
+  category?: { id: number; name: string; slug: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const blogCategoriesApi = {
+  list: () =>
+    apiRequest<{ data: BlogCategory[] }>('/blog-categories'),
+
+  create: (data: Partial<BlogCategory>) =>
+    apiRequest<{ data: BlogCategory }>('/blog-categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<BlogCategory>) =>
+    apiRequest<{ data: BlogCategory }>(`/blog-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/blog-categories/${id}`, { method: 'DELETE' }),
+
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest<{ data: BlogCategory[] }>('/blog-categories/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+};
+
+export const blogPostsApi = {
+  list: (params?: { status?: string; category_id?: number; search?: string; page?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.append('status', params.status);
+    if (params?.category_id) sp.append('category_id', String(params.category_id));
+    if (params?.search) sp.append('search', params.search);
+    if (params?.page) sp.append('page', String(params.page));
+    const qs = sp.toString();
+    return apiRequest<{ data: BlogPost[]; current_page: number; last_page: number; total: number }>(
+      `/blog-posts${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  get: (id: number) =>
+    apiRequest<{ data: BlogPost }>(`/blog-posts/${id}`),
+
+  create: (data: Partial<BlogPost>) =>
+    apiRequest<{ data: BlogPost }>('/blog-posts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<BlogPost>) =>
+    apiRequest<{ data: BlogPost }>(`/blog-posts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/blog-posts/${id}`, { method: 'DELETE' }),
+
+  uploadCoverImage: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const response = await fetch(`${API_BASE_URL}/blog-posts/${id}/cover-image`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    if (!response.ok) throw new Error('Upload failed');
+    return response.json() as Promise<{ success: boolean; data: BlogPost; message: string }>;
+  },
+
+  deleteCoverImage: (id: number) =>
+    apiRequest<{ data: BlogPost }>(`/blog-posts/${id}/cover-image`, { method: 'DELETE' }),
+};
+
+// ===================== Blog Page Settings =====================
+
+export interface BlogPageSettings {
+  id: number;
+  hero_title: string;
+  hero_subtitle: string | null;
+  hero_image_url: string | null;
+  hero_image_cf_id: string | null;
+  hero_image_position: string;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const blogSettingsApi = {
+  get: () =>
+    apiRequest<{ data: BlogPageSettings }>('/blog-settings'),
+
+  update: (data: Partial<BlogPageSettings>) =>
+    apiRequest<{ data: BlogPageSettings }>('/blog-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  uploadHeroImage: async (file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/blog-settings/hero-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+
+  deleteHeroImage: () =>
+    apiRequest<{ data: BlogPageSettings }>('/blog-settings/hero-image', { method: 'DELETE' }),
+};
+
+// ===================== About Page =====================
+
+export interface AboutPageSettings {
+  id: number;
+  hero_title: string;
+  hero_subtitle: string | null;
+  hero_image_url: string | null;
+  hero_image_cf_id: string | null;
+  hero_image_position: string;
+  about_title: string;
+  about_content: string | null;
+  highlights: { label: string; value: string; suffix?: string }[] | null;
+  value_props: string[] | null;
+  company_name: string | null;
+  registration_no: string | null;
+  capital: string | null;
+  vat_no: string | null;
+  tat_license: string | null;
+  company_info_extra: string | null;
+  license_image_url: string | null;
+  license_image_cf_id: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AboutAssociation {
+  id: number;
+  name: string;
+  license_no: string | null;
+  logo_url: string | null;
+  logo_cf_id: string | null;
+  website_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AboutService {
+  id: number;
+  title: string;
+  description: string | null;
+  icon: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AboutCustomerGroup {
+  id: number;
+  title: string;
+  description: string | null;
+  icon: string | null;
+  image_url: string | null;
+  image_cf_id: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AboutAward {
+  id: number;
+  title: string;
+  description: string | null;
+  year: string | null;
+  image_url: string | null;
+  image_cf_id: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const aboutSettingsApi = {
+  get: () =>
+    apiRequest<{ data: AboutPageSettings }>('/about-settings'),
+  update: (data: Partial<AboutPageSettings>) =>
+    apiRequest<{ data: AboutPageSettings }>('/about-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  uploadHeroImage: async (file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/about-settings/hero-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+  deleteHeroImage: () =>
+    apiRequest<{ data: AboutPageSettings }>('/about-settings/hero-image', { method: 'DELETE' }),
+  uploadLicenseImage: async (file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/about-settings/license-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+  deleteLicenseImage: () =>
+    apiRequest<{ data: AboutPageSettings }>('/about-settings/license-image', { method: 'DELETE' }),
+};
+
+export const aboutAssociationsApi = {
+  list: () => apiRequest<{ data: AboutAssociation[] }>('/about-associations'),
+  create: (data: Partial<AboutAssociation>) =>
+    apiRequest<{ data: AboutAssociation }>('/about-associations', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<AboutAssociation>) =>
+    apiRequest<{ data: AboutAssociation }>(`/about-associations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiRequest(`/about-associations/${id}`, { method: 'DELETE' }),
+  uploadLogo: async (id: number, file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/about-associations/${id}/logo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/about-associations/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
+};
+
+export const aboutServicesApi = {
+  list: () => apiRequest<{ data: AboutService[] }>('/about-services'),
+  create: (data: Partial<AboutService>) =>
+    apiRequest<{ data: AboutService }>('/about-services', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<AboutService>) =>
+    apiRequest<{ data: AboutService }>(`/about-services/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiRequest(`/about-services/${id}`, { method: 'DELETE' }),
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/about-services/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
+};
+
+export const aboutCustomerGroupsApi = {
+  list: () => apiRequest<{ data: AboutCustomerGroup[] }>('/about-customer-groups'),
+  create: (data: Partial<AboutCustomerGroup>) =>
+    apiRequest<{ data: AboutCustomerGroup }>('/about-customer-groups', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<AboutCustomerGroup>) =>
+    apiRequest<{ data: AboutCustomerGroup }>(`/about-customer-groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiRequest(`/about-customer-groups/${id}`, { method: 'DELETE' }),
+  uploadImage: async (id: number, file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/about-customer-groups/${id}/image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/about-customer-groups/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
+};
+
+export const aboutAwardsApi = {
+  list: () => apiRequest<{ data: AboutAward[] }>('/about-awards'),
+  create: (data: Partial<AboutAward>) =>
+    apiRequest<{ data: AboutAward }>('/about-awards', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<AboutAward>) =>
+    apiRequest<{ data: AboutAward }>(`/about-awards/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiRequest(`/about-awards/${id}`, { method: 'DELETE' }),
+  uploadImage: async (id: number, file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/about-awards/${id}/image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+  reorder: (items: { id: number; sort_order: number }[]) =>
+    apiRequest('/about-awards/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
+};
