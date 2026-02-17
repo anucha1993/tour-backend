@@ -92,8 +92,9 @@ function IconSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 import {
-  groupTourSettingsApi, groupTourPortfoliosApi, groupTourTestimonialsApi, groupTourInquiriesApi,
-  GroupTourPageSettings, GroupTourPortfolio, GroupTourTestimonial, GroupTourInquiry,
+  groupTourSettingsApi, groupTourPortfoliosApi, groupTourInquiriesApi,
+  GroupTourPageSettings, GroupTourPortfolio, GroupTourInquiry,
+  tourReviewApi, TourReviewAdmin,
 } from '@/lib/api';
 
 type Tab = 'settings' | 'portfolios' | 'testimonials' | 'inquiries';
@@ -387,12 +388,14 @@ function SettingsTab() {
 }
 
 /* ==================== Portfolios Tab ==================== */
+const GROUP_TYPE_PRESETS = ['เหมาส่วนตัว', 'กรุ๊ปบริษัท', 'สัมมนา', 'ทัศนศึกษา', 'ครอบครัว', 'งานแต่ง'];
+
 function PortfoliosTab() {
   const [items, setItems] = useState<GroupTourPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<GroupTourPortfolio | null>(null);
-  const [form, setForm] = useState({ title: '', caption: '', group_size: '', destination: '', sort_order: 0 });
+  const [form, setForm] = useState({ title: '', caption: '', group_size: '', destination: '', group_type: '' as string, sort_order: 0 });
   const [reordering, setReordering] = useState(false);
 
   const fetch_ = useCallback(async () => {
@@ -405,9 +408,10 @@ function PortfoliosTab() {
 
   const submit = async () => {
     try {
-      if (editItem) await groupTourPortfoliosApi.update(editItem.id, form);
-      else await groupTourPortfoliosApi.create(form);
-      setShowForm(false); setEditItem(null); setForm({ title: '', caption: '', group_size: '', destination: '', sort_order: 0 });
+      const payload = { ...form, group_type: form.group_type || null };
+      if (editItem) await groupTourPortfoliosApi.update(editItem.id, payload);
+      else await groupTourPortfoliosApi.create(payload);
+      setShowForm(false); setEditItem(null); setForm({ title: '', caption: '', group_size: '', destination: '', group_type: '', sort_order: 0 });
       fetch_();
     } catch { alert('เกิดข้อผิดพลาด'); }
   };
@@ -417,6 +421,16 @@ function PortfoliosTab() {
   const uploadImg = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
     await groupTourPortfoliosApi.uploadImage(id, f); fetch_();
+  };
+
+  const uploadLogo = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    await groupTourPortfoliosApi.uploadLogo(id, f); fetch_();
+  };
+
+  const deleteLogo = async (id: number) => {
+    if (!confirm('ยืนยันลบโลโก้?')) return;
+    await groupTourPortfoliosApi.deleteLogo(id); fetch_();
   };
 
   const moveItem = async (index: number, direction: 'up' | 'down') => {
@@ -439,7 +453,7 @@ function PortfoliosTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-gray-600">{items.length} รายการ</p>
-        <button onClick={() => { setShowForm(true); setEditItem(null); setForm({ title: '', caption: '', group_size: '', destination: '', sort_order: items.length }); }}
+        <button onClick={() => { setShowForm(true); setEditItem(null); setForm({ title: '', caption: '', group_size: '', destination: '', group_type: '', sort_order: items.length }); }}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" />เพิ่มผลงาน</button>
       </div>
 
@@ -452,6 +466,26 @@ function PortfoliosTab() {
             <input type="text" value={form.group_size} onChange={e => setForm({ ...form, group_size: e.target.value })} placeholder="จำนวนคน" className="px-3 py-2 border-1 border-solid border-gray-300 rounded-lg" />
             <input type="text" value={form.caption} onChange={e => setForm({ ...form, caption: e.target.value })} placeholder="คำบรรยาย" className="px-3 py-2 border-1 border-solid border-gray-300 rounded-lg" />
           </div>
+          {/* Group Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">ประเภทกรุ๊ป</label>
+            <input type="text" value={form.group_type} onChange={e => setForm({ ...form, group_type: e.target.value })}
+              placeholder="เช่น เหมาส่วนตัว, กรุ๊ปบริษัท, สัมมนา ..."
+              className="w-full px-3 py-2 border-1 border-solid border-gray-300 rounded-lg mb-1.5" />
+            <div className="flex flex-wrap gap-1.5">
+              {GROUP_TYPE_PRESETS.map(preset => (
+                <button key={preset} type="button"
+                  onClick={() => setForm({ ...form, group_type: preset })}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                    form.group_type === preset
+                      ? 'bg-blue-50 text-blue-700 border-blue-400'
+                      : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}>
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-2">
             <button onClick={submit} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">บันทึก</button>
             <button onClick={() => { setShowForm(false); setEditItem(null); }} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">ยกเลิก</button>
@@ -460,7 +494,8 @@ function PortfoliosTab() {
       )}
 
       <div className="space-y-3">
-        {items.map((item, index) => (
+        {items.map((item, index) => {
+          return (
           <div key={item.id} className="bg-white border-1 border-solid border-gray-300 rounded-xl overflow-hidden flex">
             {/* Move buttons */}
             <div className="flex flex-col justify-center gap-1 px-2 bg-gray-50 border-r border-solid border-gray-200">
@@ -501,118 +536,445 @@ function PortfoliosTab() {
             {/* Info */}
             <div className="flex-1 p-3 flex flex-col justify-between">
               <div>
-                <h4 className="font-medium text-gray-900 text-sm">{item.title}</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-medium text-gray-900 text-sm">{item.title}</h4>
+                  {item.group_type && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-blue-50 text-blue-700 border-blue-300">
+                      {item.group_type}
+                    </span>
+                  )}
+                </div>
                 {item.caption && <p className="text-xs text-gray-500 mt-0.5">{item.caption}</p>}
                 <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                   {item.destination && <span>📍 {item.destination}</span>}
                   {item.group_size && <span>👥 {item.group_size}</span>}
                 </div>
               </div>
-              <div className="flex gap-1 mt-2">
-                <button onClick={() => { setEditItem(item); setForm({ title: item.title, caption: item.caption || '', group_size: item.group_size || '', destination: item.destination || '', sort_order: item.sort_order }); setShowForm(true); }}
-                  className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">แก้ไข</button>
-                <button onClick={() => del(item.id)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100">ลบ</button>
+              {/* Logo & Actions */}
+              <div className="flex items-center gap-2 mt-2">
+                {/* Logo */}
+                {item.logo_url ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-7 h-7 rounded bg-white border border-gray-200 overflow-hidden relative flex-shrink-0">
+                      <Image src={item.logo_url} alt="logo" fill className="object-contain p-0.5" />
+                    </div>
+                    <button onClick={() => deleteLogo(item.id)} className="text-[10px] text-red-400 hover:text-red-600">ลบโลโก้</button>
+                    <label className="text-[10px] text-blue-500 hover:text-blue-700 cursor-pointer">
+                      เปลี่ยน<input type="file" accept="image/*" onChange={e => uploadLogo(item.id, e)} className="hidden" />
+                    </label>
+                  </div>
+                ) : (
+                  <label className="text-[10px] text-gray-400 hover:text-blue-600 cursor-pointer flex items-center gap-1 px-2 py-1 border border-dashed border-gray-300 rounded hover:border-blue-400">
+                    <Upload className="w-3 h-3" /> อัปโหลดโลโก้
+                    <input type="file" accept="image/*" onChange={e => uploadLogo(item.id, e)} className="hidden" />
+                  </label>
+                )}
+                <div className="ml-auto flex gap-1">
+                  <button onClick={() => { setEditItem(item); setForm({ title: item.title, caption: item.caption || '', group_size: item.group_size || '', destination: item.destination || '', group_type: item.group_type || '', sort_order: item.sort_order }); setShowForm(true); }}
+                    className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">แก้ไข</button>
+                  <button onClick={() => del(item.id)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100">ลบ</button>
+                </div>
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/* ==================== Testimonials Tab ==================== */
+/* ==================== Testimonials Tab (ตั้งค่าการแสดงรีวิว) ==================== */
+const TOUR_TYPE_OPTIONS: { value: string; label: string; emoji: string }[] = [
+  { value: 'private', label: 'เหมาส่วนตัว', emoji: '👨‍👩‍👧‍👦' },
+  { value: 'corporate', label: 'กรุ๊ปบริษัท', emoji: '🏢' },
+  { value: 'individual', label: 'บุคคล/ทั่วไป', emoji: '👤' },
+];
+
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'newest', label: 'ใหม่ → เก่า' },
+  { value: 'oldest', label: 'เก่า → ใหม่' },
+  { value: 'rating_high', label: 'คะแนนสูง → ต่ำ' },
+  { value: 'rating_low', label: 'คะแนนต่ำ → สูง' },
+  { value: 'featured', label: 'รีวิวแนะนำก่อน' },
+];
+
+const TOUR_TYPE_LABELS: Record<string, { label: string; emoji: string; color: string; bg: string }> = {
+  individual: { label: 'บุคคล/ทั่วไป', emoji: '👤', color: 'text-gray-700', bg: 'bg-gray-100' },
+  private: { label: 'เหมาส่วนตัว', emoji: '👨‍👩‍👧‍👦', color: 'text-blue-700', bg: 'bg-blue-100' },
+  corporate: { label: 'กรุ๊ปบริษัท', emoji: '🏢', color: 'text-purple-700', bg: 'bg-purple-100' },
+};
+
 function TestimonialsTab() {
-  const [items, setItems] = useState<GroupTourTestimonial[]>([]);
+  const [settings, setSettings] = useState<GroupTourPageSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editItem, setEditItem] = useState<GroupTourTestimonial | null>(null);
-  const [form, setForm] = useState({ company_name: '', reviewer_name: '', reviewer_position: '', content: '', rating: 5, sort_order: 0 });
+  const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<TourReviewAdmin[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewTotal, setPreviewTotal] = useState(0);
+  // Pinned review search
+  const [pinSearch, setPinSearch] = useState('');
+  const [pinResults, setPinResults] = useState<TourReviewAdmin[]>([]);
+  const [pinSearching, setPinSearching] = useState(false);
+  const pinTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetch_ = useCallback(async () => {
-    const res = await groupTourTestimonialsApi.list();
-    const d = ((res as unknown) as { data: GroupTourTestimonial[] })?.data;
-    if (d) setItems(d);
-    setLoading(false);
+  // Load settings
+  useEffect(() => {
+    groupTourSettingsApi.get().then(res => {
+      const d = ((res as unknown) as { data: GroupTourPageSettings })?.data;
+      if (d) setSettings(d);
+      setLoading(false);
+    });
   }, []);
-  useEffect(() => { fetch_(); }, [fetch_]);
 
-  const submit = async () => {
+  // Load preview based on current settings
+  const fetchPreview = useCallback(async () => {
+    if (!settings) return;
+    setPreviewLoading(true);
     try {
-      if (editItem) await groupTourTestimonialsApi.update(editItem.id, form);
-      else await groupTourTestimonialsApi.create(form);
-      setShowForm(false); setEditItem(null); setForm({ company_name: '', reviewer_name: '', reviewer_position: '', content: '', rating: 5, sort_order: 0 });
-      fetch_();
+      const tourTypes = settings.testimonial_tour_types?.length ? settings.testimonial_tour_types.join(',') : 'private,corporate';
+      const sortMap: Record<string, { sort_by: string; sort_dir: string }> = {
+        newest: { sort_by: 'created_at', sort_dir: 'desc' },
+        oldest: { sort_by: 'created_at', sort_dir: 'asc' },
+        rating_high: { sort_by: 'rating', sort_dir: 'desc' },
+        rating_low: { sort_by: 'rating', sort_dir: 'asc' },
+        featured: { sort_by: 'is_featured', sort_dir: 'desc' },
+      };
+      const sort = sortMap[settings.testimonial_sort_by] || sortMap.newest;
+      const params: Record<string, string | number> = {
+        status: 'approved',
+        tour_type: tourTypes,
+        per_page: settings.testimonial_limit || 6,
+        page: 1,
+        ...sort,
+      };
+      if (settings.testimonial_min_rating > 1) {
+        params.min_rating = settings.testimonial_min_rating;
+      }
+      const res = await tourReviewApi.list(params) as any;
+      if (res?.success && res.data) {
+        setPreview(res.data?.data || []);
+        setPreviewTotal(res.data?.total || 0);
+      }
+    } catch { /* ignore */ }
+    setPreviewLoading(false);
+  }, [settings?.testimonial_tour_types, settings?.testimonial_sort_by, settings?.testimonial_limit, settings?.testimonial_min_rating]);
+
+  useEffect(() => { fetchPreview(); }, [fetchPreview]);
+
+  // Search reviews for pinning
+  const handlePinSearch = (q: string) => {
+    setPinSearch(q);
+    if (pinTimeout.current) clearTimeout(pinTimeout.current);
+    if (!q.trim()) { setPinResults([]); return; }
+    pinTimeout.current = setTimeout(async () => {
+      setPinSearching(true);
+      try {
+        const res = await tourReviewApi.list({ search: q, status: 'approved', tour_type: 'private,corporate', per_page: 10 }) as any;
+        if (res?.success && res.data) setPinResults(res.data?.data || []);
+      } catch { /* ignore */ }
+      setPinSearching(false);
+    }, 400);
+  };
+
+  const addPinnedId = (id: number) => {
+    if (!settings) return;
+    const current = settings.testimonial_pinned_ids || [];
+    if (current.includes(id)) return;
+    setSettings({ ...settings, testimonial_pinned_ids: [...current, id] });
+    setPinSearch('');
+    setPinResults([]);
+  };
+
+  const removePinnedId = (id: number) => {
+    if (!settings) return;
+    setSettings({ ...settings, testimonial_pinned_ids: (settings.testimonial_pinned_ids || []).filter(pid => pid !== id) });
+  };
+
+  const toggleTourType = (type: string) => {
+    if (!settings) return;
+    const current = settings.testimonial_tour_types || ['private', 'corporate'];
+    if (current.includes(type)) {
+      if (current.length <= 1) return; // ต้องเลือกอย่างน้อย 1
+      setSettings({ ...settings, testimonial_tour_types: current.filter(t => t !== type) });
+    } else {
+      setSettings({ ...settings, testimonial_tour_types: [...current, type] });
+    }
+  };
+
+  const save = async () => {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const res = await groupTourSettingsApi.update({
+        testimonial_title: settings.testimonial_title,
+        testimonial_subtitle: settings.testimonial_subtitle,
+        testimonial_limit: settings.testimonial_limit,
+        testimonial_pinned_ids: settings.testimonial_pinned_ids,
+        testimonial_show_section: settings.testimonial_show_section,
+        testimonial_tour_types: settings.testimonial_tour_types,
+        testimonial_sort_by: settings.testimonial_sort_by,
+        testimonial_min_rating: settings.testimonial_min_rating,
+      });
+      const d = ((res as unknown) as { data: GroupTourPageSettings })?.data;
+      if (d) setSettings(d);
+      alert('บันทึกการตั้งค่ารีวิวสำเร็จ');
     } catch { alert('เกิดข้อผิดพลาด'); }
+    setSaving(false);
   };
 
-  const del = async (id: number) => { if (!confirm('ยืนยันลบ?')) return; await groupTourTestimonialsApi.delete(id); fetch_(); };
+  if (loading) return <div className="animate-pulse space-y-4">{[1,2,3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl" />)}</div>;
+  if (!settings) return <p>ไม่สามารถโหลดข้อมูลได้</p>;
 
-  const uploadLogo = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    await groupTourTestimonialsApi.uploadLogo(id, f); fetch_();
-  };
-
-  if (loading) return <div className="animate-pulse space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl" />)}</div>;
+  const pinnedIds = settings.testimonial_pinned_ids || [];
+  const pinnedReviews = preview.filter(r => pinnedIds.includes(r.id));
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-gray-600">{items.length} รายการ</p>
-        <button onClick={() => { setShowForm(true); setEditItem(null); setForm({ company_name: '', reviewer_name: '', reviewer_position: '', content: '', rating: 5, sort_order: 0 }); }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" />เพิ่มรีวิว</button>
+      {/* Save button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500">กำหนดเงื่อนไขการดึงรีวิวไปแสดงที่หน้าเว็บ /tours/group</p>
+        </div>
+        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium disabled:opacity-50">
+          <Save className="w-4 h-4" />{saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+        </button>
       </div>
 
-      {showForm && (
-        <div className="bg-white border border-gray-300 border border-gray-300-gray-300rounded-xl p-4 space-y-3">
-          <h3 className="font-semibold">{editItem ? 'แก้ไขรีวิว' : 'เพิ่มรีวิวใหม่'}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input type="text" value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} placeholder="ชื่อบริษัท/กลุ่ม *" className="px-3 py-2 border border-gray-300 border border-gray-300-gray-300border-gray-300 rounded-lg" />
-            <input type="text" value={form.reviewer_name} onChange={e => setForm({ ...form, reviewer_name: e.target.value })} placeholder="ชื่อผู้รีวิว" className="px-3 py-2 border border-gray-300 border border-gray-300-gray-300border-gray-300 rounded-lg" />
-            <input type="text" value={form.reviewer_position} onChange={e => setForm({ ...form, reviewer_position: e.target.value })} placeholder="ตำแหน่ง" className="px-3 py-2 border border-gray-300 border border-gray-300-gray-300border-gray-300 rounded-lg" />
-            <div className="flex items-center gap-1">
-              <span className="text-sm text-gray-600 mr-2">คะแนน:</span>
-              {[1,2,3,4,5].map(n => (
-                <button key={n} onClick={() => setForm({ ...form, rating: n })} className={`p-1 ${n <= form.rating ? 'text-amber-400' : 'text-gray-300'}`}><Star className="w-5 h-5 fill-current" /></button>
-              ))}
+      {/* Section visibility toggle */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-800">📢 แสดง Section รีวิวลูกค้า</h3>
+            <p className="text-xs text-gray-500 mt-0.5">เปิด/ปิดการแสดง section รีวิวในหน้าเว็บ</p>
+          </div>
+          <button
+            onClick={() => setSettings({ ...settings, testimonial_show_section: !settings.testimonial_show_section })}
+            className={`relative w-12 h-6 rounded-full transition-colors ${settings.testimonial_show_section ? 'bg-blue-600' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.testimonial_show_section ? 'translate-x-6' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+      </div>
+
+      {settings.testimonial_show_section && (
+        <>
+          {/* Section text settings */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <h3 className="font-semibold text-gray-800">✏️ ข้อความ Section</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">หัวข้อ</label>
+              <input type="text" value={settings.testimonial_title || ''} onChange={e => setSettings({ ...settings, testimonial_title: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="เสียงจากลูกค้า" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">คำอธิบาย</label>
+              <input type="text" value={settings.testimonial_subtitle || ''} onChange={e => setSettings({ ...settings, testimonial_subtitle: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="ความประทับใจจากลูกค้าที่ใช้บริการจัดกรุ๊ปทัวร์" />
             </div>
           </div>
-          <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} placeholder="เนื้อหารีวิว *" rows={3} className="w-full px-3 py-2 border border-gray-300 border border-gray-300-gray-300border-gray-300 rounded-lg" />
-          <div className="flex gap-2">
-            <button onClick={submit} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">บันทึก</button>
-            <button onClick={() => { setShowForm(false); setEditItem(null); }} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">ยกเลิก</button>
-          </div>
-        </div>
-      )}
 
-      <div className="space-y-3">
-        {items.map(item => (
-          <div key={item.id} className="bg-white border border-gray-300 border border-gray-300-gray-300rounded-xl p-4 flex gap-4">
-            <div className="w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative">
-              {item.logo_url ? (
-                <Image src={item.logo_url} alt={item.company_name} fill className="object-cover" />
-              ) : (
-                <label className="flex items-center justify-center w-full h-full cursor-pointer hover:bg-gray-50">
-                  <Upload className="w-4 h-4 text-gray-300" /><input type="file" accept="image/*" onChange={e => uploadLogo(item.id, e)} className="hidden" />
-                </label>
+          {/* Filter settings */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+            <h3 className="font-semibold text-gray-800">🔍 เงื่อนไขการดึงรีวิว</h3>
+
+            {/* Tour types */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">ประเภทการซื้อทัวร์</label>
+              <div className="flex flex-wrap gap-2">
+                {TOUR_TYPE_OPTIONS.map(opt => {
+                  const active = (settings.testimonial_tour_types || ['private', 'corporate']).includes(opt.value);
+                  return (
+                    <button key={opt.value} onClick={() => toggleTourType(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                    >
+                      {opt.emoji} {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sort */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">เรียงลำดับ</label>
+              <select value={settings.testimonial_sort_by || 'newest'} onChange={e => setSettings({ ...settings, testimonial_sort_by: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-lg">
+                {SORT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </select>
+            </div>
+
+            {/* Limit */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">จำนวนที่แสดง</label>
+              <div className="flex items-center gap-2">
+                <select value={settings.testimonial_limit || 6} onChange={e => setSettings({ ...settings, testimonial_limit: Number(e.target.value) })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg">
+                  {[3, 6, 9, 12, 15, 18, 24, 30].map(n => <option key={n} value={n}>{n} รีวิว</option>)}
+                </select>
+                <span className="text-xs text-gray-400">แนะนำ 6 หรือ 9 (แสดงเป็น grid 3 คอลัมน์)</span>
+              </div>
+            </div>
+
+            {/* Min rating */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">คะแนนขั้นต่ำ</label>
+              <div className="flex items-center gap-2">
+                <select value={settings.testimonial_min_rating || 1} onChange={e => setSettings({ ...settings, testimonial_min_rating: Number(e.target.value) })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <option key={n} value={n}>{n} ดาวขึ้นไป</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <Star key={s} className={`w-4 h-4 ${s <= (settings.testimonial_min_rating || 1) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pinned reviews */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <div>
+              <h3 className="font-semibold text-gray-800">📌 ปักหมุดรีวิว</h3>
+              <p className="text-xs text-gray-500 mt-0.5">เลือกรีวิวที่ต้องการแสดงเสมอ (แสดงก่อนรีวิวอื่น)</p>
+            </div>
+
+            {/* Pinned list */}
+            {pinnedIds.length > 0 && (
+              <div className="space-y-2">
+                {pinnedIds.map((id, idx) => {
+                  const review = pinnedReviews.find(r => r.id === id);
+                  return (
+                    <div key={id} className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                      <span className="text-xs font-bold text-amber-600 w-5">#{idx + 1}</span>
+                      {review ? (
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900 truncate">{review.reviewer_name}</span>
+                            <div className="flex items-center gap-0.5">
+                              {[1,2,3,4,5].map(s => <Star key={s} className={`w-3 h-3 ${s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />)}
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 truncate">{review.comment}</p>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">ID: {id}</span>
+                      )}
+                      <button onClick={() => removePinnedId(id)} className="p-1 text-red-400 hover:text-red-600 flex-shrink-0"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Search to add pinned */}
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input type="text" value={pinSearch} onChange={e => handlePinSearch(e.target.value)}
+                  placeholder="ค้นหารีวิวเพื่อปักหมุด (ชื่อผู้รีวิว, ข้อความ)..."
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              {(pinResults.length > 0 || pinSearching) && (
+                <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+                  {pinSearching ? (
+                    <div className="p-3 text-sm text-gray-500 text-center">กำลังค้นหา...</div>
+                  ) : (
+                    pinResults.map(r => {
+                      const isPinned = pinnedIds.includes(r.id);
+                      const typeInfo = TOUR_TYPE_LABELS[r.tour_type] || TOUR_TYPE_LABELS.individual;
+                      return (
+                        <button key={r.id} onClick={() => !isPinned && addPinnedId(r.id)} disabled={isPinned}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0 ${isPinned ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm text-gray-900">{r.reviewer_name}</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${typeInfo.bg} ${typeInfo.color}`}>{typeInfo.emoji} {typeInfo.label}</span>
+                            <div className="flex items-center gap-0.5 ml-auto">
+                              {[1,2,3,4,5].map(s => <Star key={s} className={`w-3 h-3 ${s <= r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />)}
+                            </div>
+                            {isPinned && <span className="text-xs text-amber-600 font-medium">📌 ปักหมุดแล้ว</span>}
+                          </div>
+                          <p className="text-xs text-gray-500 truncate mt-0.5">{r.comment}</p>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               )}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-gray-900">{item.company_name}</span>
-                <div className="flex">{Array.from({ length: item.rating }).map((_, i) => <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-current" />)}</div>
-              </div>
-              {item.reviewer_name && <p className="text-xs text-gray-500">{item.reviewer_name}{item.reviewer_position ? ` - ${item.reviewer_position}` : ''}</p>}
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.content}</p>
-            </div>
-            <div className="flex flex-col gap-1">
-              <button onClick={() => { setEditItem(item); setForm({ company_name: item.company_name, reviewer_name: item.reviewer_name || '', reviewer_position: item.reviewer_position || '', content: item.content, rating: item.rating, sort_order: item.sort_order }); setShowForm(true); }}
-                className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">แก้ไข</button>
-              <button onClick={() => del(item.id)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100">ลบ</button>
-            </div>
           </div>
-        ))}
-      </div>
+
+          {/* Preview */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-800">👁️ ตัวอย่างรีวิวที่จะแสดง</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  ตาม config ปัจจุบัน พบ {previewTotal} รีวิว (แสดง {Math.min(settings.testimonial_limit || 6, previewTotal)} รายการ)
+                </p>
+              </div>
+              <button onClick={fetchPreview} className="text-sm text-blue-600 hover:text-blue-800 font-medium">🔄 รีเฟรช</button>
+            </div>
+
+            {previewLoading ? (
+              <div className="animate-pulse space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 rounded-lg" />)}</div>
+            ) : preview.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <MessageSquare className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">ไม่พบรีวิวตามเงื่อนไขที่กำหนด</p>
+                <a href="/dashboard/reviews?create=group" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:text-blue-800">
+                  <Plus className="w-3.5 h-3.5" /> สร้างรีวิวกรุ๊ปทัวร์
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {preview.map((review, idx) => {
+                  const typeInfo = TOUR_TYPE_LABELS[review.tour_type] || TOUR_TYPE_LABELS.individual;
+                  const isPinned = pinnedIds.includes(review.id);
+                  return (
+                    <div key={review.id} className={`flex items-center gap-3 p-2.5 rounded-lg border ${isPinned ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+                      <span className="text-xs font-bold text-gray-400 w-5">{idx + 1}</span>
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-gray-400">
+                        {review.reviewer_avatar_url ? (
+                          <img src={review.reviewer_avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          review.reviewer_name?.charAt(0)?.toUpperCase() || '?'
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900 truncate">{review.reviewer_name}</span>
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${typeInfo.bg} ${typeInfo.color}`}>{typeInfo.emoji}</span>
+                          <div className="flex items-center gap-0.5">
+                            {[1,2,3,4,5].map(s => <Star key={s} className={`w-3 h-3 ${s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />)}
+                          </div>
+                          {isPinned && <span className="text-[10px] text-amber-600 font-medium">📌</span>}
+                          {review.is_featured && <Sparkles className="w-3 h-3 text-amber-500" />}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{review.comment}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Quick links */}
+          <div className="flex justify-center gap-4 pt-1">
+            <a href="/dashboard/reviews?create=group" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium">
+              <Plus className="w-4 h-4" /> สร้างรีวิวกรุ๊ปทัวร์
+            </a>
+            <span className="text-gray-300">|</span>
+            <a href="/dashboard/reviews" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 font-medium">
+              <Settings className="w-4 h-4" /> จัดการรีวิวทั้งหมด →
+            </a>
+          </div>
+        </>
+      )}
     </div>
   );
 }
