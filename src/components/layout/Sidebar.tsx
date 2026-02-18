@@ -46,6 +46,9 @@ import {
   Zap,
   MessageSquare,
   Video,
+  Trophy,
+  Gift,
+  Award,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -175,6 +178,32 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     title: 'สมาชิกเว็บ',
     href: '/dashboard/web-members',
     icon: Users,
+  },
+  {
+    title: 'ระบบคะแนนสมาชิก',
+    icon: Trophy,
+    children: [
+      {
+        title: 'ภาพรวม',
+        href: '/dashboard/member-points',
+        icon: LayoutDashboard,
+      },
+      {
+        title: 'ระดับสมาชิก',
+        href: '/dashboard/member-points/levels',
+        icon: Award,
+      },
+      {
+        title: 'กฎการให้คะแนน',
+        href: '/dashboard/member-points/rules',
+        icon: Gift,
+      },
+      {
+        title: 'คะแนนสมาชิก',
+        href: '/dashboard/member-points/members',
+        icon: Users,
+      },
+    ],
   },
   {
     title: 'รีวิวทัวร์',

@@ -479,6 +479,13 @@ export interface WebMember {
   last_login_ip: string | null;
   created_at: string;
   updated_at: string;
+  level?: {
+    id: number;
+    name: string;
+    slug: string;
+    icon: string | null;
+    color: string | null;
+  } | null;
 }
 
 export interface WebMemberStatistics {
@@ -4812,4 +4819,189 @@ export const contactMessagesApi = {
     apiRequest(`/contact-messages/${id}`, { method: 'DELETE' }),
   unreadCount: () =>
     apiRequest<{ count: number }>('/contact-messages/unread-count'),
+};
+
+// ===== Member Points & Levels =====
+
+export interface MemberLevel {
+  id: number;
+  name: string;
+  slug: string;
+  icon: string | null;
+  color: string | null;
+  min_spending: number;
+  discount_percent: number;
+  point_multiplier: number;
+  redemption_rate: number;
+  benefits: string[] | null;
+  sort_order: number;
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointRule {
+  id: number;
+  action: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  calc_type: 'fixed' | 'percent';
+  points: number;
+  percent_of_amount: number;
+  max_points_per_day: number | null;
+  max_points_per_action: number | null;
+  cooldown_minutes: number;
+  expire_days: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointTransaction {
+  id: number;
+  member_id: number;
+  rule_id: number | null;
+  type: 'earn' | 'spend' | 'expire' | 'adjust';
+  points: number;
+  balance_after: number;
+  source_type: string | null;
+  source_id: number | null;
+  description: string | null;
+  expires_at: string | null;
+  is_expired: boolean;
+  created_at: string;
+  rule?: { id: number; action: string; name: string; icon: string | null };
+}
+
+export interface MemberPointStats {
+  total_members: number;
+  total_points_circulating: number;
+  points_earned_today: number;
+  points_spent_today: number;
+  redemptions_today: number;
+  level_distribution: {
+    name: string;
+    icon: string | null;
+    color: string | null;
+    count: number;
+  }[];
+}
+
+export interface MemberWithPoints {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  total_points: number;
+  lifetime_points: number;
+  lifetime_spending: number;
+  current_level_id: number | null;
+  status: string;
+  level: MemberLevel | null;
+}
+
+export interface MemberPointDetail {
+  member: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+  };
+  summary: {
+    total_points: number;
+    lifetime_points: number;
+    lifetime_spending: number;
+    level: MemberLevel | null;
+    next_level: {
+      name: string;
+      icon: string | null;
+      min_spending: number;
+      spending_needed: number;
+      progress_percent: number;
+    } | null;
+    expiring_points: number;
+    this_month_earned: number;
+  };
+}
+
+export const memberPointsApi = {
+  // Dashboard stats
+  stats: () =>
+    apiRequest<MemberPointStats>('/member-points/stats'),
+
+  // Levels CRUD
+  listLevels: () =>
+    apiRequest<MemberLevel[]>('/member-points/levels'),
+  createLevel: (data: Partial<MemberLevel>) =>
+    apiRequest<MemberLevel>('/member-points/levels', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateLevel: (id: number, data: Partial<MemberLevel>) =>
+    apiRequest<MemberLevel>(`/member-points/levels/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteLevel: (id: number) =>
+    apiRequest(`/member-points/levels/${id}`, { method: 'DELETE' }),
+
+  // Rules
+  listRules: () =>
+    apiRequest<PointRule[]>('/member-points/rules'),
+  updateRule: (id: number, data: Partial<PointRule>) =>
+    apiRequest<PointRule>(`/member-points/rules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Members with points
+  listMembers: (params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    level_id?: number;
+    sort_by?: string;
+    sort_dir?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.page) sp.append('page', String(params.page));
+    if (params?.per_page) sp.append('per_page', String(params.per_page));
+    if (params?.search) sp.append('search', params.search);
+    if (params?.level_id) sp.append('level_id', String(params.level_id));
+    if (params?.sort_by) sp.append('sort_by', params.sort_by);
+    if (params?.sort_dir) sp.append('sort_dir', params.sort_dir);
+    return apiRequest<{
+      data: MemberWithPoints[];
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+    }>(`/member-points/members?${sp}`);
+  },
+
+  getMemberDetail: (id: number) =>
+    apiRequest<MemberPointDetail>(`/member-points/members/${id}`),
+
+  getMemberTransactions: (id: number, params?: { page?: number; per_page?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.page) sp.append('page', String(params.page));
+    if (params?.per_page) sp.append('per_page', String(params.per_page));
+    return apiRequest<{
+      data: PointTransaction[];
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+    }>(`/member-points/members/${id}/transactions?${sp}`);
+  },
+
+  adjustMemberPoints: (id: number, data: { points: number; description: string }) =>
+    apiRequest<PointTransaction>(`/member-points/members/${id}/adjust`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
