@@ -43,6 +43,7 @@ import {
   Package,
   BookOpen,
   FolderOpen,
+  Zap,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -173,26 +174,15 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem
     href: '/dashboard/reviews',
     icon: Star,
   },
+  
   {
-    title: 'รอบรู้เรื่องเที่ยว',
-    icon: BookOpen,
+    title: 'จัดการเว็บไซต์',
+    icon: FileText,
     children: [
-      {
-        title: 'บทความ',
-        href: '/dashboard/blog/posts',
-        icon: FileText,
-      },
-      {
-        title: 'หมวดหมู่',
-        href: '/dashboard/blog/categories',
-        icon: FolderOpen,
-      },
-      {
-        title: 'ตั้งค่าหน้าบล็อก',
-        href: '/dashboard/blog/settings',
-        icon: Settings,
-      },
-    ],
+        {
+    title: 'Hero Slides',
+    href: '/dashboard/hero-slides',
+    icon: ImageIcon,
   },
   {
     title: 'เกี่ยวกับเรา',
@@ -226,13 +216,25 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem
     ],
   },
   {
-    title: 'จัดการเว็บไซต์',
-    icon: FileText,
+    title: 'รอบรู้เรื่องเที่ยว',
+    icon: BookOpen,
     children: [
-        {
-    title: 'Hero Slides',
-    href: '/dashboard/hero-slides',
-    icon: ImageIcon,
+      {
+        title: 'บทความ',
+        href: '/dashboard/blog/posts',
+        icon: FileText,
+      },
+      {
+        title: 'หมวดหมู่',
+        href: '/dashboard/blog/categories',
+        icon: FolderOpen,
+      },
+      {
+        title: 'ตั้งค่าหน้าบล็อก',
+        href: '/dashboard/blog/settings',
+        icon: Settings,
+      },
+    ],
   },
   {
     title: 'ประเทศยอดนิยม',
@@ -248,6 +250,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem
     title: 'การจัดการโปรโมชั่น',
     href: '/dashboard/website/promotion-management',
     icon: Layers,
+  },
+  {
+    title: 'Flash Sale',
+    href: '/dashboard/website/flash-sales',
+    icon: Zap,
   },
   {
     title: 'ทัวร์แนะนำ',
