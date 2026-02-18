@@ -45,6 +45,7 @@ import {
   FolderOpen,
   Zap,
   MessageSquare,
+  Video,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -124,6 +125,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     title: 'Gallery รูปภาพ',
     href: '/dashboard/gallery',
     icon: ImageIcon,
+  },
+  {
+    title: 'Gallery วิดีโอ',
+    href: '/dashboard/gallery-videos',
+    icon: Video,
   },
 
   // TODO: สร้างหน้า departures

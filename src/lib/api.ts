@@ -1353,6 +1353,139 @@ export const galleryApi = {
   },
 };
 
+// ================== Gallery Videos API ==================
+
+export interface GalleryVideo {
+  id: number;
+  video_url: string;
+  thumbnail_cloudflare_id: string | null;
+  thumbnail_url: string | null;
+  title: string;
+  description: string | null;
+  country_id: number | null;
+  city_id: number | null;
+  country?: {
+    id: number;
+    iso2: string;
+    name_en: string;
+    name_th: string | null;
+  };
+  city?: {
+    id: number;
+    name_en: string;
+    name_th: string | null;
+  };
+  tags: string[];
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const galleryVideoApi = {
+  list: (params?: Record<string, string>) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) searchParams.append(key, value);
+      });
+    }
+    return apiRequest<GalleryVideo[]>(`/gallery-videos?${searchParams.toString()}`);
+  },
+
+  get: (id: number) =>
+    apiRequest<GalleryVideo>(`/gallery-videos/${id}`),
+
+  create: async (data: {
+    video_url: string;
+    title: string;
+    description?: string;
+    thumbnail?: File;
+    country_id?: number;
+    city_id?: number;
+    tags?: string[];
+  }) => {
+    const formData = new FormData();
+    formData.append('video_url', data.video_url);
+    formData.append('title', data.title);
+    if (data.description) formData.append('description', data.description);
+    if (data.thumbnail) formData.append('thumbnail', data.thumbnail);
+    if (data.country_id) formData.append('country_id', data.country_id.toString());
+    if (data.city_id) formData.append('city_id', data.city_id.toString());
+    if (data.tags) {
+      data.tags.forEach((tag, i) => formData.append(`tags[${i}]`, tag));
+    }
+
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/gallery-videos`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    return response.json() as Promise<ApiResponse<GalleryVideo>>;
+  },
+
+  update: async (id: number, data: {
+    video_url?: string;
+    title?: string;
+    description?: string | null;
+    thumbnail?: File;
+    country_id?: number | null;
+    city_id?: number | null;
+    tags?: string[];
+    is_active?: boolean;
+    sort_order?: number;
+  }) => {
+    const formData = new FormData();
+    formData.append('_method', 'PUT');
+    if (data.video_url !== undefined) formData.append('video_url', data.video_url);
+    if (data.title !== undefined) formData.append('title', data.title);
+    if (data.description !== undefined) formData.append('description', data.description ?? '');
+    if (data.thumbnail) formData.append('thumbnail', data.thumbnail);
+    if (data.country_id !== undefined) formData.append('country_id', data.country_id?.toString() ?? '');
+    if (data.city_id !== undefined) formData.append('city_id', data.city_id?.toString() ?? '');
+    if (data.tags) {
+      data.tags.forEach((tag, i) => formData.append(`tags[${i}]`, tag));
+    }
+    if (data.is_active !== undefined) formData.append('is_active', data.is_active ? '1' : '0');
+    if (data.sort_order !== undefined) formData.append('sort_order', data.sort_order.toString());
+
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/gallery-videos/${id}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    return response.json() as Promise<ApiResponse<GalleryVideo>>;
+  },
+
+  delete: (id: number) =>
+    apiRequest(`/gallery-videos/${id}`, { method: 'DELETE' }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<GalleryVideo>(`/gallery-videos/${id}/toggle-status`, { method: 'PATCH' }),
+
+  getTags: () =>
+    apiRequest<string[]>('/gallery-videos/tags'),
+
+  getStatistics: () =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    apiRequest<any>('/gallery-videos/statistics'),
+
+  replaceThumbnail: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/gallery-videos/${id}/replace-thumbnail`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    return response.json() as Promise<ApiResponse<GalleryVideo>>;
+  },
+};
+
 // ================== Integrations API ==================
 
 export interface WholesalerApiConfig {
