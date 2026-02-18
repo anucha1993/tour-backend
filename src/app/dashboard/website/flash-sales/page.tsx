@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   flashSalesApi,
   FlashSale,
@@ -21,7 +21,7 @@ import {
   Package,
   Check,
   Loader2,
-  GripVertical,
+  Users,
 } from 'lucide-react';
 
 // ─── Types ───
@@ -61,6 +61,15 @@ function formatDateTime(isoString: string): string {
   });
 }
 
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function getStatusBadge(label: string) {
   switch (label) {
     case 'กำลังดำเนินการ':
@@ -95,23 +104,42 @@ export default function FlashSalesPage() {
   const [showSearch, setShowSearch] = useState(false);
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Add item form
-  const [addingTourId, setAddingTourId] = useState<number | null>(null);
-  const [addingTourOriginalPrice, setAddingTourOriginalPrice] = useState<number>(0);
-  const [addFlashPrice, setAddFlashPrice] = useState('');
-  const [addDiscountPercent, setAddDiscountPercent] = useState('');
-  const [addQuantityLimit, setAddQuantityLimit] = useState('');
+  // Period selection for adding (batch)
+  const [selectedTour, setSelectedTour] = useState<FlashSaleTourSearch | null>(null);
+  // Per-period settings: periodId → { checked, flashPrice, discountPercent, flashEndDate }
+  const [periodSettings, setPeriodSettings] = useState<Record<number, {
+    checked: boolean;
+    flashPrice: string;
+    discountPercent: string;
+    flashEndDate: string;
+    originalPrice: number;
+  }>>({});
+  const [globalDiscountPercent, setGlobalDiscountPercent] = useState('');
+  const [globalFlashEndDate, setGlobalFlashEndDate] = useState('');
 
-  // Edit item
-  const [editingItem, setEditingItem] = useState<FlashSaleItem | null>(null);
-  const [editFlashPrice, setEditFlashPrice] = useState('');
-  const [editDiscountPercent, setEditDiscountPercent] = useState('');
-  const [editQuantityLimit, setEditQuantityLimit] = useState('');
+  // Edit mode (full-tour period table)
+  const [editTourData, setEditTourData] = useState<FlashSaleTourSearch | null>(null);
+  const [editPeriodSettings, setEditPeriodSettings] = useState<Record<number, {
+    isExisting: boolean;
+    itemId?: number;
+    checked: boolean;
+    flashPrice: string;
+    discountPercent: string;
+    quantityLimit: string;
+    flashEndDate: string;
+    originalPrice: number;
+  }>>({});
+  const [editLoading, setEditLoading] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null); // which item row triggered edit
+  const [editGlobalDiscountPercent, setEditGlobalDiscountPercent] = useState('');
+  const [editGlobalFlashEndDate, setEditGlobalFlashEndDate] = useState('');
+  const editPanelRef = useRef<HTMLTableRowElement>(null);
 
   // Mass update
   const [showMassUpdate, setShowMassUpdate] = useState(false);
   const [massDiscountType, setMassDiscountType] = useState<'percent' | 'amount'>('percent');
   const [massDiscountValue, setMassDiscountValue] = useState('');
+  const [massFlashEndDate, setMassFlashEndDate] = useState('');
   const [massUpdating, setMassUpdating] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
 
@@ -156,8 +184,9 @@ export default function FlashSalesPage() {
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
-    setAddingTourId(null);
-    setEditingItem(null);
+    setSelectedTour(null);
+    setPeriodSettings({});
+    closeEditMode();
     await fetchItems(sale.id);
   };
 
@@ -180,7 +209,6 @@ export default function FlashSalesPage() {
       if (modalMode === 'create') {
         const res = await flashSalesApi.create(form);
         await fetchFlashSales();
-        // Auto-redirect to items management after creating
         const newSale = res.data;
         if (newSale?.id) {
           openItems(newSale);
@@ -219,16 +247,12 @@ export default function FlashSalesPage() {
     }
   };
 
-  // ─── Items Handlers ───
+  // ─── Tour Search & Period Selection ───
   const searchTours = async (q: string) => {
     try {
       setSearching(true);
       const res = await flashSalesApi.searchTours(q);
-      // Filter out already added tours
-      const existingIds = saleItems.map((i) => i.tour_id);
-      setSearchResults(
-        (res.data || []).filter((t: FlashSaleTourSearch) => !existingIds.includes(t.id))
-      );
+      setSearchResults(res.data || []);
     } catch (err) {
       console.error('Search error:', err);
     } finally {
@@ -245,45 +269,141 @@ export default function FlashSalesPage() {
   };
 
   const handleSelectTour = (tour: FlashSaleTourSearch) => {
-    const origPrice = tour.min_price || 0;
-    setAddingTourId(tour.id);
-    setAddingTourOriginalPrice(origPrice);
-    setAddFlashPrice(origPrice ? String(origPrice) : '');
-    setAddDiscountPercent('');
-    setAddQuantityLimit('');
-  };
-
-  // Auto-calc: discount % → flash price
-  const handleAddDiscountChange = (val: string) => {
-    setAddDiscountPercent(val);
-    if (val && addingTourOriginalPrice > 0) {
-      const pct = Math.min(100, Math.max(0, Number(val)));
-      const newPrice = Math.round(addingTourOriginalPrice * (1 - pct / 100));
-      setAddFlashPrice(String(newPrice));
+    setSelectedTour(tour);
+    // Populate per-period settings from tour.periods
+    const settings: typeof periodSettings = {};
+    for (const p of tour.periods) {
+      const origPrice = p.price_adult || tour.min_price || 0;
+      settings[p.id] = {
+        checked: false,
+        flashPrice: origPrice ? String(origPrice) : '',
+        discountPercent: '',
+        flashEndDate: selectedSale ? formatDateTimeLocal(selectedSale.end_date) : '',
+        originalPrice: origPrice,
+      };
     }
+    setPeriodSettings(settings);
+    setGlobalDiscountPercent('');
+    setGlobalFlashEndDate(selectedSale ? formatDateTimeLocal(selectedSale.end_date) : '');
   };
 
-  // Auto-calc: flash price → discount %
-  const handleAddPriceChange = (val: string) => {
-    setAddFlashPrice(val);
-    if (val && addingTourOriginalPrice > 0) {
-      const pct = ((addingTourOriginalPrice - Number(val)) / addingTourOriginalPrice) * 100;
-      setAddDiscountPercent(pct > 0 ? String(Math.round(pct * 10) / 10) : '');
-    } else {
-      setAddDiscountPercent('');
+  // Toggle checkbox for a single period
+  const handleTogglePeriod = (periodId: number) => {
+    setPeriodSettings((prev) => ({
+      ...prev,
+      [periodId]: { ...prev[periodId], checked: !prev[periodId]?.checked },
+    }));
+  };
+
+  // Toggle all / none
+  const handleToggleAllPeriods = (checked: boolean) => {
+    const existingPeriodIds = new Set(saleItems.map((i) => i.period_id));
+    setPeriodSettings((prev) => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        const pid = Number(key);
+        if (!existingPeriodIds.has(pid)) {
+          updated[pid] = { ...updated[pid], checked };
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Per-period discount % change → calc flash price
+  const handlePeriodDiscountChange = (periodId: number, val: string) => {
+    setPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      const pct = Math.min(100, Math.max(0, Number(val) || 0));
+      const newPrice = s.originalPrice > 0 ? Math.round(s.originalPrice * (1 - pct / 100)) : 0;
+      return { ...prev, [periodId]: { ...s, discountPercent: val, flashPrice: String(newPrice) } };
+    });
+  };
+
+  // Per-period flash price change → calc discount %
+  const handlePeriodFlashPriceChange = (periodId: number, val: string) => {
+    setPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      let pct = '';
+      if (val && s.originalPrice > 0) {
+        const p = ((s.originalPrice - Number(val)) / s.originalPrice) * 100;
+        pct = p > 0 ? String(Math.round(p * 10) / 10) : '';
+      }
+      return { ...prev, [periodId]: { ...s, flashPrice: val, discountPercent: pct } };
+    });
+  };
+
+  // Per-period flash end date change
+  const handlePeriodFlashEndDateChange = (periodId: number, val: string) => {
+    setPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      return { ...prev, [periodId]: { ...s, flashEndDate: val } };
+    });
+  };
+
+  // Apply global discount % to all checked periods
+  const handleApplyGlobalDiscount = () => {
+    if (!globalDiscountPercent) return;
+    const pct = Math.min(100, Math.max(0, Number(globalDiscountPercent) || 0));
+    setPeriodSettings((prev) => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        const pid = Number(key);
+        if (updated[pid].checked && updated[pid].originalPrice > 0) {
+          const newPrice = Math.round(updated[pid].originalPrice * (1 - pct / 100));
+          updated[pid] = { ...updated[pid], discountPercent: String(pct), flashPrice: String(newPrice) };
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Apply global flash end date to all checked periods
+  const handleApplyGlobalEndDate = () => {
+    if (!globalFlashEndDate) return;
+    setPeriodSettings((prev) => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        const pid = Number(key);
+        if (updated[pid].checked) {
+          updated[pid] = { ...updated[pid], flashEndDate: globalFlashEndDate };
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Batch add all checked periods
+  const handleBatchAddItems = async () => {
+    if (!selectedSale) return;
+    const existingPeriodIds = new Set(saleItems.map((i) => i.period_id));
+    const items: Array<{
+      period_id: number;
+      flash_price?: number;
+      flash_end_date?: string;
+    }> = [];
+    for (const [pidStr, s] of Object.entries(periodSettings)) {
+      const pid = Number(pidStr);
+      if (s.checked && !existingPeriodIds.has(pid)) {
+        items.push({
+          period_id: pid,
+          flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
+          flash_end_date: s.flashEndDate || undefined,
+        });
+      }
     }
-  };
-
-  const handleAddItem = async () => {
-    if (!addingTourId || !selectedSale) return;
+    if (items.length === 0) {
+      alert('กรุณาเลือกรอบเดินทางอย่างน้อย 1 รอบ');
+      return;
+    }
     try {
       setSaving(true);
-      await flashSalesApi.addItem(selectedSale.id, {
-        tour_id: addingTourId,
-        flash_price: addFlashPrice ? Number(addFlashPrice) : undefined,
-        quantity_limit: addQuantityLimit ? Number(addQuantityLimit) : undefined,
-      });
-      setAddingTourId(null);
+      await flashSalesApi.addItems(selectedSale.id, items);
+      setSelectedTour(null);
+      setPeriodSettings({});
       setShowSearch(false);
       setSearchQuery('');
       setSearchResults([]);
@@ -308,48 +428,207 @@ export default function FlashSalesPage() {
     }
   };
 
-  const startEditItem = (item: FlashSaleItem) => {
-    setEditingItem(item);
-    setEditFlashPrice(item.flash_price ? String(item.flash_price) : '');
-    setEditDiscountPercent(item.discount_percent ? String(item.discount_percent) : '');
-    setEditQuantityLimit(item.quantity_limit ? String(item.quantity_limit) : '');
-  };
-
-  // Auto-calc for edit: discount % → flash price
-  const handleEditDiscountChange = (val: string) => {
-    setEditDiscountPercent(val);
-    if (val && editingItem?.original_price) {
-      const origPrice = Number(editingItem.original_price);
-      const pct = Math.min(100, Math.max(0, Number(val)));
-      const newPrice = Math.round(origPrice * (1 - pct / 100));
-      setEditFlashPrice(String(newPrice));
+  // ─── Edit Mode: Full-tour period table ───
+  const startEditItem = async (item: FlashSaleItem) => {
+    // Close add panel if open
+    setShowSearch(false);
+    setSelectedTour(null);
+    setEditingItemId(item.id);
+    setEditLoading(true);
+    try {
+      const tourCode = item.tour?.tour_code || '';
+      const res = await flashSalesApi.searchTours(tourCode);
+      const tour = (res.data || []).find((t) => t.id === item.tour_id);
+      if (!tour || !tour.periods?.length) {
+        alert('ไม่พบข้อมูลรอบเดินทางของทัวร์นี้');
+        return;
+      }
+      setEditTourData(tour);
+      // Build period settings — existing items are editable, new ones can be added
+      const existingItems = saleItems.filter((si) => si.tour_id === item.tour_id);
+      const settings: typeof editPeriodSettings = {};
+      for (const period of tour.periods) {
+        const existingItem = existingItems.find((ei) => ei.period_id === period.id);
+        if (existingItem) {
+          settings[period.id] = {
+            isExisting: true,
+            itemId: existingItem.id,
+            checked: true,
+            flashPrice: existingItem.flash_price ? String(existingItem.flash_price) : '',
+            discountPercent: existingItem.discount_percent ? String(existingItem.discount_percent) : '',
+            quantityLimit: existingItem.quantity_limit ? String(existingItem.quantity_limit) : '',
+            flashEndDate: existingItem.flash_end_date ? formatDateTimeLocal(existingItem.flash_end_date) : '',
+            originalPrice: Number(existingItem.original_price) || period.price_adult || 0,
+          };
+        } else {
+          settings[period.id] = {
+            isExisting: false,
+            checked: false,
+            flashPrice: period.price_adult ? String(period.price_adult) : '',
+            discountPercent: '',
+            quantityLimit: '',
+            flashEndDate: selectedSale ? formatDateTimeLocal(selectedSale.end_date) : '',
+            originalPrice: period.price_adult || 0,
+          };
+        }
+      }
+      setEditPeriodSettings(settings);
+      setEditGlobalDiscountPercent('');
+      setEditGlobalFlashEndDate(selectedSale ? formatDateTimeLocal(selectedSale.end_date) : '');
+      // Scroll to inline panel after render
+      setTimeout(() => {
+        editPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 150);
+    } catch (err) {
+      console.error('Error loading tour periods:', err);
+      alert('โหลดข้อมูลรอบเดินทางไม่สำเร็จ');
+    } finally {
+      setEditLoading(false);
     }
   };
 
-  // Auto-calc for edit: flash price → discount %
-  const handleEditPriceChange = (val: string) => {
-    setEditFlashPrice(val);
-    if (val && editingItem?.original_price) {
-      const origPrice = Number(editingItem.original_price);
-      const pct = ((origPrice - Number(val)) / origPrice) * 100;
-      setEditDiscountPercent(pct > 0 ? String(Math.round(pct * 10) / 10) : '');
-    } else {
-      setEditDiscountPercent('');
-    }
+  const closeEditMode = () => {
+    setEditTourData(null);
+    setEditPeriodSettings({});
+    setEditLoading(false);
+    setEditingItemId(null);
   };
 
-  const handleUpdateItem = async () => {
-    if (!editingItem || !selectedSale) return;
+  // Toggle checkbox for new period in edit mode
+  const handleEditTogglePeriod = (periodId: number) => {
+    setEditPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s || s.isExisting) return prev; // Can't uncheck existing items
+      return { ...prev, [periodId]: { ...s, checked: !s.checked } };
+    });
+  };
+
+  // Toggle all new periods in edit mode
+  const handleEditToggleAllNew = (checked: boolean) => {
+    setEditPeriodSettings((prev) => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        const pid = Number(key);
+        if (!updated[pid].isExisting) {
+          updated[pid] = { ...updated[pid], checked };
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Per-period discount change in edit mode
+  const handleEditPeriodDiscountChange = (periodId: number, val: string) => {
+    setEditPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      const pct = Math.min(100, Math.max(0, Number(val) || 0));
+      const newPrice = s.originalPrice > 0 ? Math.round(s.originalPrice * (1 - pct / 100)) : 0;
+      return { ...prev, [periodId]: { ...s, discountPercent: val, flashPrice: String(newPrice) } };
+    });
+  };
+
+  // Per-period flash price change in edit mode
+  const handleEditPeriodFlashPriceChange = (periodId: number, val: string) => {
+    setEditPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      let pct = '';
+      if (val && s.originalPrice > 0) {
+        const p = ((s.originalPrice - Number(val)) / s.originalPrice) * 100;
+        pct = p > 0 ? String(Math.round(p * 10) / 10) : '';
+      }
+      return { ...prev, [periodId]: { ...s, flashPrice: val, discountPercent: pct } };
+    });
+  };
+
+  // Per-period flash end date change in edit mode
+  const handleEditPeriodFlashEndDateChange = (periodId: number, val: string) => {
+    setEditPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      return { ...prev, [periodId]: { ...s, flashEndDate: val } };
+    });
+  };
+
+  // Per-period quantity limit change in edit mode
+  const handleEditPeriodQuantityLimitChange = (periodId: number, val: string) => {
+    setEditPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      return { ...prev, [periodId]: { ...s, quantityLimit: val } };
+    });
+  };
+
+  // Apply global discount to checked/existing periods in edit mode
+  const handleApplyEditGlobalDiscount = () => {
+    if (!editGlobalDiscountPercent) return;
+    const pct = Math.min(100, Math.max(0, Number(editGlobalDiscountPercent) || 0));
+    setEditPeriodSettings((prev) => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        const pid = Number(key);
+        const s = updated[pid];
+        if ((s.isExisting || s.checked) && s.originalPrice > 0) {
+          const newPrice = Math.round(s.originalPrice * (1 - pct / 100));
+          updated[pid] = { ...s, discountPercent: String(pct), flashPrice: String(newPrice) };
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Apply global flash end date to checked/existing periods in edit mode
+  const handleApplyEditGlobalEndDate = () => {
+    if (!editGlobalFlashEndDate) return;
+    setEditPeriodSettings((prev) => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        const pid = Number(key);
+        const s = updated[pid];
+        if (s.isExisting || s.checked) {
+          updated[pid] = { ...s, flashEndDate: editGlobalFlashEndDate };
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Save: update existing items + add new checked periods
+  const handleSaveEdit = async () => {
+    if (!selectedSale || !editTourData) return;
     try {
       setSaving(true);
-      await flashSalesApi.updateItem(selectedSale.id, editingItem.id, {
-        flash_price: editFlashPrice ? Number(editFlashPrice) : undefined,
-        quantity_limit: editQuantityLimit ? Number(editQuantityLimit) : undefined,
-      });
-      setEditingItem(null);
+      // 1. Update existing items
+      for (const [, s] of Object.entries(editPeriodSettings)) {
+        if (s.isExisting && s.itemId) {
+          await flashSalesApi.updateItem(selectedSale.id, s.itemId, {
+            flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
+            flash_end_date: s.flashEndDate || undefined,
+            quantity_limit: s.quantityLimit ? Number(s.quantityLimit) : undefined,
+          });
+        }
+      }
+      // 2. Add new checked periods
+      const newItems: Array<{ period_id: number; flash_price?: number; flash_end_date?: string }> = [];
+      for (const [pidStr, s] of Object.entries(editPeriodSettings)) {
+        if (!s.isExisting && s.checked) {
+          newItems.push({
+            period_id: Number(pidStr),
+            flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
+            flash_end_date: s.flashEndDate || undefined,
+          });
+        }
+      }
+      if (newItems.length > 0) {
+        await flashSalesApi.addItems(selectedSale.id, newItems);
+      }
+      closeEditMode();
       await fetchItems(selectedSale.id);
+      await fetchFlashSales();
     } catch (err) {
-      console.error('Update error:', err);
+      console.error('Save edit error:', err);
+      alert('เกิดข้อผิดพลาดในการบันทึก');
     } finally {
       setSaving(false);
     }
@@ -367,31 +646,47 @@ export default function FlashSalesPage() {
     }
   };
 
-  // Mass update discount
-  const handleMassUpdateDiscount = async () => {
-    if (!selectedSale || !massDiscountValue) return;
-    const value = Number(massDiscountValue);
-    if (value <= 0) return;
-    if (massDiscountType === 'percent' && value > 100) {
+  // Mass update discount + flash_end_date
+  const handleMassUpdate = async () => {
+    if (!selectedSale) return;
+    const hasDiscount = massDiscountValue && Number(massDiscountValue) > 0;
+    const hasEndDate = massFlashEndDate !== '';
+    if (!hasDiscount && !hasEndDate) {
+      alert('กรุณาระบุส่วนลดหรือวันหมดเวลา Flash');
+      return;
+    }
+    if (hasDiscount && massDiscountType === 'percent' && Number(massDiscountValue) > 100) {
       alert('ส่วนลดไม่สามารถเกิน 100%');
       return;
     }
     if (selectedItemIds.size === 0) {
-      alert('กรุณาเลือกทัวร์ที่ต้องการอัปเดตส่วนลด');
+      alert('กรุณาเลือกรายการที่ต้องการอัปเดต');
       return;
     }
-    const label = massDiscountType === 'percent' ? `${value}%` : `฿${value.toLocaleString()}`;
-    if (!confirm(`ยืนยันอัปเดตส่วนลดเป็น ${label} สำหรับ ${selectedItemIds.size} ทัวร์ที่เลือก?`)) return;
+    const parts: string[] = [];
+    if (hasDiscount) {
+      const v = Number(massDiscountValue);
+      parts.push(massDiscountType === 'percent' ? `ส่วนลด ${v}%` : `ส่วนลด ฿${v.toLocaleString()}`);
+    }
+    if (hasEndDate) parts.push(`วันหมดเวลา Flash`);
+    if (!confirm(`ยืนยันอัปเดต ${parts.join(' + ')} สำหรับ ${selectedItemIds.size} รายการ?`)) return;
     try {
       setMassUpdating(true);
-      await flashSalesApi.massUpdateDiscount(selectedSale.id, {
-        discount_type: massDiscountType,
-        discount_value: value,
+      const payload: Parameters<typeof flashSalesApi.massUpdateDiscount>[1] = {
         item_ids: Array.from(selectedItemIds),
-      });
+      };
+      if (hasDiscount) {
+        payload.discount_type = massDiscountType;
+        payload.discount_value = Number(massDiscountValue);
+      }
+      if (hasEndDate) {
+        payload.flash_end_date = massFlashEndDate || null;
+      }
+      await flashSalesApi.massUpdateDiscount(selectedSale.id, payload);
       await fetchItems(selectedSale.id);
       setShowMassUpdate(false);
       setMassDiscountValue('');
+      setMassFlashEndDate('');
       setSelectedItemIds(new Set());
     } catch (err) {
       console.error('Mass update error:', err);
@@ -401,10 +696,10 @@ export default function FlashSalesPage() {
     }
   };
 
-  // ─── Items Management View ───
+  // ─── Items Management View (TABLE LAYOUT) ───
   if (modalMode === 'items' && selectedSale) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button
@@ -415,7 +710,7 @@ export default function FlashSalesPage() {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              จัดการรายการ Flash Sale
+              จัดการรอบเดินทาง Flash Sale
             </h1>
             <p className="text-gray-500 text-sm mt-1">
               {selectedSale.title} • {formatDateTime(selectedSale.start_date)} - {formatDateTime(selectedSale.end_date)}
@@ -423,7 +718,7 @@ export default function FlashSalesPage() {
           </div>
         </div>
 
-        {/* Add Tour Button */}
+        {/* Add Period Button */}
         <div className="mb-6">
           {!showSearch ? (
             <button
@@ -431,14 +726,14 @@ export default function FlashSalesPage() {
               className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
             >
               <Plus className="w-4 h-4" />
-              เพิ่มทัวร์
+              เพิ่มรอบเดินทาง
             </button>
           ) : (
             <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-800">ค้นหาทัวร์</h3>
+                <h3 className="font-semibold text-gray-800">ค้นหาทัวร์ → เลือกรอบเดินทาง</h3>
                 <button
-                  onClick={() => { setShowSearch(false); setAddingTourId(null); setSearchQuery(''); setSearchResults([]); }}
+                  onClick={() => { setShowSearch(false); setSelectedTour(null); setPeriodSettings({}); setSearchQuery(''); setSearchResults([]); }}
                   className="p-1 hover:bg-gray-100 rounded"
                 >
                   <X className="w-4 h-4" />
@@ -461,8 +756,8 @@ export default function FlashSalesPage() {
                 )}
               </div>
 
-              {/* Search Results */}
-              {searchResults.length > 0 && !addingTourId && (
+              {/* Step 1: Tour Search Results */}
+              {searchResults.length > 0 && !selectedTour && (
                 <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-lg divide-y">
                   {searchResults.map((tour) => (
                     <button
@@ -487,7 +782,7 @@ export default function FlashSalesPage() {
                           {tour.title}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {tour.tour_code} • ราคา {tour.min_price?.toLocaleString() || '-'} บาท
+                          {tour.tour_code} • {tour.periods?.length || 0} รอบเปิดจอง
                         </p>
                       </div>
                     </button>
@@ -495,97 +790,209 @@ export default function FlashSalesPage() {
                 </div>
               )}
 
-              {searchResults.length === 0 && searchQuery && !searching && (
+              {searchResults.length === 0 && searchQuery && !searching && !selectedTour && (
                 <p className="text-sm text-gray-500 text-center py-4">
                   ไม่พบทัวร์ที่ค้นหา
                 </p>
               )}
 
-              {/* Add Item Form (after selecting a tour) */}
-              {addingTourId && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-orange-800">
-                      กำหนดส่วนลด Flash Sale
-                    </p>
-                    {addingTourOriginalPrice > 0 && (
-                      <p className="text-xs text-gray-500">
-                        ราคาปกติ: <span className="font-semibold text-gray-700">฿{addingTourOriginalPrice.toLocaleString()}</span>
-                      </p>
-                    )}
+              {/* Step 2: Period Selection Table (all periods of selected tour) */}
+              {selectedTour && (
+                <div className="border border-orange-200 rounded-lg overflow-hidden">
+                  <div className="bg-orange-50 px-4 py-2 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm text-orange-800">{selectedTour.title}</p>
+                      <p className="text-xs text-orange-600">{selectedTour.tour_code}</p>
+                    </div>
+                    <button
+                      onClick={() => { setSelectedTour(null); setPeriodSettings({}); }}
+                      className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-orange-100"
+                    >
+                      เปลี่ยนทัวร์
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">
-                        ส่วนลด (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={addDiscountPercent}
-                        onChange={(e) => handleAddDiscountChange(e.target.value)}
-                        placeholder="เช่น 20"
-                        min="0"
-                        max="100"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">
-                        ราคา Flash Sale (บาท)
-                      </label>
-                      <input
-                        type="number"
-                        value={addFlashPrice}
-                        onChange={(e) => handleAddPriceChange(e.target.value)}
-                        placeholder="ราคาพิเศษ"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">
-                        จำนวนจำกัด (ว่าง = ไม่จำกัด)
-                      </label>
-                      <input
-                        type="number"
-                        value={addQuantityLimit}
-                        onChange={(e) => setAddQuantityLimit(e.target.value)}
-                        placeholder="ไม่จำกัด"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                  </div>
-                  {addDiscountPercent && addFlashPrice && addingTourOriginalPrice > 0 && (
-                    <p className="text-xs text-green-600 font-medium">
-                      💰 ลูกค้าประหยัด ฿{(addingTourOriginalPrice - Number(addFlashPrice)).toLocaleString()} (ลด {addDiscountPercent}%)
+
+                  {selectedTour.periods && selectedTour.periods.length > 0 ? (
+                    <>
+                      {/* Global controls for checked periods */}
+                      <div className="bg-amber-50 px-4 py-3 border-b border-orange-200">
+                        <div className="flex flex-wrap items-end gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">ส่วนลดรวม (%)</label>
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                value={globalDiscountPercent}
+                                onChange={(e) => setGlobalDiscountPercent(e.target.value)}
+                                placeholder="เช่น 20"
+                                min="0"
+                                max="100"
+                                className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                              <button
+                                onClick={handleApplyGlobalDiscount}
+                                className="px-2 py-1.5 bg-orange-100 text-orange-700 text-xs rounded hover:bg-orange-200 whitespace-nowrap"
+                              >
+                                ใช้กับที่เลือก
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">วันหมดเวลา Flash รวม</label>
+                            <div className="flex gap-1">
+                              <input
+                                type="datetime-local"
+                                value={globalFlashEndDate}
+                                onChange={(e) => setGlobalFlashEndDate(e.target.value)}
+                                className="w-48 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                              <button
+                                onClick={handleApplyGlobalEndDate}
+                                className="px-2 py-1.5 bg-orange-100 text-orange-700 text-xs rounded hover:bg-orange-200 whitespace-nowrap"
+                              >
+                                ใช้กับที่เลือก
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Periods Table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b">
+                            <tr>
+                              <th className="px-3 py-2 text-left w-10">
+                                <input
+                                  type="checkbox"
+                                  checked={(() => {
+                                    const existingIds = new Set(saleItems.map((i) => i.period_id));
+                                    const checkable = Object.entries(periodSettings).filter(([k]) => !existingIds.has(Number(k)));
+                                    return checkable.length > 0 && checkable.every(([, s]) => s.checked);
+                                  })()}
+                                  onChange={(e) => handleToggleAllPeriods(e.target.checked)}
+                                  className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                                />
+                              </th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">วันเดินทาง</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">ที่นั่ง</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">ราคาปกติ</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">ส่วนลด %</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">ราคา Flash</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">หมดเวลา Flash</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {selectedTour.periods.map((period) => {
+                              const existingIds = new Set(saleItems.map((i) => i.period_id));
+                              const alreadyAdded = existingIds.has(period.id);
+                              const s = periodSettings[period.id];
+                              return (
+                                <tr
+                                  key={period.id}
+                                  className={`${alreadyAdded ? 'bg-gray-50 opacity-50' : s?.checked ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
+                                >
+                                  <td className="px-3 py-2">
+                                    {alreadyAdded ? (
+                                      <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">เพิ่มแล้ว</span>
+                                    ) : (
+                                      <input
+                                        type="checkbox"
+                                        checked={s?.checked || false}
+                                        onChange={() => handleTogglePeriod(period.id)}
+                                        className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-gray-800 whitespace-nowrap">
+                                    {formatDate(period.start_date)} - {formatDate(period.end_date)}
+                                  </td>
+                                  <td className="px-3 py-2 text-center text-gray-600">
+                                    {period.available}/{period.capacity}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-gray-700 font-medium whitespace-nowrap">
+                                    {s?.originalPrice ? `฿${s.originalPrice.toLocaleString()}` : '-'}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {!alreadyAdded && (
+                                      <input
+                                        type="number"
+                                        value={s?.discountPercent || ''}
+                                        onChange={(e) => handlePeriodDiscountChange(period.id, e.target.value)}
+                                        placeholder="%"
+                                        min="0"
+                                        max="100"
+                                        className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {!alreadyAdded && (
+                                      <input
+                                        type="number"
+                                        value={s?.flashPrice || ''}
+                                        onChange={(e) => handlePeriodFlashPriceChange(period.id, e.target.value)}
+                                        placeholder="ราคา"
+                                        className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {!alreadyAdded && (
+                                      <input
+                                        type="datetime-local"
+                                        value={s?.flashEndDate || ''}
+                                        onChange={(e) => handlePeriodFlashEndDateChange(period.id, e.target.value)}
+                                        className="w-44 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                      />
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Batch Add Button */}
+                      <div className="px-4 py-3 bg-orange-50 border-t border-orange-200 flex items-center justify-between">
+                        <p className="text-xs text-orange-600">
+                          เลือก {Object.values(periodSettings).filter((s) => s.checked).length} รอบ
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setSelectedTour(null); setPeriodSettings({}); }}
+                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+                          >
+                            ยกเลิก
+                          </button>
+                          <button
+                            onClick={handleBatchAddItems}
+                            disabled={saving || Object.values(periodSettings).filter((s) => s.checked).length === 0}
+                            className="flex items-center gap-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 text-sm"
+                          >
+                            {saving ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Check className="w-4 h-4" />
+                            )}
+                            เพิ่มรอบที่เลือก
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-6">
+                      ไม่มีรอบเดินทางที่เปิดจอง
                     </p>
                   )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleAddItem}
-                      disabled={saving}
-                      className="flex items-center gap-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 text-sm"
-                    >
-                      {saving ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Check className="w-4 h-4" />
-                      )}
-                      เพิ่ม
-                    </button>
-                    <button
-                      onClick={() => setAddingTourId(null)}
-                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
-                    >
-                      ยกเลิก
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Mass Update Discount */}
+        {/* Mass Update */}
         {saleItems.length > 0 && (
           <div className="mb-4">
             <button
@@ -593,16 +1000,16 @@ export default function FlashSalesPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition"
             >
               <Zap className="w-4 h-4" />
-              อัปเดตส่วนลดหลายรายการ
+              อัปเดตรอบเดินทางหลายรายการ
             </button>
 
             {showMassUpdate && (
               <div className="mt-3 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-orange-800">
-                    อัปเดตส่วนลด
+                    อัปเดตรอบเดินทาง
                     <span className="ml-1 text-sm font-normal text-orange-600">
-                      (เลือก {selectedItemIds.size}/{saleItems.length} รายการ)
+                      (เลือก {selectedItemIds.size}/{saleItems.length} รอบ)
                     </span>
                   </h3>
                   <button
@@ -630,14 +1037,9 @@ export default function FlashSalesPage() {
                     />
                     <span className="text-sm text-gray-700">เลือกทั้งหมด</span>
                   </label>
-                  {selectedItemIds.size > 0 && selectedItemIds.size < saleItems.length && (
-                    <span className="text-xs text-gray-400">
-                      เลือกบางส่วน ({selectedItemIds.size} รายการ)
-                    </span>
-                  )}
                 </div>
 
-                {/* Item Checkboxes */}
+                {/* Item Checkboxes - period-centric display */}
                 <div className="max-h-48 overflow-y-auto space-y-1 bg-white/60 rounded-lg p-2 border border-orange-100">
                   {saleItems.map((item) => {
                     const isChecked = selectedItemIds.has(item.id);
@@ -669,15 +1071,34 @@ export default function FlashSalesPage() {
                           }}
                           className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
                         />
-                        <span className="text-sm text-gray-700 truncate flex-1">
-                          {item.tour?.title || `Tour #${item.tour_id}`}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          {item.period ? (
+                            <span className="text-sm font-medium text-orange-700 block">
+                              {formatDate(item.period.start_date)} - {formatDate(item.period.end_date)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400 block">ไม่ระบุรอบ</span>
+                          )}
+                          <span className="text-[11px] text-gray-500 truncate block">
+                            {item.tour?.title || `Tour #${item.tour_id}`}
+                            {item.flash_end_date && (
+                              <span className="ml-2 text-orange-500">
+                                หมด: {formatDateTime(item.flash_end_date)}
+                              </span>
+                            )}
+                          </span>
+                        </div>
                         <span className="text-xs text-gray-400 flex-shrink-0">
                           ฿{origPrice.toLocaleString()}
                         </span>
-                        {newPrice !== null && isChecked && (
+                        {item.flash_price && (
                           <span className="text-xs text-orange-600 font-bold flex-shrink-0">
-                            → ฿{newPrice.toLocaleString()}
+                            → ฿{Number(item.flash_price).toLocaleString()}
+                          </span>
+                        )}
+                        {newPrice !== null && isChecked && (
+                          <span className="text-xs text-green-600 font-bold flex-shrink-0">
+                            ⇒ ฿{newPrice.toLocaleString()}
                           </span>
                         )}
                       </label>
@@ -685,34 +1106,33 @@ export default function FlashSalesPage() {
                   })}
                 </div>
 
-                {/* Discount Type Tabs */}
-                <div className="flex rounded-lg border border-orange-200 overflow-hidden">
-                  <button
-                    onClick={() => { setMassDiscountType('percent'); setMassDiscountValue(''); }}
-                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
-                      massDiscountType === 'percent'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-white text-gray-600 hover:bg-orange-50'
-                    }`}
-                  >
-                    ลดเป็น % (เปอร์เซ็นต์)
-                  </button>
-                  <button
-                    onClick={() => { setMassDiscountType('amount'); setMassDiscountValue(''); }}
-                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
-                      massDiscountType === 'amount'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-white text-gray-600 hover:bg-orange-50'
-                    }`}
-                  >
-                    ลดเป็นจำนวนเงิน (บาท)
-                  </button>
-                </div>
-
-                {/* Discount Value Input */}
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <label className="block text-sm text-gray-600 mb-1.5">
+                {/* Discount Section */}
+                <div className="bg-white/80 rounded-lg p-4 border border-orange-100 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">ส่วนลด (ไม่บังคับ)</p>
+                  <div className="flex rounded-lg border border-orange-200 overflow-hidden">
+                    <button
+                      onClick={() => { setMassDiscountType('percent'); setMassDiscountValue(''); }}
+                      className={`flex-1 px-4 py-2 text-sm font-medium transition ${
+                        massDiscountType === 'percent'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-white text-gray-600 hover:bg-orange-50'
+                      }`}
+                    >
+                      ลดเป็น %
+                    </button>
+                    <button
+                      onClick={() => { setMassDiscountType('amount'); setMassDiscountValue(''); }}
+                      className={`flex-1 px-4 py-2 text-sm font-medium transition ${
+                        massDiscountType === 'amount'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-white text-gray-600 hover:bg-orange-50'
+                      }`}
+                    >
+                      ลดเป็นจำนวนเงิน (บาท)
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
                       {massDiscountType === 'percent' ? 'ระบุส่วนลด (%)' : 'ระบุจำนวนเงินที่ต้องการลด (บาท)'}
                     </label>
                     <div className="relative">
@@ -723,16 +1143,45 @@ export default function FlashSalesPage() {
                         placeholder={massDiscountType === 'percent' ? 'เช่น 20' : 'เช่น 1000'}
                         min="0"
                         max={massDiscountType === 'percent' ? '100' : undefined}
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-12"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
                         {massDiscountType === 'percent' ? '%' : 'บาท'}
                       </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Flash End Date Section */}
+                <div className="bg-white/80 rounded-lg p-4 border border-orange-100 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">วันหมดเวลา Flash (ไม่บังคับ)</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={massFlashEndDate}
+                      onChange={(e) => setMassFlashEndDate(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    {massFlashEndDate && (
+                      <button
+                        onClick={() => setMassFlashEndDate('')}
+                        className="px-2 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                        title="ล้าง"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    เว้นว่างไว้หากไม่ต้องการเปลี่ยน / กดล้างเพื่อตั้งค่าเป็น &quot;ตามแคมเปญ&quot;
+                  </p>
+                </div>
+
+                {/* Submit Button */}
+                <div className="flex justify-end">
                   <button
-                    onClick={handleMassUpdateDiscount}
-                    disabled={massUpdating || !massDiscountValue || Number(massDiscountValue) <= 0 || selectedItemIds.size === 0}
+                    onClick={handleMassUpdate}
+                    disabled={massUpdating || selectedItemIds.size === 0 || (!massDiscountValue && !massFlashEndDate)}
                     className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition"
                   >
                     {massUpdating ? (
@@ -740,17 +1189,15 @@ export default function FlashSalesPage() {
                     ) : (
                       <Check className="w-4 h-4" />
                     )}
-                    อัปเดต {selectedItemIds.size} รายการ
+                    อัปเดต {selectedItemIds.size} รอบเดินทาง
                   </button>
                 </div>
-
-                {/* Preview removed - inline in checkboxes above */}
               </div>
             )}
           </div>
         )}
 
-        {/* Items List */}
+        {/* Items TABLE */}
         {loadingItems ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
@@ -758,149 +1205,349 @@ export default function FlashSalesPage() {
         ) : saleItems.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <Zap className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>ยังไม่มีรายการทัวร์ กดปุ่ม &quot;เพิ่มทัวร์&quot; เพื่อเริ่มต้น</p>
+            <p>ยังไม่มีรายการ กดปุ่ม &quot;เพิ่มรอบเดินทาง&quot; เพื่อเริ่มต้น</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {saleItems.map((item, idx) => (
-              <div
-                key={item.id}
-                className={`bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4 transition ${
-                  !item.is_active ? 'opacity-50' : ''
-                }`}
-              >
-                <div className="text-gray-300 cursor-grab">
-                  <GripVertical className="w-5 h-5" />
-                </div>
-                <span className="text-sm text-gray-400 font-mono w-6">
-                  {idx + 1}
-                </span>
-
-                {/* Tour Image */}
-                {item.tour?.cover_image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.tour.cover_image_url}
-                    alt=""
-                    className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Package className="w-6 h-6 text-gray-400" />
-                  </div>
-                )}
-
-                {/* Tour Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">
-                    {item.tour?.title || `Tour #${item.tour_id}`}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {item.tour?.tour_code}
-                  </p>
-                  {editingItem?.id === item.id ? (
-                    <div className="mt-2 space-y-1.5">
-                      {item.original_price && (
-                        <p className="text-[10px] text-gray-400">ราคาปกติ: ฿{Number(item.original_price).toLocaleString()}</p>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
-                          <input
-                            type="number"
-                            value={editDiscountPercent}
-                            onChange={(e) => handleEditDiscountChange(e.target.value)}
-                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm pr-6"
-                            placeholder="ส่วนลด"
-                            min="0"
-                            max="100"
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
-                        </div>
-                        <input
-                          type="number"
-                          value={editFlashPrice}
-                          onChange={(e) => handleEditPriceChange(e.target.value)}
-                          className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
-                          placeholder="ราคา"
-                        />
-                        <input
-                          type="number"
-                          value={editQuantityLimit}
-                          onChange={(e) => setEditQuantityLimit(e.target.value)}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                          placeholder="จำนวน"
-                        />
-                        <button
-                          onClick={handleUpdateItem}
-                          disabled={saving}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded"
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 w-8">#</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">รอบเดินทาง / ทัวร์</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600">ราคาปกติ</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600">ราคา Flash</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">ส่วนลด</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">ที่นั่ง</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">หมดเวลา Flash</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">สถานะ</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600 w-28">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {saleItems.map((item, idx) => {
+                    const isEditTarget = editingItemId === item.id;
+                    const isEditingTour = editTourData?.id === item.tour_id;
+                    return (
+                      <React.Fragment key={item.id}>
+                        <tr
+                          className={`hover:bg-gray-50 transition ${!item.is_active ? 'opacity-50 bg-gray-50' : ''} ${isEditingTour ? 'bg-blue-50/40' : ''}`}
                         >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditingItem(null)}
-                          className="p-1 text-gray-400 hover:bg-gray-100 rounded"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-1 flex items-center gap-3 text-xs">
-                      <span className="text-orange-600 font-bold">
-                        ฿{Number(item.flash_price).toLocaleString()}
-                      </span>
-                      {item.original_price && Number(item.flash_price) < Number(item.original_price) && (
-                        <span className="text-gray-400 line-through">
-                          ฿{Number(item.original_price).toLocaleString()}
-                        </span>
-                      )}
-                      {item.discount_percent && Number(item.discount_percent) > 0 && (
-                        <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                          -{Number(item.discount_percent)}%
-                        </span>
-                      )}
-                      {item.quantity_limit && (
-                        <span className="text-gray-500">
-                          ขายแล้ว {item.quantity_sold}/{item.quantity_limit}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                          <td className="px-4 py-3 text-gray-400">{idx + 1}</td>
 
-                {/* Actions */}
-                {editingItem?.id !== item.id && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => startEditItem(item)}
-                      title="แก้ไข"
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleToggleItem(item)}
-                      title={item.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
-                      className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                    >
-                      {item.is_active ? (
-                        <Eye className="w-4 h-4" />
-                      ) : (
-                        <EyeOff className="w-4 h-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleRemoveItem(item.id)}
-                      title="ลบ"
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                          {/* Period + Tour (period-centric) */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {item.tour?.cover_image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={item.tour.cover_image_url}
+                                  alt=""
+                                  className="w-10 h-10 rounded object-cover flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <Package className="w-4 h-4 text-gray-400" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                {item.period ? (
+                                  <p className="text-sm font-semibold text-orange-700">
+                                    {formatDate(item.period.start_date)} - {formatDate(item.period.end_date)}
+                                  </p>
+                                ) : (
+                                  <p className="text-sm text-gray-400">ไม่ระบุรอบ</p>
+                                )}
+                                <p className="text-[11px] text-gray-500 truncate max-w-[250px]">
+                                  {item.tour?.title || `Tour #${item.tour_id}`}
+                                  <span className="text-gray-400 ml-1">{item.tour?.tour_code}</span>
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Original Price */}
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-gray-600">
+                              ฿{Number(item.original_price).toLocaleString()}
+                            </span>
+                          </td>
+
+                          {/* Flash Price */}
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-bold text-orange-600">
+                              ฿{Number(item.flash_price).toLocaleString()}
+                            </span>
+                          </td>
+
+                          {/* Discount */}
+                          <td className="px-4 py-3 text-center">
+                            {item.discount_percent && Number(item.discount_percent) > 0 ? (
+                              <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs font-bold">
+                                -{Number(item.discount_percent)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+
+                          {/* Seats / Quantity */}
+                          <td className="px-4 py-3 text-center">
+                            <div className="text-xs">
+                              {item.quantity_limit ? (
+                                <span className="text-gray-700">
+                                  {item.quantity_sold}/{item.quantity_limit}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">ไม่จำกัด</span>
+                              )}
+                              {item.period && (
+                                <p className="text-[10px] text-gray-400 flex items-center justify-center gap-0.5 mt-0.5">
+                                  <Users className="w-3 h-3" />
+                                  {item.period.available}/{item.period.capacity}
+                                </p>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Flash End Date */}
+                          <td className="px-4 py-3">
+                            <span className="text-xs text-gray-600">
+                              {item.flash_end_date ? formatDateTime(item.flash_end_date) : (
+                                <span className="text-gray-400">ตามแคมเปญ</span>
+                              )}
+                            </span>
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                              item.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                              {item.is_active ? 'เปิด' : 'ปิด'}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-0.5">
+                              <button
+                                onClick={() => isEditTarget ? closeEditMode() : startEditItem(item)}
+                                title={isEditTarget ? 'ยกเลิกแก้ไข' : 'แก้ไขรอบเดินทาง'}
+                                className={`p-1.5 rounded-lg transition ${
+                                  isEditTarget
+                                    ? 'text-blue-600 bg-blue-100'
+                                    : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+                                }`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleItem(item)}
+                                title={item.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
+                                className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                              >
+                                {item.is_active ? (
+                                  <Eye className="w-3.5 h-3.5" />
+                                ) : (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleRemoveItem(item.id)}
+                                title="ลบ"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* ─── Inline Edit: full-tour periods table ─── */}
+                        {isEditTarget && (
+                          <tr ref={editPanelRef}>
+                            <td colSpan={9} className="p-0 bg-blue-50/30">
+                              <div className="border-t-2 border-b-2 border-blue-300">
+                                {editLoading ? (
+                                  <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                                    <span className="ml-2 text-gray-500 text-sm">กำลังโหลดรอบเดินทาง...</span>
+                                  </div>
+                                ) : editTourData && (
+                                  <>
+                                    {/* Tour header + global controls */}
+                                    <div className="bg-orange-50 px-4 py-2 flex items-center justify-between border-b border-orange-200">
+                                      <div className="flex items-center gap-3">
+                                        {editTourData.cover_image_url ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={editTourData.cover_image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                                        ) : (
+                                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                            <Package className="w-3.5 h-3.5 text-gray-400" />
+                                          </div>
+                                        )}
+                                        <div>
+                                          <p className="font-medium text-sm text-orange-800">{editTourData.title}</p>
+                                          <p className="text-[11px] text-orange-600">{editTourData.tour_code} • {editTourData.periods?.length || 0} รอบ</p>
+                                        </div>
+                                      </div>
+                                      <button onClick={closeEditMode} className="p-1 hover:bg-orange-100 rounded" title="ปิด">
+                                        <X className="w-4 h-4 text-gray-500" />
+                                      </button>
+                                    </div>
+
+                                    {/* Global controls */}
+                                    <div className="bg-amber-50/70 px-4 py-2 border-b border-orange-100">
+                                      <div className="flex flex-wrap items-end gap-3">
+                                        <div>
+                                          <label className="block text-[11px] text-gray-500 mb-0.5">ส่วนลดรวม (%)</label>
+                                          <div className="flex gap-1">
+                                            <input
+                                              type="number"
+                                              value={editGlobalDiscountPercent}
+                                              onChange={(e) => setEditGlobalDiscountPercent(e.target.value)}
+                                              placeholder="เช่น 20"
+                                              min="0" max="100"
+                                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                            <button onClick={handleApplyEditGlobalDiscount} className="px-2 py-1 bg-blue-100 text-blue-700 text-[11px] rounded hover:bg-blue-200 whitespace-nowrap">
+                                              ใช้กับทั้งหมด
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[11px] text-gray-500 mb-0.5">วันหมดเวลา Flash รวม</label>
+                                          <div className="flex gap-1">
+                                            <input
+                                              type="datetime-local"
+                                              value={editGlobalFlashEndDate}
+                                              onChange={(e) => setEditGlobalFlashEndDate(e.target.value)}
+                                              className="w-44 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                            <button onClick={handleApplyEditGlobalEndDate} className="px-2 py-1 bg-blue-100 text-blue-700 text-[11px] rounded hover:bg-blue-200 whitespace-nowrap">
+                                              ใช้กับทั้งหมด
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Periods sub-table */}
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-gray-50/80 border-b">
+                                          <tr>
+                                            <th className="px-3 py-1.5 text-left w-10">
+                                              <input
+                                                type="checkbox"
+                                                checked={(() => {
+                                                  const newP = Object.entries(editPeriodSettings).filter(([, s]) => !s.isExisting);
+                                                  return newP.length > 0 && newP.every(([, s]) => s.checked);
+                                                })()}
+                                                onChange={(e) => handleEditToggleAllNew(e.target.checked)}
+                                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                                title="เลือก/ยกเลิกรอบใหม่ทั้งหมด"
+                                              />
+                                            </th>
+                                            <th className="px-3 py-1.5 text-left text-[11px] font-medium text-gray-500">วันเดินทาง</th>
+                                            <th className="px-3 py-1.5 text-center text-[11px] font-medium text-gray-500">ที่นั่ง</th>
+                                            <th className="px-3 py-1.5 text-right text-[11px] font-medium text-gray-500">ราคาปกติ</th>
+                                            <th className="px-3 py-1.5 text-center text-[11px] font-medium text-gray-500">ส่วนลด %</th>
+                                            <th className="px-3 py-1.5 text-center text-[11px] font-medium text-gray-500">ราคา Flash</th>
+                                            <th className="px-3 py-1.5 text-center text-[11px] font-medium text-gray-500">จำกัดที่นั่ง</th>
+                                            <th className="px-3 py-1.5 text-center text-[11px] font-medium text-gray-500">หมดเวลา Flash</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                          {editTourData.periods?.map((period) => {
+                                            const s = editPeriodSettings[period.id];
+                                            if (!s) return null;
+                                            return (
+                                              <tr key={period.id} className={`${s.isExisting ? 'bg-blue-50/60' : s.checked ? 'bg-green-50/60' : 'hover:bg-gray-50'}`}>
+                                                <td className="px-3 py-1.5">
+                                                  {s.isExisting ? (
+                                                    <span className="text-[10px] bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded font-medium">แก้ไข</span>
+                                                  ) : (
+                                                    <input type="checkbox" checked={s.checked} onChange={() => handleEditTogglePeriod(period.id)} className="rounded border-gray-300 text-green-500 focus:ring-green-500" />
+                                                  )}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-gray-800 whitespace-nowrap text-sm">
+                                                  {formatDate(period.start_date)} - {formatDate(period.end_date)}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-center text-gray-600 text-xs">
+                                                  {period.available}/{period.capacity}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-right text-gray-700 font-medium whitespace-nowrap text-xs">
+                                                  {s.originalPrice ? `฿${s.originalPrice.toLocaleString()}` : '-'}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {(s.isExisting || s.checked) && (
+                                                    <input type="number" value={s.discountPercent} onChange={(e) => handleEditPeriodDiscountChange(period.id, e.target.value)}
+                                                      placeholder="%" min="0" max="100" className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                  )}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {(s.isExisting || s.checked) && (
+                                                    <input type="number" value={s.flashPrice} onChange={(e) => handleEditPeriodFlashPriceChange(period.id, e.target.value)}
+                                                      placeholder="ราคา" className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                  )}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {(s.isExisting || s.checked) && (
+                                                    <input type="number" value={s.quantityLimit} onChange={(e) => handleEditPeriodQuantityLimitChange(period.id, e.target.value)}
+                                                      placeholder="ไม่จำกัด" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                  )}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {(s.isExisting || s.checked) && (
+                                                    <input type="datetime-local" value={s.flashEndDate} onChange={(e) => handleEditPeriodFlashEndDateChange(period.id, e.target.value)}
+                                                      className="w-44 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+
+                                    {/* Save / Cancel footer */}
+                                    <div className="px-4 py-2 bg-blue-50 border-t border-blue-200 flex items-center justify-between">
+                                      <p className="text-xs text-blue-600">
+                                        {Object.values(editPeriodSettings).filter(s => s.isExisting).length} รอบแก้ไข
+                                        {Object.values(editPeriodSettings).filter(s => !s.isExisting && s.checked).length > 0 && (
+                                          <span className="ml-1 text-green-600">
+                                            + {Object.values(editPeriodSettings).filter(s => !s.isExisting && s.checked).length} รอบใหม่
+                                          </span>
+                                        )}
+                                      </p>
+                                      <div className="flex gap-2">
+                                        <button onClick={closeEditMode} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">
+                                          ยกเลิก
+                                        </button>
+                                        <button
+                                          onClick={handleSaveEdit}
+                                          disabled={saving}
+                                          className="flex items-center gap-1 px-4 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm font-medium"
+                                        >
+                                          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                          บันทึกทั้งหมด
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -918,7 +1565,7 @@ export default function FlashSalesPage() {
             Flash Sale
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            จัดการแคมเปญ Flash Sale พร้อม Countdown Timer บนหน้าแรก
+            จัดการแคมเปญ Flash Sale — กำหนดส่วนลดระดับรอบเดินทาง พร้อม Countdown Timer
           </p>
         </div>
         <button
@@ -977,7 +1624,7 @@ export default function FlashSalesPage() {
                     </span>
                     <span className="flex items-center gap-1">
                       <Package className="w-3.5 h-3.5" />
-                      {sale.items_count || 0} ทัวร์
+                      {sale.items_count || 0} รอบเดินทาง
                     </span>
                   </div>
                 </div>
@@ -1104,34 +1751,34 @@ export default function FlashSalesPage() {
                 </div>
               </div>
 
-                {/* Link to items management (edit mode only) */}
-                {modalMode === 'edit' && selectedSale && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-orange-800">ทัวร์และส่วนลด</p>
-                      <p className="text-xs text-orange-600 mt-0.5">
-                        กำหนดส่วนลดแต่ละทัวร์ได้ที่หน้าจัดการรายการ
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => openItems(selectedSale)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium transition"
-                    >
-                      <Package className="w-4 h-4" />
-                      จัดการทัวร์และส่วนลด
-                    </button>
-                  </div>
-                )}
-
-                {modalMode === 'create' && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-xs text-blue-700">
-                      💡 หลังจากสร้าง Flash Sale แล้ว ระบบจะพาไปหน้าเพิ่มทัวร์และกำหนดส่วนลดโดยอัตโนมัติ
+              {/* Link to items management (edit mode only) */}
+              {modalMode === 'edit' && selectedSale && (
+                <div className="mt-4 bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-orange-800">รอบเดินทางและส่วนลด</p>
+                    <p className="text-xs text-orange-600 mt-0.5">
+                      กำหนดส่วนลดแต่ละรอบเดินทางได้ที่หน้าจัดการรายการ
                     </p>
                   </div>
-                )}
+                  <button
+                    onClick={() => openItems(selectedSale)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium transition"
+                  >
+                    <Package className="w-4 h-4" />
+                    จัดการรอบเดินทาง
+                  </button>
+                </div>
+              )}
 
-                <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+              {modalMode === 'create' && (
+                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700">
+                    💡 หลังจากสร้าง Flash Sale แล้ว ระบบจะพาไปหน้าเพิ่มรอบเดินทางและกำหนดส่วนลดโดยอัตโนมัติ
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
                 <button
                   onClick={() => setModalMode(null)}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
@@ -1148,7 +1795,7 @@ export default function FlashSalesPage() {
                   ) : (
                     <Check className="w-4 h-4" />
                   )}
-                  {modalMode === 'create' ? 'สร้าง → จัดการทัวร์' : 'บันทึก'}
+                  {modalMode === 'create' ? 'สร้าง → จัดการรอบเดินทาง' : 'บันทึก'}
                 </button>
               </div>
             </div>

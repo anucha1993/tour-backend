@@ -4507,6 +4507,7 @@ export interface FlashSaleItem {
   id: number;
   flash_sale_id: number;
   tour_id: number;
+  period_id: number | null;
   flash_price: number | null;
   original_price: number | null;
   discount_percent: number | null;
@@ -4514,6 +4515,7 @@ export interface FlashSaleItem {
   quantity_sold: number;
   sort_order: number;
   is_active: boolean;
+  flash_end_date: string | null;
   tour?: {
     id: number;
     title: string;
@@ -4524,6 +4526,32 @@ export interface FlashSaleItem {
     price_adult: number | null;
     status: string;
   };
+  period?: {
+    id: number;
+    tour_id: number;
+    start_date: string;
+    end_date: string;
+    capacity: number;
+    booked: number;
+    available: number;
+    status: string;
+    offer?: {
+      id: number;
+      period_id: number;
+      price_adult: number | null;
+    };
+  };
+}
+
+export interface FlashSaleTourSearchPeriod {
+  id: number;
+  start_date: string;
+  end_date: string;
+  capacity: number;
+  booked: number;
+  available: number;
+  status: string;
+  price_adult: number | null;
 }
 
 export interface FlashSaleTourSearch {
@@ -4536,6 +4564,7 @@ export interface FlashSaleTourSearch {
   price_adult: number | null;
   max_discount_percent: number | null;
   status: string;
+  periods: FlashSaleTourSearchPeriod[];
 }
 
 export const flashSalesApi = {
@@ -4555,15 +4584,17 @@ export const flashSalesApi = {
   toggleStatus: (id: number) =>
     apiRequest<FlashSale>(`/flash-sales/${id}/toggle-status`, { method: 'PATCH' }),
   // Items
-  addItem: (flashSaleId: number, data: { tour_id: number; flash_price?: number; quantity_limit?: number; sort_order?: number }) =>
+  addItem: (flashSaleId: number, data: { period_id: number; flash_price?: number; flash_end_date?: string; quantity_limit?: number; sort_order?: number }) =>
     apiRequest<FlashSaleItem>(`/flash-sales/${flashSaleId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  addItems: (flashSaleId: number, items: { period_id: number; flash_price?: number; flash_end_date?: string; quantity_limit?: number }[]) =>
+    apiRequest<{ added: number; skipped: number }>(`/flash-sales/${flashSaleId}/items-batch`, { method: 'POST', body: JSON.stringify({ items }) }),
   updateItem: (flashSaleId: number, itemId: number, data: Partial<FlashSaleItem>) =>
     apiRequest<FlashSaleItem>(`/flash-sales/${flashSaleId}/items/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
   removeItem: (flashSaleId: number, itemId: number) =>
     apiRequest(`/flash-sales/${flashSaleId}/items/${itemId}`, { method: 'DELETE' }),
   reorderItems: (flashSaleId: number, items: { id: number; sort_order: number }[]) =>
     apiRequest(`/flash-sales/${flashSaleId}/items/reorder`, { method: 'POST', body: JSON.stringify({ items }) }),
-  massUpdateDiscount: (flashSaleId: number, data: { discount_type: 'percent' | 'amount'; discount_value: number; item_ids?: number[] }) =>
+  massUpdateDiscount: (flashSaleId: number, data: { discount_type?: 'percent' | 'amount'; discount_value?: number; flash_end_date?: string | null; item_ids?: number[] }) =>
     apiRequest<{ updated_count: number }>(`/flash-sales/${flashSaleId}/items/mass-update-discount`, { method: 'POST', body: JSON.stringify(data) }),
   // Search tours for selection
   searchTours: (q?: string) =>
