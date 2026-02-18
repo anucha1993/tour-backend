@@ -4542,23 +4542,23 @@ export const flashSalesApi = {
   list: (params?: { is_active?: boolean }) => {
     const searchParams = new URLSearchParams();
     if (params?.is_active !== undefined) searchParams.append('is_active', String(params.is_active));
-    return apiRequest<{ data: FlashSale[] }>(`/flash-sales?${searchParams}`);
+    return apiRequest<FlashSale[]>(`/flash-sales?${searchParams}`);
   },
   get: (id: number) =>
-    apiRequest<{ data: FlashSale }>(`/flash-sales/${id}`),
+    apiRequest<FlashSale>(`/flash-sales/${id}`),
   create: (data: Partial<FlashSale>) =>
-    apiRequest<{ data: FlashSale }>('/flash-sales', { method: 'POST', body: JSON.stringify(data) }),
+    apiRequest<FlashSale>('/flash-sales', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: Partial<FlashSale>) =>
-    apiRequest<{ data: FlashSale }>(`/flash-sales/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    apiRequest<FlashSale>(`/flash-sales/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) =>
     apiRequest(`/flash-sales/${id}`, { method: 'DELETE' }),
   toggleStatus: (id: number) =>
-    apiRequest<{ data: FlashSale }>(`/flash-sales/${id}/toggle-status`, { method: 'PATCH' }),
+    apiRequest<FlashSale>(`/flash-sales/${id}/toggle-status`, { method: 'PATCH' }),
   // Items
   addItem: (flashSaleId: number, data: { tour_id: number; flash_price?: number; quantity_limit?: number; sort_order?: number }) =>
-    apiRequest<{ data: FlashSaleItem }>(`/flash-sales/${flashSaleId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+    apiRequest<FlashSaleItem>(`/flash-sales/${flashSaleId}/items`, { method: 'POST', body: JSON.stringify(data) }),
   updateItem: (flashSaleId: number, itemId: number, data: Partial<FlashSaleItem>) =>
-    apiRequest<{ data: FlashSaleItem }>(`/flash-sales/${flashSaleId}/items/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
+    apiRequest<FlashSaleItem>(`/flash-sales/${flashSaleId}/items/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
   removeItem: (flashSaleId: number, itemId: number) =>
     apiRequest(`/flash-sales/${flashSaleId}/items/${itemId}`, { method: 'DELETE' }),
   reorderItems: (flashSaleId: number, items: { id: number; sort_order: number }[]) =>
@@ -4567,5 +4567,85 @@ export const flashSalesApi = {
     apiRequest<{ updated_count: number }>(`/flash-sales/${flashSaleId}/items/mass-update-discount`, { method: 'POST', body: JSON.stringify(data) }),
   // Search tours for selection
   searchTours: (q?: string) =>
-    apiRequest<{ data: FlashSaleTourSearch[] }>(`/flash-sales-search-tours?q=${encodeURIComponent(q || '')}`),
+    apiRequest<FlashSaleTourSearch[]>(`/flash-sales-search-tours?q=${encodeURIComponent(q || '')}`),
+};
+
+// ═══════════════════════════════════════════
+//  Contact Page / Messages
+// ═══════════════════════════════════════════
+
+export interface ContactPageSettings {
+  id: number;
+  hero_title: string;
+  hero_subtitle: string | null;
+  hero_image_url: string | null;
+  intro_text: string | null;
+  map_embed_url: string | null;
+  office_name: string | null;
+  office_address: string | null;
+  office_lat: string | null;
+  office_lng: string | null;
+  show_map: boolean;
+  show_form: boolean;
+  is_active: boolean;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactMessage {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  subject: string;
+  message: string;
+  status: 'new' | 'read' | 'replied' | 'archived';
+  status_label?: string;
+  admin_notes: string | null;
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const contactSettingsApi = {
+  get: () =>
+    apiRequest<{ data: ContactPageSettings }>('/contact-settings'),
+  update: (data: Partial<ContactPageSettings>) =>
+    apiRequest<{ data: ContactPageSettings }>('/contact-settings', { method: 'PUT', body: JSON.stringify(data) }),
+  uploadHeroImage: async (file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/contact-settings/hero-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+  deleteHeroImage: () =>
+    apiRequest<{ data: ContactPageSettings }>('/contact-settings/hero-image', { method: 'DELETE' }),
+};
+
+export const contactMessagesApi = {
+  list: (params?: { status?: string; search?: string; page?: number; per_page?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.append('status', params.status);
+    if (params?.search) sp.append('search', params.search);
+    if (params?.page) sp.append('page', String(params.page));
+    if (params?.per_page) sp.append('per_page', String(params.per_page));
+    return apiRequest<ContactMessage[]>(`/contact-messages?${sp}`) as Promise<ApiResponse<ContactMessage[]> & { counts?: Record<string, number> }>;
+  },
+  get: (id: number) =>
+    apiRequest<ContactMessage>(`/contact-messages/${id}`),
+  update: (id: number, data: { status?: string; admin_notes?: string }) =>
+    apiRequest<ContactMessage>(`/contact-messages/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    apiRequest(`/contact-messages/${id}`, { method: 'DELETE' }),
+  unreadCount: () =>
+    apiRequest<{ count: number }>('/contact-messages/unread-count'),
 };

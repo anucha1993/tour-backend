@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { toursApi, TourCounts, groupTourInquiriesApi } from '@/lib/api';
+import { toursApi, TourCounts, groupTourInquiriesApi, contactMessagesApi } from '@/lib/api';
 import QueueStatus from './QueueStatus';
 import {
   LayoutDashboard,
@@ -44,6 +44,7 @@ import {
   BookOpen,
   FolderOpen,
   Zap,
+  MessageSquare,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -56,7 +57,7 @@ interface MenuItem {
 }
 
 // Function to build menu items with counts
-const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem[] => [
+const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContactMsgCount?: number): MenuItem[] => [
   {
     title: 'แดชบอร์ด',
     href: '/dashboard',
@@ -178,6 +179,7 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem
   {
     title: 'จัดการเว็บไซต์',
     icon: FileText,
+    badge: (newInquiryCount || 0) + (newContactMsgCount || 0),
     children: [
         {
     title: 'Hero Slides',
@@ -312,10 +314,30 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number): MenuItem
     href: '/dashboard/website/seo',
     icon: Search,
   },
-  {
-    title: 'ข้อมูลติดต่อ',
+
+   {
+    title: 'ติดต่อเรา',
+    icon: Phone,
+    children: [
+      {
+        title: 'ข้อมูลติดต่อ',
     href: '/dashboard/website/site-contacts',
     icon: Phone,
+      },
+      {
+        title: 'ตั้งค่าหน้าติดต่อ',
+    href: '/dashboard/website/contact-settings',
+    icon: Settings,
+      },
+      
+    ],
+  },
+  
+  {
+    title: 'ข้อความติดต่อ',
+    href: '/dashboard/website/contact-messages',
+    icon: MessageSquare,
+    badge: newContactMsgCount,
   },
   {
     title: 'Subscribers & Newsletter',
@@ -417,6 +439,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
   const searchParams = useSearchParams();
   const [tourCounts, setTourCounts] = useState<TourCounts | null>(null);
   const [newInquiryCount, setNewInquiryCount] = useState(0);
+  const [newContactMsgCount, setNewContactMsgCount] = useState(0);
   
   // Fetch tour counts
   useEffect(() => {
@@ -439,16 +462,26 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
         console.error('Failed to fetch inquiry count:', error);
       }
     };
+    const fetchContactMsgCount = async () => {
+      try {
+        const res = await contactMessagesApi.unreadCount();
+        const r = res as unknown as { count: number };
+        if (r?.count !== undefined) setNewContactMsgCount(r.count);
+      } catch (error) {
+        console.error('Failed to fetch contact message count:', error);
+      }
+    };
     fetchCounts();
     fetchInquiryCount();
+    fetchContactMsgCount();
     
     // Refresh counts every 60 seconds
-    const interval = setInterval(() => { fetchCounts(); fetchInquiryCount(); }, 60000);
+    const interval = setInterval(() => { fetchCounts(); fetchInquiryCount(); fetchContactMsgCount(); }, 60000);
     return () => clearInterval(interval);
   }, []);
   
   // Build menu items with counts
-  const menuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined);
+  const menuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined, newContactMsgCount || undefined);
   
   // Build current full URL for matching
   const currentUrl = searchParams.toString() 
@@ -512,7 +545,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
       {/* Mobile Overlay */}
       {mobileOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-400 lg:hidden"
           onClick={closeMobile}
         />
       )}
@@ -520,7 +553,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 h-screen bg-white border-r border-gray-200 transition-all duration-300 flex flex-col',
+          'fixed left-0 top-0 z-1000 h-screen bg-white border-r border-gray-200 transition-all duration-300 flex flex-col',
           // Desktop - always visible
           'lg:translate-x-0',
           collapsed ? 'lg:w-[72px]' : 'lg:w-64',
@@ -601,10 +634,22 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
                       )}
                     </div>
                     {(!collapsed || mobileOpen) && (
-                      <ChevronDown className={cn(
-                        'w-4 h-4 transition-transform duration-200',
-                        isExpanded && 'rotate-180'
-                      )} />
+                      <div className="flex items-center gap-1.5">
+                        {item.badge && item.badge > 0 ? (
+                          <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </span>
+                        ) : null}
+                        <ChevronDown className={cn(
+                          'w-4 h-4 transition-transform duration-200',
+                          isExpanded && 'rotate-180'
+                        )} />
+                      </div>
+                    )}
+                    {collapsed && !mobileOpen && item.badge && item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
                     )}
                   </button>
                   
