@@ -613,6 +613,8 @@ export default function EditTourPage() {
     price_child_nobed: '',
     discount_child_nobed: '',
     promotion_id: null as number | null,
+    promo_start_date: '',
+    promo_end_date: '',
   });
   const [periodForm, setPeriodForm] = useState<PeriodFormData>(emptyPeriodForm);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
@@ -1174,6 +1176,8 @@ export default function EditTourPage() {
       price_child_nobed: '',
       discount_child_nobed: '',
       promotion_id: null,
+      promo_start_date: '',
+      promo_end_date: '',
     });
     setShowNewPeriodRow(true);
   };
@@ -1200,6 +1204,8 @@ export default function EditTourPage() {
         price_child_nobed: parseFloat(newPeriodData.price_child_nobed) || 0,
         discount_child_nobed: parseFloat(newPeriodData.discount_child_nobed) || 0,
         promotion_id: newPeriodData.promotion_id,
+        promo_start_date: newPeriodData.promo_start_date || null,
+        promo_end_date: newPeriodData.promo_end_date || null,
         cancellation_policy: 'สามารถยกเลิกได้ภายใน 30 วันก่อนเดินทาง',
       };
 
@@ -2715,7 +2721,7 @@ export default function EditTourPage() {
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">พักเดี่ยว</th>
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">เด็ก(เตียง)</th>
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">เด็ก(ไม่เตียง)</th>
-                <th className="text-center px-2 py-2 font-medium text-gray-700 bg-purple-50">โปรโมชั่น</th>
+                <th className="text-center px-2 py-2 font-medium text-gray-700 bg-purple-50 min-w-[160px]">โปรโมชั่น</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">ที่นั่ง</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">จอง</th>
                 <th className="px-2 py-2"></th>
@@ -2829,14 +2835,36 @@ export default function EditTourPage() {
                   <td className="px-2 py-1 bg-purple-50">
                     <select
                       value={newPeriodData.promotion_id?.toString() || ''}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, promotion_id: e.target.value ? parseInt(e.target.value) : null }))}
-                      className="w-32 px-1 py-1 border border-purple-300 rounded text-xs bg-white"
+                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, promotion_id: e.target.value ? parseInt(e.target.value) : null, promo_start_date: e.target.value ? prev.promo_start_date : '', promo_end_date: e.target.value ? prev.promo_end_date : '' }))}
+                      className="w-full px-1 py-1 border border-purple-300 rounded text-xs bg-white"
                     >
                       <option value="">ไม่มี</option>
                       {promotions.map(promo => (
                         <option key={promo.id} value={promo.id}>{promo.name}</option>
                       ))}
                     </select>
+                    {newPeriodData.promotion_id && (
+                      <div className="mt-1.5 space-y-1">
+                        <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
+                          <span className="text-[10px] text-purple-500 text-right">เริ่ม</span>
+                          <input
+                            type="date"
+                            value={newPeriodData.promo_start_date}
+                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_start_date: e.target.value }))}
+                            className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
+                          <span className="text-[10px] text-purple-500 text-right">สิ้นสุด</span>
+                          <input
+                            type="date"
+                            value={newPeriodData.promo_end_date}
+                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_end_date: e.target.value }))}
+                            className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-1 text-center">
                     <input
@@ -3082,20 +3110,65 @@ export default function EditTourPage() {
                   {/* โปรโมชั่น */}
                   <td className="px-2 py-1 bg-purple-50 text-center">
                     {isEditing ? (
-                      <select
-                        value={period.offer?.promotion_id?.toString() || ''}
-                        onChange={(e) => handleInlineOfferUpdate(period.id, 'promotion_id', e.target.value ? parseInt(e.target.value) : null)}
-                        className="w-32 px-1 py-1 border border-purple-300 rounded text-xs bg-white"
-                      >
-                        <option value="">ไม่มี</option>
-                        {promotions.map(promo => (
-                          <option className="" key={promo.id} value={promo.id}>{promo.name}</option>
-                        ))}
-                      </select>
+                      <div>
+                        <select
+                          value={period.offer?.promotion_id?.toString() || ''}
+                          onChange={(e) => {
+                            handleInlineOfferUpdate(period.id, 'promotion_id', e.target.value ? parseInt(e.target.value) : null);
+                            if (!e.target.value) {
+                              handleInlineOfferUpdate(period.id, 'promo_start_date', null);
+                              handleInlineOfferUpdate(period.id, 'promo_end_date', null);
+                            }
+                          }}
+                          className="w-full px-1 py-1 border border-purple-300 rounded text-xs bg-white"
+                        >
+                          <option value="">ไม่มี</option>
+                          {promotions.map(promo => (
+                            <option className="" key={promo.id} value={promo.id}>{promo.name}</option>
+                          ))}
+                        </select>
+                        {period.offer?.promotion_id && (
+                          <div className="mt-1.5 space-y-1">
+                            <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
+                              <span className="text-[10px] text-purple-500 text-right">เริ่ม</span>
+                              <input
+                                type="date"
+                                key={`promo-start-${period.id}-${period.offer?.promo_start_date}`}
+                                defaultValue={period.offer?.promo_start_date?.split('T')[0] || ''}
+                                onBlur={(e) => handleInlineOfferUpdate(period.id, 'promo_start_date', e.target.value || null)}
+                                className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
+                              />
+                            </div>
+                            <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
+                              <span className="text-[10px] text-purple-500 text-right">สิ้นสุด</span>
+                              <input
+                                type="date"
+                                key={`promo-end-${period.id}-${period.offer?.promo_end_date}`}
+                                defaultValue={period.offer?.promo_end_date?.split('T')[0] || ''}
+                                onBlur={(e) => handleInlineOfferUpdate(period.id, 'promo_end_date', e.target.value || null)}
+                                className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <span className="text-sm text-purple-700">
-                        {period.offer?.promotion?.name || '-'}
-                      </span>
+                      <div>
+                        <span className="text-xs text-purple-700 font-medium">
+                          {period.offer?.promotion?.name || '-'}
+                        </span>
+                        {period.offer?.promotion_id && (period.offer?.promo_start_date || period.offer?.promo_end_date) && (
+                          <div className="text-[10px] text-purple-500 mt-0.5 leading-tight">
+                            {period.offer.promo_start_date && (
+                              <span>{new Date(period.offer.promo_start_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                            )}
+                            {period.offer.promo_start_date && period.offer.promo_end_date && <span> - </span>}
+                            {period.offer.promo_end_date && (
+                              <span>{new Date(period.offer.promo_end_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </td>
                   {/* ที่นั่ง */}
