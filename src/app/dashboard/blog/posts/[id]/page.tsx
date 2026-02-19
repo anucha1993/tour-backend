@@ -7,9 +7,10 @@ import {
   ArrowLeft, Save, Upload, Trash2, Eye, X, FileText,
 } from 'lucide-react';
 import {
-  blogPostsApi, blogCategoriesApi,
-  BlogPost, BlogCategory,
+  blogPostsApi, blogCategoriesApi, countriesApi, citiesApi,
+  BlogPost, BlogCategory, Country, City,
 } from '@/lib/api';
+import RichTextEditor from '@/components/RichTextEditor';
 
 export default function BlogPostEditor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -17,10 +18,14 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
   const isNew = id === 'new';
 
   const [categories, setCategories] = useState<BlogCategory[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [form, setForm] = useState({
     category_id: null as number | null,
+    country_ids: [] as number[],
+    city_ids: [] as number[],
     title: '',
     slug: '',
     excerpt: '',
@@ -38,12 +43,22 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
   const [postId, setPostId] = useState<number | null>(isNew ? null : Number(id));
   const [tagInput, setTagInput] = useState('');
   const [showSeo, setShowSeo] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const [showCountryList, setShowCountryList] = useState(false);
 
-  // Fetch categories
+  // Fetch categories + countries
   useEffect(() => {
     blogCategoriesApi.list().then(res => {
       const d = ((res as unknown) as { data: BlogCategory[] })?.data;
       if (d) setCategories(d);
+    });
+    countriesApi.list({ is_active: 'true', per_page: '200' }).then(res => {
+      const d = Array.isArray(res) ? res : (res as unknown as { data: Country[] })?.data;
+      if (d) setCountries(d);
+    });
+    citiesApi.list({ per_page: '500', is_active: 'true' }).then(res => {
+      const d = Array.isArray(res) ? res : (res as unknown as { data: City[] })?.data;
+      if (d) setCities(d);
     });
   }, []);
 
@@ -55,6 +70,8 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
         if (d) {
           setForm({
             category_id: d.category_id,
+            country_ids: d.country_ids ?? [],
+            city_ids: d.city_ids ?? [],
             title: d.title,
             slug: d.slug,
             excerpt: d.excerpt || '',
@@ -82,6 +99,8 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
       const payload = {
         ...form,
         category_id: form.category_id || null,
+        country_ids: form.country_ids.length > 0 ? form.country_ids : null,
+        city_ids: form.city_ids.length > 0 ? form.city_ids : null,
         published_at: form.published_at || null,
         tags: form.tags.length > 0 ? form.tags : null,
         seo_title: form.seo_title || null,
@@ -123,6 +142,20 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
     setCoverImageUrl(null);
   };
 
+  const uploadContentImage = useCallback(async (file: File): Promise<string> => {
+    if (!postId) {
+      // Auto-save first if new
+      alert('กรุณาบันทึกบทความก่อนแทรกรูป');
+      throw new Error('No post id');
+    }
+    const res = await blogPostsApi.uploadContentImage(postId, file);
+    return res.url;
+  }, [postId]);
+
+  const filteredCities = form.country_ids.length > 0
+    ? cities.filter(c => form.country_ids.includes(c.country_id))
+    : cities;
+
   const addTag = () => {
     const tag = tagInput.trim();
     if (tag && !form.tags.includes(tag)) {
@@ -143,7 +176,7 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
   );
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -195,9 +228,14 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
 
           {/* Content */}
           <div className="bg-white rounded-xl border-1 border-solid border-gray-200 p-5">
-            <label className="block text-sm font-medium text-gray-700 mb-1">เนื้อหาบทความ (HTML)</label>
-            <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
-              rows={20} placeholder="<p>เขียนเนื้อหาบทความที่นี่...</p>" className="w-full px-3 py-2 border-1 border-solid border-gray-300 rounded-lg font-mono text-sm" />
+            <label className="block text-sm font-medium text-gray-700 mb-2">เนื้อหาบทความ</label>
+            <RichTextEditor
+              value={form.content}
+              onChange={val => setForm({ ...form, content: val })}
+              placeholder="เขียนเนื้อหาบทความที่นี่..."
+              rows={24}
+              onImageUpload={uploadContentImage}
+            />
           </div>
 
           {/* SEO */}
@@ -262,6 +300,136 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
               <option value="">ไม่มีหมวดหมู่</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+
+          {/* Country & City */}
+          <div className="bg-white rounded-xl border-1 border-solid border-gray-200 p-5 space-y-3">
+            <h3 className="font-semibold text-gray-700">ประเทศ & เมือง</h3>
+
+            {/* Countries multi-select */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">ประเทศ</label>
+              {/* Selected country chips */}
+              {form.country_ids.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {form.country_ids.map(cid => {
+                    const c = countries.find(x => x.id === cid);
+                    if (!c) return null;
+                    return (
+                      <span key={cid} className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        {c.flag_emoji} {c.name_th || c.name_en}
+                        <button
+                          type="button"
+                          onClick={() => setForm(f => ({
+                            ...f,
+                            country_ids: f.country_ids.filter(id => id !== cid),
+                            city_ids: f.city_ids.filter(cityId => {
+                              const city = cities.find(x => x.id === cityId);
+                              return city && f.country_ids.filter(id => id !== cid).includes(city.country_id);
+                            }),
+                          }))}
+                          className="hover:text-red-500 ml-0.5"
+                        ><X className="w-3 h-3" /></button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Search input */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={countrySearch}
+                  onChange={e => { setCountrySearch(e.target.value); setShowCountryList(true); }}
+                  onFocus={() => setShowCountryList(true)}
+                  placeholder="ค้นหาประเทศ..."
+                  className="w-full px-3 py-2 border-1 border-solid border-gray-300 rounded-lg text-sm"
+                />
+                {showCountryList && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {countries
+                      .filter(c => {
+                        const q = countrySearch.toLowerCase();
+                        return !q || (c.name_th || '').toLowerCase().includes(q) || c.name_en.toLowerCase().includes(q);
+                      })
+                      .map(c => {
+                        const selected = form.country_ids.includes(c.id);
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setForm(f => ({
+                                ...f,
+                                country_ids: selected
+                                  ? f.country_ids.filter(id => id !== c.id)
+                                  : [...f.country_ids, c.id],
+                                city_ids: selected
+                                  ? f.city_ids.filter(cityId => {
+                                      const city = cities.find(x => x.id === cityId);
+                                      return city && f.country_ids.filter(id => id !== c.id).includes(city.country_id);
+                                    })
+                                  : f.city_ids,
+                              }));
+                              setCountrySearch('');
+                              setShowCountryList(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${selected ? 'bg-blue-50 text-blue-700 font-medium' : ''}`}
+                          >
+                            <span>{c.flag_emoji}</span>
+                            <span>{c.name_th || c.name_en}</span>
+                            {selected && <span className="ml-auto text-blue-500">✓</span>}
+                          </button>
+                        );
+                      })}
+                    {countries.filter(c => {
+                      const q = countrySearch.toLowerCase();
+                      return !q || (c.name_th || '').toLowerCase().includes(q) || c.name_en.toLowerCase().includes(q);
+                    }).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-400">ไม่พบประเทศ</div>
+                    )}
+                    <div className="border-t border-gray-100 p-1.5">
+                      <button type="button" onClick={() => { setShowCountryList(false); setCountrySearch(''); }} className="w-full text-xs text-center text-gray-500 py-1 hover:text-gray-700">ปิด</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Cities multi-select (badge toggle) */}
+            {filteredCities.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1.5">เมือง</label>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  {filteredCities.map(c => {
+                    const selected = form.city_ids.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          city_ids: selected
+                            ? f.city_ids.filter(id => id !== c.id)
+                            : [...f.city_ids, c.id],
+                        }))}
+                        className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                          selected
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                      >
+                        {c.name_th || c.name_en}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.city_ids.length > 0 && (
+                  <button type="button" onClick={() => setForm(f => ({ ...f, city_ids: [] }))}
+                    className="mt-1.5 text-xs text-gray-400 hover:text-red-500">ล้างเมืองที่เลือก</button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Cover Image */}

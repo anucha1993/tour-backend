@@ -49,6 +49,7 @@ import {
   Trophy,
   Gift,
   Award,
+  Bell,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -287,6 +288,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     title: 'การจัดการโปรโมชั่น',
     href: '/dashboard/website/promotion-management',
     icon: Layers,
+  },
+  {
+    title: 'โปรโมชั่นสำหรับสมาชิก',
+    href: '/dashboard/website/member-promotions',
+    icon: Bell,
   },
   {
     title: 'Flash Sale',

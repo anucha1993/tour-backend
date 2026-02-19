@@ -3,6 +3,8 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
 import { useEffect, useCallback, useState, useRef } from 'react';
 
 // Common emojis for quick access
@@ -20,6 +22,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   rows?: number;
+  /** ถ้าส่ง prop นี้ ปุ่มแทรกรูปในเนื้อหาจะเปิดใช้งาน */
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
 export default function RichTextEditor({
@@ -28,11 +32,16 @@ export default function RichTextEditor({
   placeholder = '',
   className = '',
   rows = 4,
+  onImageUpload,
 }: RichTextEditorProps) {
   const [showEmoji, setShowEmoji] = useState(false);
   const [emojiPosition, setEmojiPosition] = useState({ top: 0, left: 0 });
+  const [uploading, setUploading] = useState(false);
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
   const emojiRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const handleToggleEmoji = () => {
     if (!showEmoji && buttonRef.current) {
@@ -48,13 +57,11 @@ export default function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3],
-        },
+        heading: { levels: [1, 2, 3] },
       }),
-      Placeholder.configure({
-        placeholder,
-      }),
+      Placeholder.configure({ placeholder }),
+      Image.configure({ inline: false, allowBase64: false }),
+      Link.configure({ openOnClick: false, autolink: true }),
     ],
     content: value,
     immediatelyRender: false,
@@ -99,6 +106,35 @@ export default function RichTextEditor({
     },
     [editor]
   );
+
+  // Handle image file selection + upload
+  const handleImageFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !onImageUpload) return;
+      e.target.value = '';
+      setUploading(true);
+      try {
+        const url = await onImageUpload(file);
+        editor?.chain().focus().setImage({ src: url, alt: file.name }).run();
+      } catch {
+        alert('อัปโหลดรูปไม่สำเร็จ');
+      } finally {
+        setUploading(false);
+      }
+    },
+    [onImageUpload, editor]
+  );
+
+  // Handle link set/unset
+  const handleSetLink = useCallback(() => {
+    if (!editor) return;
+    if (!linkUrl) { editor.chain().focus().unsetLink().run(); setShowLinkInput(false); return; }
+    const href = linkUrl.startsWith('http') ? linkUrl : `https://${linkUrl}`;
+    editor.chain().focus().setLink({ href }).run();
+    setLinkUrl('');
+    setShowLinkInput(false);
+  }, [editor, linkUrl]);
 
   if (!editor) {
     return null;
@@ -174,28 +210,99 @@ export default function RichTextEditor({
 
         <div className="w-px h-5 bg-gray-300 mx-1" />
 
+        {/* H1/H2/H3 */}
+        <button
+          type="button"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          className={`p-1.5 rounded hover:bg-gray-200 text-xs font-bold ${editor.isActive('heading', { level: 1 }) ? 'bg-gray-300' : ''}`}
+          title="หัวข้อใหญ่"
+        >H1</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`p-1.5 rounded hover:bg-gray-200 text-sm font-semibold ${
-            editor.isActive('heading', { level: 2 }) ? 'bg-gray-300' : ''
-          }`}
-          title="หัวข้อ"
-        >
-          H
-        </button>
+          className={`p-1.5 rounded hover:bg-gray-200 text-xs font-bold ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-300' : ''}`}
+          title="หัวข้อกลาง"
+        >H2</button>
+        <button
+          type="button"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          className={`p-1.5 rounded hover:bg-gray-200 text-xs font-bold ${editor.isActive('heading', { level: 3 }) ? 'bg-gray-300' : ''}`}
+          title="หัวข้อเล็ก"
+        >H3</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={`p-1.5 rounded hover:bg-gray-200 ${
-            editor.isActive('blockquote') ? 'bg-gray-300' : ''
-          }`}
+          className={`p-1.5 rounded hover:bg-gray-200 ${editor.isActive('blockquote') ? 'bg-gray-300' : ''}`}
           title="อ้างอิง"
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
           </svg>
         </button>
+
+        <div className="w-px h-5 bg-gray-300 mx-1" />
+
+        {/* Link */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              if (editor.isActive('link')) {
+                editor.chain().focus().unsetLink().run();
+              } else {
+                setShowLinkInput(v => !v);
+              }
+            }}
+            className={`p-1.5 rounded hover:bg-gray-200 ${editor.isActive('link') ? 'bg-blue-100 text-blue-600' : ''}`}
+            title="ลิงก์"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </button>
+          {showLinkInput && (
+            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex gap-1 w-64">
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={e => setLinkUrl(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); handleSetLink(); }
+                  if (e.key === 'Escape') setShowLinkInput(false);
+                }}
+                placeholder="https://..."
+                className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded"
+                autoFocus
+              />
+              <button type="button" onClick={handleSetLink} className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">ตกลง</button>
+            </div>
+          )}
+        </div>
+
+        {/* Image Upload */}
+        {onImageUpload && (
+          <>
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading}
+              className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-50"
+              title="แทรกรูปภาพ"
+            >
+              {uploading ? (
+                <svg className="w-4 h-4 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFileChange} />
+          </>
+        )}
 
         <div className="w-px h-5 bg-gray-300 mx-1" />
 
@@ -315,6 +422,23 @@ export default function RichTextEditor({
           padding-left: 1rem;
           margin-left: 0;
           color: #666;
+        }
+        .ProseMirror a {
+          color: #2563eb;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        .ProseMirror img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 0.5rem;
+          margin: 0.5rem 0;
+          cursor: pointer;
+          display: block;
+        }
+        .ProseMirror img.ProseMirror-selectednode {
+          outline: 2px solid #2563eb;
+          outline-offset: 2px;
         }
       `}</style>
     </div>

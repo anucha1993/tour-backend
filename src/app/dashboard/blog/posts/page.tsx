@@ -4,13 +4,16 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  FileText, Plus, Search, Eye, Pencil, Trash2, Filter,
-  Clock, Star, ChevronLeft, ChevronRight,
+  FileText, Plus, Search, Eye, Pencil, Trash2,
+  Clock, Star, ChevronLeft, ChevronRight, MapPin, Globe,
 } from 'lucide-react';
 import {
-  blogPostsApi, blogCategoriesApi,
+  blogPostsApi, blogCategoriesApi, countriesApi, citiesApi,
   BlogPost, BlogCategory,
 } from '@/lib/api';
+
+interface Country { id: number; name_th: string; name_en: string; flag_emoji?: string }
+interface City { id: number; name_th: string; name_en: string; country_id: number }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   draft: { label: 'แบบร่าง', color: 'bg-gray-100 text-gray-600' },
@@ -21,9 +24,12 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 export default function BlogPostsPage() {
   const [items, setItems] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState<number | undefined>(undefined);
+  const [countryFilter, setCountryFilter] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -49,7 +55,22 @@ export default function BlogPostsPage() {
       const d = ((res as unknown) as { data: BlogCategory[] })?.data;
       if (d) setCategories(d);
     });
+    countriesApi.list({ is_active: 'true', per_page: '200' }).then(res => {
+      const d = ((res as unknown) as { data: Country[] })?.data;
+      if (d) setCountries(d);
+    });
+    citiesApi.list({ per_page: '500', is_active: 'true' }).then(res => {
+      const d = ((res as unknown) as { data: City[] })?.data;
+      if (d) setCities(d);
+    });
   }, []);
+
+  const countryMap = Object.fromEntries(countries.map(c => [c.id, c]));
+  const cityMap = Object.fromEntries(cities.map(c => [c.id, c]));
+
+  const filteredItems = countryFilter
+    ? items.filter(p => p.country_ids && p.country_ids.includes(countryFilter))
+    : items;
 
   const del = async (id: number) => {
     if (!confirm('ยืนยันลบบทความนี้?')) return;
@@ -95,13 +116,18 @@ export default function BlogPostsPage() {
           <option value="">ทุกหมวดหมู่</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <select value={countryFilter ?? ''} onChange={e => { setCountryFilter(e.target.value ? Number(e.target.value) : undefined); setPage(1); }}
+          className="px-3 py-2 border-1 border-solid border-gray-300 rounded-lg">
+          <option value="">ทุกประเทศ</option>
+          {countries.map(c => <option key={c.id} value={c.id}>{c.flag_emoji} {c.name_th}</option>)}
+        </select>
         <span className="text-sm text-gray-500">{total} บทความ</span>
       </div>
 
       {/* Post List */}
       {loading ? (
         <div className="animate-pulse space-y-3">{[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl" />)}</div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           <FileText className="w-16 h-16 mx-auto mb-3 text-gray-300" />
           <p className="text-lg font-medium">ยังไม่มีบทความ</p>
@@ -109,7 +135,7 @@ export default function BlogPostsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {items.map(post => (
+          {filteredItems.map(post => (
             <div key={post.id} className="bg-white border-1 border-solid border-gray-200 rounded-xl p-4 flex gap-4 items-start">
               {/* Cover image */}
               <div className="w-32 h-20 bg-gray-100 rounded-lg overflow-hidden relative flex-shrink-0">
@@ -125,11 +151,33 @@ export default function BlogPostsPage() {
                   <h3 className="font-semibold text-gray-900 truncate">{post.title}</h3>
                   {post.is_featured && <Star className="w-4 h-4 text-amber-400 fill-current flex-shrink-0" />}
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_MAP[post.status]?.color || ''}`}>
                     {STATUS_MAP[post.status]?.label || post.status}
                   </span>
                   {post.category && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{post.category.name}</span>}
+                  {post.country_ids && post.country_ids.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Globe className="w-3 h-3 text-emerald-500" />
+                      {post.country_ids.slice(0, 3).map(id => (
+                        <span key={id} className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full">
+                          {countryMap[id]?.flag_emoji} {countryMap[id]?.name_th || id}
+                        </span>
+                      ))}
+                      {post.country_ids.length > 3 && <span className="text-gray-400">+{post.country_ids.length - 3}</span>}
+                    </span>
+                  )}
+                  {post.city_ids && post.city_ids.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-orange-400" />
+                      {post.city_ids.slice(0, 3).map(id => (
+                        <span key={id} className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded-full">
+                          {cityMap[id]?.name_th || id}
+                        </span>
+                      ))}
+                      {post.city_ids.length > 3 && <span className="text-gray-400">+{post.city_ids.length - 3}</span>}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(post.published_at)}</span>
                   <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{post.view_count}</span>
                   {post.reading_time_min && <span>{post.reading_time_min} นาที</span>}

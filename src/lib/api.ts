@@ -4288,6 +4288,8 @@ export interface BlogCategory {
 export interface BlogPost {
   id: number;
   category_id: number | null;
+  country_ids: number[] | null;
+  city_ids: number[] | null;
   title: string;
   slug: string;
   excerpt: string | null;
@@ -4382,6 +4384,19 @@ export const blogPostsApi = {
 
   deleteCoverImage: (id: number) =>
     apiRequest<{ data: BlogPost }>(`/blog-posts/${id}/cover-image`, { method: 'DELETE' }),
+
+  uploadContentImage: async (postId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const response = await fetch(`${API_BASE_URL}/blog-posts/${postId}/content-image`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    if (!response.ok) throw new Error('Upload failed');
+    return response.json() as Promise<{ success: boolean; url: string; cf_id: string; message: string }>;
+  },
 };
 
 // ===================== Blog Page Settings =====================
@@ -5004,4 +5019,116 @@ export const memberPointsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+};
+
+// ============================================================
+// Promotion Notifications (สำหรับสมาชิก)
+// ============================================================
+
+export interface PromotionNotificationAdmin {
+  id: number;
+  title: string;
+  description: string | null;
+  how_to_use: string | null;
+  banner_url: string | null;
+  cloudflare_id: string | null;
+  type: 'promotion' | 'flash_sale' | 'birthday' | 'special' | 'custom';
+  target_type: 'all' | 'level';
+  target_level_id: number | null;
+  target_level: { id: number; name: string; icon: string | null } | null;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
+  read_count: number;
+  claim_count: number;
+  max_claims: number | null;
+}
+
+export interface PromotionClaimRecord {
+  id: number;
+  member_id: number;
+  claim_code: string | null;
+  claimed_at: string;
+  used_at: string | null;
+  status: 'claimed' | 'used' | 'expired';
+  member: {
+    id: number;
+    name: string;
+    email: string;
+    phone: string | null;
+  };
+}
+
+export const promotionNotificationsApi = {
+  list: (params?: { is_active?: boolean; type?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.is_active !== undefined) sp.append('is_active', String(params.is_active));
+    if (params?.type) sp.append('type', params.type);
+    return apiRequest<PromotionNotificationAdmin[]>(`/promotion-notifications?${sp}`);
+  },
+
+  get: (id: number) =>
+    apiRequest<PromotionNotificationAdmin>(`/promotion-notifications/${id}`),
+
+  create: (data: Partial<PromotionNotificationAdmin>) =>
+    apiRequest<PromotionNotificationAdmin>('/promotion-notifications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: Partial<PromotionNotificationAdmin>) =>
+    apiRequest<PromotionNotificationAdmin>(`/promotion-notifications/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/promotion-notifications/${id}`, { method: 'DELETE' }),
+
+  toggleStatus: (id: number) =>
+    apiRequest<{ is_active: boolean; message: string }>(`/promotion-notifications/${id}/toggle-status`, {
+      method: 'PATCH',
+    }),
+
+  meta: () =>
+    apiRequest<{ levels: { id: number; name: string; icon: string | null; min_spending: number }[] }>(
+      '/promotion-notifications/meta'
+    ),
+
+  uploadBanner: async (id: number, file: File): Promise<ApiResponse<{ banner_url: string; cloudflare_id: string }>> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch(`${API_BASE_URL}/promotion-notifications/${id}/upload-banner`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new ApiError(data.message || 'Upload failed', response.status, data.errors);
+    return data;
+  },
+
+  deleteBanner: (id: number) =>
+    apiRequest<{ message: string }>(`/promotion-notifications/${id}/delete-banner`, { method: 'DELETE' }),
+
+  getClaims: (id: number, search?: string) =>
+    apiRequest<{ data: PromotionClaimRecord[]; total_claims: number; max_claims: number | null; remaining: number | null; filtered: number }>(
+      `/promotion-notifications/${id}/claims${search ? `?search=${encodeURIComponent(search)}` : ''}`
+    ),
+
+  lookupByCode: (code: string) =>
+    apiRequest<{ data: PromotionClaimRecord & { notification: { id: number; title: string; type: string } } }>(
+      `/promotion-notifications/claims/lookup?code=${encodeURIComponent(code.toUpperCase())}`
+    ),
+
+  markClaimUsed: (claimId: number) =>
+    apiRequest<{ success: boolean; message: string; data: { id: number; status: string; used_at: string } }>(
+      `/promotion-notifications/claims/${claimId}/mark-used`,
+      { method: 'PATCH' }
+    ),
 };
