@@ -563,28 +563,28 @@ export default function IntegrationDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Link href="/dashboard/integrations">
             <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             {integration.wholesaler.logo_url ? (
               <img 
                 src={integration.wholesaler.logo_url} 
                 alt={integration.wholesaler.name}
-                className="w-12 h-12 rounded-lg object-cover"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0"
               />
             ) : (
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Server className="w-6 h-6 text-gray-500" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Server className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500" />
               </div>
             )}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900">{integration.wholesaler.name}</h1>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900">{integration.wholesaler.name}</h1>
                 <span className={`
                   px-2 py-0.5 text-xs rounded-full font-medium
                   ${integration.health_status === 'healthy' ? 'bg-green-100 text-green-700' : ''}
@@ -596,87 +596,98 @@ export default function IntegrationDetailPage() {
                    integration.health_status === 'down' ? 'ไม่ตอบสนอง' : integration.health_status}
                 </span>
               </div>
-              <p className="text-gray-500 text-sm">{integration.api_base_url}</p>
+              <p className="text-gray-500 text-xs sm:text-sm truncate">{integration.api_base_url}</p>
             </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
+            size="sm"
             onClick={handleToggleSync}
-            className={integration.sync_enabled ? 'text-yellow-600' : 'text-green-600'}
+            className={`flex-1 sm:flex-none ${integration.sync_enabled ? 'text-yellow-600' : 'text-green-600'}`}
           >
             {integration.sync_enabled ? (
               <>
                 <Pause className="w-4 h-4" />
-                หยุด Sync
+                <span className="hidden sm:inline">หยุด Sync</span>
+                <span className="sm:hidden">หยุด</span>
               </>
             ) : (
               <>
                 <Play className="w-4 h-4" />
-                เปิด Sync
+                <span className="hidden sm:inline">เปิด Sync</span>
+                <span className="sm:hidden">เปิด</span>
               </>
             )}
           </Button>
           <Button 
-            variant="outline" 
+            variant="outline"
+            size="sm"
             onClick={handleCheckTourCount}
             disabled={tourCountModal.loading}
-            className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+            className="bg-blue-50 hover:bg-blue-100 border-blue-200 flex-1 sm:flex-none"
           >
             {tourCountModal.loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                กำลังตรวจสอบ...
+                <span className="hidden sm:inline">กำลังตรวจสอบ...</span>
               </>
             ) : (
               <>
                 <Search className="w-4 h-4" />
-                ตรวจสอบจำนวนทัวร์
+                <span className="hidden sm:inline">ตรวจสอบจำนวนทัวร์</span>
+                <span className="sm:hidden">ตรวจสอบ</span>
               </>
             )}
           </Button>
           <Button 
-            variant="outline" 
+            variant="outline"
+            size="sm"
             onClick={handlePreview}
             disabled={previewModal.loading}
+            className="flex-1 sm:flex-none"
           >
             {previewModal.loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                กำลังโหลด...
+                <span className="hidden sm:inline">กำลังโหลด...</span>
               </>
             ) : (
               <>
                 <Eye className="w-4 h-4" />
-                ดูตัวอย่าง
+                <span className="hidden sm:inline">ดูตัวอย่าง</span>
+                <span className="sm:hidden">ตัวอย่าง</span>
               </>
             )}
           </Button>
-          <Button onClick={handleSync} disabled={syncing}>
+          <Button size="sm" onClick={handleSync} disabled={syncing} className="flex-1 sm:flex-none">
             {syncing ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                กำลัง Sync...
+                <span className="hidden sm:inline">กำลัง Sync...</span>
+                <span className="sm:hidden">Sync...</span>
               </>
             ) : (
               <>
                 <RefreshCw className="w-4 h-4" />
-                Sync ตอนนี้
+                <span className="hidden sm:inline">Sync ตอนนี้</span>
+                <span className="sm:hidden">Sync</span>
               </>
             )}
           </Button>
           <Link href={`/dashboard/integrations/${params.id}/mapping`}>
-            <Button variant="outline">
+            <Button variant="outline" size="sm">
               <Zap className="w-4 h-4" />
-              ตั้งค่า Mapping
+              <span className="hidden sm:inline">ตั้งค่า Mapping</span>
+              <span className="sm:hidden">Mapping</span>
             </Button>
           </Link>
           <Link href={`/dashboard/integrations/${params.id}/settings`}>
-            <Button variant="outline">
+            <Button variant="outline" size="sm">
               <Settings className="w-4 h-4" />
-              ตั้งค่า
+              <span className="hidden sm:inline">ตั้งค่า</span>
             </Button>
           </Link>
         </div>
@@ -759,19 +770,19 @@ export default function IntegrationDetailPage() {
           </div>
           
           {/* Progress Details */}
-          <div className="flex items-center justify-between text-sm text-blue-700">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-sm text-blue-700 gap-1">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
               <span>{liveProgress.processed_items}/{liveProgress.total_items} รายการ</span>
               {liveProgress.current_chunk > 0 && (
                 <span className="text-blue-500">Chunk {liveProgress.current_chunk}/{liveProgress.total_chunks}</span>
               )}
               {liveProgress.current_item_code && (
-                <span className="font-mono text-xs bg-blue-100 px-2 py-0.5 rounded">
+                <span className="font-mono text-xs bg-blue-100 px-2 py-0.5 rounded truncate max-w-[150px] sm:max-w-none">
                   {liveProgress.current_item_code}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <span className="font-bold">{Math.round(liveProgress.progress_percent || 0)}%</span>
               {liveProgress.api_calls_count > 0 && (
                 <span className="text-blue-500 text-xs">API: {liveProgress.api_calls_count} calls</span>
@@ -798,43 +809,43 @@ export default function IntegrationDetailPage() {
       )}
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">ทัวร์</p>
-              <p className="text-2xl font-bold">{integration.tours_count}</p>
+              <p className="text-xs sm:text-sm text-gray-500">ทัวร์</p>
+              <p className="text-xl sm:text-2xl font-bold">{integration.tours_count}</p>
             </div>
-            <Package className="w-8 h-8 text-blue-500" />
+            <Package className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">รอบเดินทาง</p>
-              <p className="text-2xl font-bold">{integration.periods_count}</p>
+              <p className="text-xs sm:text-sm text-gray-500">รอบเดินทาง</p>
+              <p className="text-xl sm:text-2xl font-bold">{integration.periods_count}</p>
             </div>
-            <Calendar className="w-8 h-8 text-purple-500" />
+            <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-purple-500" />
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Sync ล่าสุด</p>
-              <p className="text-2xl font-bold">{integration.last_sync_duration || '-'}s</p>
+              <p className="text-xs sm:text-sm text-gray-500">Sync ล่าสุด</p>
+              <p className="text-xl sm:text-2xl font-bold">{integration.last_sync_duration || '-'}s</p>
               <p className="text-xs text-gray-400">{formatTimeAgo(integration.last_sync)}</p>
             </div>
-            <Clock className="w-8 h-8 text-green-500" />
+            <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-green-500" />
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">สถานะ</p>
-              <p className={`text-2xl font-bold ${
+              <p className="text-xs sm:text-sm text-gray-500">สถานะ</p>
+              <p className={`text-lg sm:text-2xl font-bold ${
                 integration.last_sync_status === 'completed' ? 'text-green-600' : 
                 integration.last_sync_status === 'failed' ? 'text-red-600' : 
                 integration.last_sync_status === 'cancelled' ? 'text-orange-600' :
@@ -852,19 +863,19 @@ export default function IntegrationDetailPage() {
                  integration.last_sync_status || '-'}
               </p>
             </div>
-            <Activity className="w-8 h-8 text-green-500" />
+            <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-green-500" />
           </div>
         </Card>
       </div>
 
       {/* Stats Range Selection */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto">
         {(['today', 'week', 'month'] as const).map((range) => (
           <button
             key={range}
             onClick={() => setStatsRange(range)}
             className={`
-              px-4 py-2 rounded-lg text-sm font-medium transition-colors
+              px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap
               ${statsRange === range 
                 ? 'bg-blue-500 text-white' 
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -879,61 +890,61 @@ export default function IntegrationDetailPage() {
       </div>
 
       {/* Period Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <RefreshCw className="w-5 h-5 text-blue-600" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0">
+              <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">จำนวน Sync</p>
-              <p className="text-xl font-bold">{currentStats.syncs}</p>
+              <p className="text-xs sm:text-sm text-gray-500">จำนวน Sync</p>
+              <p className="text-lg sm:text-xl font-bold">{currentStats.syncs}</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-green-600" />
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg flex-shrink-0">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">ทัวร์ที่เพิ่ม</p>
-              <p className="text-xl font-bold text-green-600">+{currentStats.tours_added}</p>
+              <p className="text-xs sm:text-sm text-gray-500">ทัวร์ที่เพิ่ม</p>
+              <p className="text-lg sm:text-xl font-bold text-green-600">+{currentStats.tours_added}</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <BarChart3 className="w-5 h-5 text-purple-600" />
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg flex-shrink-0">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">ทัวร์ที่อัพเดท</p>
-              <p className="text-xl font-bold text-purple-600">{currentStats.tours_updated}</p>
+              <p className="text-xs sm:text-sm text-gray-500">ทัวร์ที่อัพเดท</p>
+              <p className="text-lg sm:text-xl font-bold text-purple-600">{currentStats.tours_updated}</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600" />
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg flex-shrink-0">
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">ข้อผิดพลาด</p>
-              <p className="text-xl font-bold text-red-600">{currentStats.errors}</p>
+              <p className="text-xs sm:text-sm text-gray-500">ข้อผิดพลาด</p>
+              <p className="text-lg sm:text-xl font-bold text-red-600">{currentStats.errors}</p>
             </div>
           </div>
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Recent Syncs */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">ประวัติ Sync ล่าสุด</h2>
+            <h2 className="text-base sm:text-lg font-semibold">ประวัติ Sync ล่าสุด</h2>
             <Link href={`/dashboard/integrations/${params.id}/history`} className="text-blue-600 text-sm hover:underline">
               ดูทั้งหมด
             </Link>
@@ -989,7 +1000,7 @@ export default function IntegrationDetailPage() {
                     )}
                     {/* Show error message for failed sync */}
                     {sync.status === 'failed' && sync.error_summary && (
-                      <p className="text-xs text-red-600 mt-0.5 truncate max-w-xs" title={
+                      <p className="text-xs text-red-600 mt-0.5 truncate max-w-[200px] sm:max-w-xs" title={
                         !Array.isArray(sync.error_summary) && 'message' in sync.error_summary 
                           ? sync.error_summary.message 
                           : Array.isArray(sync.error_summary) && sync.error_summary.length > 0 
@@ -1049,9 +1060,9 @@ export default function IntegrationDetailPage() {
         </Card>
 
         {/* Recently Synced Tours */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">ทัวร์ที่ Sync ล่าสุด</h2>
+            <h2 className="text-base sm:text-lg font-semibold">ทัวร์ที่ Sync ล่าสุด</h2>
             <Link href={`/dashboard/integrations/${params.id}/tours`} className="text-blue-600 text-sm hover:underline">
               ดูทั้งหมด
             </Link>
@@ -1059,9 +1070,9 @@ export default function IntegrationDetailPage() {
           
           <div className="space-y-3">
             {recentTours.length > 0 ? recentTours.map((tour) => (
-              <div key={tour.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="text-sm font-medium">{tour.title}</p>
+              <div key={tour.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{tour.title}</p>
                   <p className="text-xs text-gray-500">{tour.tour_code}</p>
                 </div>
                 <span className={`
@@ -1085,10 +1096,10 @@ export default function IntegrationDetailPage() {
       </div>
 
       {/* Features & Configuration */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Features */}
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">ฟีเจอร์ที่รองรับ</h2>
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold mb-4">ฟีเจอร์ที่รองรับ</h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <span className="text-sm">ตรวจสอบห้องว่าง</span>
@@ -1118,12 +1129,12 @@ export default function IntegrationDetailPage() {
         </Card>
 
         {/* Configuration */}
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">การตั้งค่า</h2>
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold mb-4">การตั้งค่า</h2>
           <div className="space-y-4 text-sm">
-            <div className="flex justify-between">
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
               <span className="text-gray-500">API URL</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{integration.api_base_url}</span>
+              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded truncate max-w-full sm:max-w-[280px]">{integration.api_base_url}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">ประเภท Auth</span>
@@ -1147,8 +1158,8 @@ export default function IntegrationDetailPage() {
 
       {/* Preview Modal */}
       {previewModal.open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -1213,9 +1224,9 @@ export default function IntegrationDetailPage() {
 
             {/* Modal Footer */}
             {previewModal.data && (
-              <div className="border-t p-4 flex items-center justify-between bg-gray-50 border-gray-300">
+              <div className="border-t p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 border-gray-300">
                 <div className="text-sm text-gray-500">
-                  จะ sync ทัวร์ {previewModal.data.preview_count} รายการ (จากทั้งหมด {previewModal.data.total_fetched} รายการ)
+                  จะ sync ทัวร์ {previewModal.data.preview_count} รายการ (จากทั้งหมด {previewModal.data.total_fetched})
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -1285,7 +1296,7 @@ export default function IntegrationDetailPage() {
             {/* Modal Content */}
             <div className="p-4 space-y-4">
               {/* Status & Time */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 <div className="bg-gray-50 rounded-lg p-3 text-center">
                   <span className={`
                     px-3 py-1 text-sm rounded-full font-medium
@@ -1317,16 +1328,16 @@ export default function IntegrationDetailPage() {
 
               {/* Time Info */}
               <div className="bg-gray-50 rounded-lg p-3">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
                   <div>
                     <span className="text-gray-500">เริ่มต้น:</span>
-                    <span className="ml-2 font-medium">
+                    <span className="ml-2 font-medium text-xs sm:text-sm">
                       {new Date(syncLogModal.log.started_at).toLocaleString('th-TH')}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-500">เสร็จสิ้น:</span>
-                    <span className="ml-2 font-medium">
+                    <span className="ml-2 font-medium text-xs sm:text-sm">
                       {syncLogModal.log.completed_at 
                         ? new Date(syncLogModal.log.completed_at).toLocaleString('th-TH')
                         : '-'}
@@ -1338,25 +1349,25 @@ export default function IntegrationDetailPage() {
               {/* Tour Stats */}
               <div>
                 <h4 className="font-medium text-gray-700 mb-2">สถิติทัวร์</h4>
-                <div className="grid grid-cols-5 gap-2">
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <p className="text-xl font-bold text-blue-700">{syncLogModal.log.tours_received}</p>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  <div className="bg-blue-50 rounded-lg p-2 sm:p-3 text-center">
+                    <p className="text-lg sm:text-xl font-bold text-blue-700">{syncLogModal.log.tours_received}</p>
                     <p className="text-xs text-blue-600">รับเข้า</p>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <p className="text-xl font-bold text-green-700">{syncLogModal.log.tours_created}</p>
+                  <div className="bg-green-50 rounded-lg p-2 sm:p-3 text-center">
+                    <p className="text-lg sm:text-xl font-bold text-green-700">{syncLogModal.log.tours_created}</p>
                     <p className="text-xs text-green-600">สร้างใหม่</p>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-3 text-center">
-                    <p className="text-xl font-bold text-purple-700">{syncLogModal.log.tours_updated}</p>
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 text-center">
+                    <p className="text-lg sm:text-xl font-bold text-purple-700">{syncLogModal.log.tours_updated}</p>
                     <p className="text-xs text-purple-600">อัพเดท</p>
                   </div>
-                  <div className="bg-gray-100 rounded-lg p-3 text-center">
-                    <p className="text-xl font-bold text-gray-700">{syncLogModal.log.tours_skipped ?? 0}</p>
+                  <div className="bg-gray-100 rounded-lg p-2 sm:p-3 text-center">
+                    <p className="text-lg sm:text-xl font-bold text-gray-700">{syncLogModal.log.tours_skipped ?? 0}</p>
                     <p className="text-xs text-gray-600">ข้าม</p>
                   </div>
-                  <div className="bg-red-50 rounded-lg p-3 text-center">
-                    <p className="text-xl font-bold text-red-700">{syncLogModal.log.tours_failed ?? 0}</p>
+                  <div className="bg-red-50 rounded-lg p-2 sm:p-3 text-center">
+                    <p className="text-lg sm:text-xl font-bold text-red-700">{syncLogModal.log.tours_failed ?? 0}</p>
                     <p className="text-xs text-red-600">ล้มเหลว</p>
                   </div>
                 </div>

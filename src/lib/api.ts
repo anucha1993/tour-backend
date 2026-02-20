@@ -5315,7 +5315,7 @@ export const bookingsApi = {
         if (value !== undefined && value !== '') searchParams.set(key, String(value));
       });
     }
-    return apiRequest<{ data: AdminBooking[]; current_page: number; last_page: number; total: number }>(
+    return apiRequest<AdminBooking[]>(
       `/bookings?${searchParams.toString()}`
     );
   },

@@ -232,10 +232,13 @@ export default function BookingsPage() {
         page,
         per_page: 20,
       });
-      const bookingData = res.data;
-      setBookings(bookingData?.data || []);
-      setTotalPages(bookingData?.last_page || 1);
-      setTotal(bookingData?.total || 0);
+      // Laravel paginator returns: { data: [...], current_page, last_page, total, ... }
+      // apiRequest returns it as-is, so res maps to ApiResponse where res.data = AdminBooking[]
+      // and pagination fields are at top level via `meta` or direct properties
+      const raw = res as unknown as { data: AdminBooking[]; current_page: number; last_page: number; total: number };
+      setBookings(raw.data || []);
+      setTotalPages(raw.last_page || 1);
+      setTotal(raw.total || 0);
     } catch (err) {
       console.error('Failed to fetch bookings', err);
     } finally {
@@ -246,7 +249,8 @@ export default function BookingsPage() {
   const fetchStats = useCallback(async () => {
     try {
       const res = await bookingsApi.statistics();
-      setStats(res.data || null);
+      // Laravel returns flat JSON: { total, pending, confirmed, ... }
+      setStats(res as unknown as BookingStatistics);
     } catch (err) {
       console.error('Failed to fetch stats', err);
     }

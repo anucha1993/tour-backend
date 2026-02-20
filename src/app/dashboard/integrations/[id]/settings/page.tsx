@@ -728,18 +728,18 @@ export default function IntegrationSettingsPage() {
       )}
       
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Link href={`/dashboard/integrations/${params.id}`}>
             <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">ตั้งค่า Integration</h1>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900">ตั้งค่า Integration</h1>
               {/* Sync Status Badge */}
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+              <span className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full text-xs font-semibold ${
                 formData.sync_enabled
                   ? 'bg-green-100 text-green-700 border border-green-200'
                   : 'bg-red-100 text-red-700 border border-red-200'
@@ -748,20 +748,21 @@ export default function IntegrationSettingsPage() {
                 {formData.sync_enabled ? 'Sync เปิดอยู่' : 'Sync ปิดอยู่'}
               </span>
             </div>
-            <p className="text-gray-500 text-sm">{formData.wholesaler.name}</p>
+            <p className="text-gray-500 text-xs sm:text-sm truncate">{formData.wholesaler.name}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Quick Toggle Sync Button */}
           <Button 
             variant="outline"
+            size="sm"
             onClick={handleToggleSync}
             disabled={togglingSync}
-            className={formData.sync_enabled 
+            className={`flex-1 sm:flex-none ${formData.sync_enabled 
               ? 'text-orange-600 border-orange-300 hover:bg-orange-50' 
               : 'text-green-600 border-green-300 hover:bg-green-50'
-            }
+            }`}
           >
             {togglingSync ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -770,14 +771,15 @@ export default function IntegrationSettingsPage() {
             ) : (
               <Play className="w-4 h-4" />
             )}
-            {formData.sync_enabled ? 'ปิด Sync' : 'เปิด Sync'}
+            <span className="hidden sm:inline">{formData.sync_enabled ? 'ปิด Sync' : 'เปิด Sync'}</span>
+            <span className="sm:hidden">{formData.sync_enabled ? 'ปิด' : 'เปิด'}</span>
           </Button>
 
-          <Button onClick={handleSave} disabled={saving}>
+          <Button size="sm" onClick={handleSave} disabled={saving} className="flex-1 sm:flex-none">
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                กำลังบันทึก...
+                <span className="hidden sm:inline">กำลังบันทึก...</span>
               </>
             ) : (
               <>
@@ -789,9 +791,9 @@ export default function IntegrationSettingsPage() {
         </div>
       </div>
 
-      <div className="flex gap-6">
-        {/* Sidebar Tabs */}
-        <div className="w-48 space-y-1">
+      <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+        {/* Sidebar Tabs - horizontal scroll on mobile, vertical on desktop */}
+        <div className="md:w-48 flex md:flex-col gap-1 overflow-x-auto pb-2 md:pb-0 -mx-1 px-1 md:mx-0 md:px-0">
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
             return (
@@ -799,7 +801,7 @@ export default function IntegrationSettingsPage() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`
-                  w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                  flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0
                   ${activeTab === tab.id 
                     ? 'bg-blue-50 text-blue-600' 
                     : tab.id === 'danger'
@@ -819,9 +821,9 @@ export default function IntegrationSettingsPage() {
         <div className="flex-1">
           {/* API Configuration */}
           {activeTab === 'api' && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">ตั้งค่าการเชื่อมต่อ API</h2>
-              <p className="text-sm text-gray-500 mb-6">กำหนด URL, Authentication และ Rate Limit สำหรับเชื่อมต่อกับ API ของ Wholesaler</p>
+            <Card className="p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold mb-2">ตั้งค่าการเชื่อมต่อ API</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">กำหนด URL, Authentication และ Rate Limit สำหรับเชื่อมต่อกับ API ของ Wholesaler</p>
               
               <div className="space-y-6">
                 {/* Base URL */}
@@ -836,7 +838,7 @@ export default function IntegrationSettingsPage() {
                 </div>
                 
                 {/* API Version */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">API Version</label>
                     <input
@@ -1048,7 +1050,7 @@ export default function IntegrationSettingsPage() {
                 )}
                 
                 {/* Rate Limit & Timeout */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Rate Limit (จำนวน request/นาที)</label>
                     <input
@@ -1070,7 +1072,7 @@ export default function IntegrationSettingsPage() {
                 </div>
                 
                 {/* Retry Settings */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">จำนวนครั้งที่ Retry</label>
                     <input
@@ -1093,7 +1095,7 @@ export default function IntegrationSettingsPage() {
                 
                 {/* Test Connection */}
                 <div className="pt-4 border-t">
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
                     <Button variant="outline" onClick={handleTestConnection} disabled={testing}>
                       {testing ? (
                         <>
@@ -1129,13 +1131,13 @@ export default function IntegrationSettingsPage() {
 
           {/* Sync Settings */}
           {activeTab === 'sync' && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">การ Sync ข้อมูล</h2>
-              <p className="text-sm text-gray-500 mb-6">ตั้งค่าความถี่และวิธีการ sync ทัวร์จาก Wholesaler เข้าระบบ</p>
+            <Card className="p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold mb-2">การ Sync ข้อมูล</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">ตั้งค่าความถี่และวิธีการ sync ทัวร์จาก Wholesaler เข้าระบบ</p>
               
               <div className="space-y-6">
                 {/* Sync Enabled */}
-                <div className={`flex items-center justify-between p-4 rounded-lg border-2 transition-colors ${
+                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border-2 transition-colors ${
                   formData.sync_enabled 
                     ? 'bg-green-50 border-green-200' 
                     : 'bg-red-50 border-red-200'
@@ -1323,7 +1325,7 @@ export default function IntegrationSettingsPage() {
                       />
                       <div className="mt-2 text-xs text-gray-500 space-y-1">
                         <p className="font-medium">รูปแบบ: นาที ชั่วโมง วัน เดือน วันในสัปดาห์</p>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-1">
                           <span>• <code className="bg-gray-200 px-1 rounded">0 * * * *</code> = ทุกชั่วโมง</span>
                           <span>• <code className="bg-gray-200 px-1 rounded">*/30 * * * *</code> = ทุก 30 นาที</span>
                           <span>• <code className="bg-gray-200 px-1 rounded">0 */2 * * *</code> = ทุก 2 ชั่วโมง</span>
@@ -1343,12 +1345,12 @@ export default function IntegrationSettingsPage() {
                 {/* Sync Method */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">วิธีการ Sync</label>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, sync_mode: 'cursor' }))}
                       className={`
-                        p-4 rounded-lg border-2 text-left transition-colors
+                        p-3 sm:p-4 rounded-lg border-2 text-left transition-colors
                         ${formData.sync_mode === 'cursor' 
                           ? 'border-blue-500 bg-blue-50' 
                           : 'border-gray-200 hover:border-gray-300'
@@ -1362,7 +1364,7 @@ export default function IntegrationSettingsPage() {
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, sync_mode: 'last_modified' }))}
                       className={`
-                        p-4 rounded-lg border-2 text-left transition-colors
+                        p-3 sm:p-4 rounded-lg border-2 text-left transition-colors
                         ${formData.sync_mode === 'last_modified' 
                           ? 'border-blue-500 bg-blue-50' 
                           : 'border-gray-200 hover:border-gray-300'
@@ -1376,7 +1378,7 @@ export default function IntegrationSettingsPage() {
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, sync_mode: 'ack_callback' }))}
                       className={`
-                        p-4 rounded-lg border-2 text-left transition-colors
+                        p-3 sm:p-4 rounded-lg border-2 text-left transition-colors
                         ${formData.sync_mode === 'ack_callback' 
                           ? 'border-blue-500 bg-blue-50' 
                           : 'border-gray-200 hover:border-gray-300'
@@ -1444,12 +1446,12 @@ export default function IntegrationSettingsPage() {
                     เลือกวิธีการดึงข้อมูลรอบเดินทาง (Periods) - บาง API แยก endpoint ระหว่างทัวร์และรอบเดินทาง
                   </p>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, phase_mode: 'single' }))}
                       className={`
-                        p-4 rounded-lg border-2 text-left transition-colors
+                        p-3 sm:p-4 rounded-lg border-2 text-left transition-colors
                         ${formData.phase_mode === 'single' 
                           ? 'border-blue-500 bg-white' 
                           : 'border-gray-200 bg-white hover:border-gray-300'
@@ -1463,7 +1465,7 @@ export default function IntegrationSettingsPage() {
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, phase_mode: 'two_phase' }))}
                       className={`
-                        p-4 rounded-lg border-2 text-left transition-colors
+                        p-3 sm:p-4 rounded-lg border-2 text-left transition-colors
                         ${formData.phase_mode === 'two_phase' 
                           ? 'border-blue-500 bg-white' 
                           : 'border-gray-200 bg-white hover:border-gray-300'
@@ -1606,7 +1608,7 @@ export default function IntegrationSettingsPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">วิธีจัดการ</label>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, past_period_handling: 'skip' }))}
@@ -1679,17 +1681,17 @@ export default function IntegrationSettingsPage() {
 
           {/* Booking Flow */}
           {activeTab === 'booking' && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">Booking Flow</h2>
-              <p className="text-sm text-gray-500 mb-6">ตั้งค่าความสามารถของ API สำหรับการจอง</p>
+            <Card className="p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold mb-2">Booking Flow</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">ตั้งค่าความสามารถของ API สำหรับการจอง</p>
               
               <div className="space-y-6">
                 {/* Features */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">เช็คที่ว่าง (Availability)</p>
-                      <p className="text-sm text-gray-500">ตรวจสอบที่ว่างแบบ Real-time จาก API</p>
+                  <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm sm:text-base">เช็คที่ว่าง (Availability)</p>
+                      <p className="text-xs sm:text-sm text-gray-500">ตรวจสอบที่ว่างแบบ Real-time จาก API</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -1702,10 +1704,10 @@ export default function IntegrationSettingsPage() {
                     </label>
                   </div>
                   
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">Hold Booking (TTL)</p>
-                      <p className="text-sm text-gray-500">จองที่ชั่วคราวก่อนยืนยันการจอง</p>
+                  <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm sm:text-base">Hold Booking (TTL)</p>
+                      <p className="text-xs sm:text-sm text-gray-500">จองที่ชั่วคราวก่อนยืนยันการจอง</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -1718,10 +1720,10 @@ export default function IntegrationSettingsPage() {
                     </label>
                   </div>
                   
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">แก้ไขการจอง (Modify)</p>
-                      <p className="text-sm text-gray-500">แก้ไขการจองได้หลังยืนยันแล้ว</p>
+                  <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm sm:text-base">แก้ไขการจอง (Modify)</p>
+                      <p className="text-xs sm:text-sm text-gray-500">แก้ไขการจองได้หลังยืนยันแล้ว</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -1789,9 +1791,9 @@ export default function IntegrationSettingsPage() {
 
           {/* PDF Branding */}
           {activeTab === 'pdf' && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">PDF Branding</h2>
-              <p className="text-sm text-gray-500 mb-6">
+            <Card className="p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold mb-2">PDF Branding</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">
                 ใส่รูป Header/Footer เพื่อ overlay บน PDF ทุกหน้าที่ดาวน์โหลดจาก Wholesaler นี้
               </p>
               
@@ -1921,11 +1923,11 @@ export default function IntegrationSettingsPage() {
 
           {/* Notifications */}
           {activeTab === 'notifications' && (
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-6">
+            <Card className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                 <div>
-                  <h2 className="text-lg font-semibold">การแจ้งเตือน</h2>
-                  <p className="text-sm text-gray-500">ตั้งค่าการแจ้งเตือนเมื่อเกิดข้อผิดพลาดหรือปัญหา</p>
+                  <h2 className="text-base sm:text-lg font-semibold">การแจ้งเตือน</h2>
+                  <p className="text-xs sm:text-sm text-gray-500">ตั้งค่าการแจ้งเตือนเมื่อเกิดข้อผิดพลาดหรือปัญหา</p>
                 </div>
                 <Button
                   variant="outline"
@@ -1955,10 +1957,10 @@ export default function IntegrationSettingsPage() {
               
               <div className="space-y-6">
                 {/* Enable Notifications */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium">เปิดการแจ้งเตือน</p>
-                    <p className="text-sm text-gray-500">รับการแจ้งเตือนเมื่อ sync ผิดพลาดหรือเชื่อมต่อมีปัญหา</p>
+                <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base">เปิดการแจ้งเตือน</p>
+                    <p className="text-xs sm:text-sm text-gray-500">รับการแจ้งเตือนเมื่อ sync ผิดพลาดหรือเชื่อมต่อมีปัญหา</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -2088,19 +2090,19 @@ export default function IntegrationSettingsPage() {
 
           {/* Danger Zone */}
           {activeTab === 'danger' && (
-            <Card className="p-6 border-red-200">
-              <h2 className="text-lg font-semibold text-red-600 mb-2">Danger Zone</h2>
-              <p className="text-sm text-gray-500 mb-6">การดำเนินการในส่วนนี้อาจมีผลกระทบสำคัญ โปรดดำเนินการด้วยความระมัดระวัง</p>
+            <Card className="p-4 sm:p-6 border-red-200">
+              <h2 className="text-base sm:text-lg font-semibold text-red-600 mb-2">Danger Zone</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">การดำเนินการในส่วนนี้อาจมีผลกระทบสำคัญ โปรดดำเนินการด้วยความระมัดระวัง</p>
               
               <div className="space-y-6">
                 {/* Pause/Resume Integration Sync */}
-                <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border ${
                   formData.sync_enabled 
                     ? 'bg-yellow-50 border-yellow-200' 
                     : 'bg-green-50 border-green-200'
                 }`}>
-                  <div>
-                    <p className="font-medium">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base">
                       {formData.sync_enabled ? 'หยุดชั่วคราว' : 'เปิด Sync อีกครั้ง'}
                     </p>
                     <p className="text-sm text-gray-500">
@@ -2131,10 +2133,10 @@ export default function IntegrationSettingsPage() {
                 </div>
                 
                 {/* Re-sync All */}
-                <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div>
-                    <p className="font-medium">Sync ทั้งหมดใหม่</p>
-                    <p className="text-sm text-gray-500">Sync ทัวร์ทั้งหมดใหม่จากต้น (อาจใช้เวลาสักครู่)</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base">Sync ทั้งหมดใหม่</p>
+                    <p className="text-xs sm:text-sm text-gray-500">Sync ทัวร์ทั้งหมดใหม่จากต้น (อาจใช้เวลาสักครู่)</p>
                   </div>
                   <Button 
                     variant="outline" 
@@ -2152,10 +2154,10 @@ export default function IntegrationSettingsPage() {
                 </div>
                 
                 {/* Delete Integration */}
-                <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div>
-                    <p className="font-medium text-red-600">ลบ Integration</p>
-                    <p className="text-sm text-gray-500">ลบ Integration ถาวร รวมถึงข้อมูลทั้งหมดที่ sync เข้ามา</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="min-w-0">
+                    <p className="font-medium text-red-600 text-sm sm:text-base">ลบ Integration</p>
+                    <p className="text-xs sm:text-sm text-gray-500">ลบ Integration ถาวร รวมถึงข้อมูลทั้งหมดที่ sync เข้ามา</p>
                   </div>
                   <Button 
                     variant="outline" 

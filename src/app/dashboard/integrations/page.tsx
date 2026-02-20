@@ -285,13 +285,13 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">เชื่อมต่อ Wholesaler</h1>
-          <p className="text-gray-500 text-sm">จัดการการเชื่อมต่อ API กับ Wholesaler ภายนอก เพื่อดึงข้อมูลทัวร์อัตโนมัติ</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">เชื่อมต่อ Wholesaler</h1>
+          <p className="text-gray-500 text-xs sm:text-sm">จัดการการเชื่อมต่อ API กับ Wholesaler ภายนอก เพื่อดึงข้อมูลทัวร์อัตโนมัติ</p>
         </div>
-        <Link href="/dashboard/integrations/new">
-          <Button>
+        <Link href="/dashboard/integrations/new" className="flex-shrink-0">
+          <Button className="w-full sm:w-auto">
             <Plus className="w-4 h-4" />
             เพิ่ม Integration
           </Button>
@@ -299,62 +299,63 @@ export default function IntegrationsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Settings className="w-5 h-5 text-blue-600" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.total}</p>
+            <div className="min-w-0">
+              <p className="text-xl sm:text-2xl font-bold">{stats.total}</p>
               <p className="text-xs text-gray-500">ทั้งหมด</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <Activity className="w-5 h-5 text-green-600" />
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.active}</p>
+            <div className="min-w-0">
+              <p className="text-xl sm:text-2xl font-bold">{stats.active}</p>
               <p className="text-xs text-gray-500">เปิดใช้งาน</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.healthy}</p>
+            <div className="min-w-0">
+              <p className="text-xl sm:text-2xl font-bold">{stats.healthy}</p>
               <p className="text-xs text-gray-500">สถานะปกติ</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-purple-600" />
+        <Card className="p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.totalTours}</p>
+            <div className="min-w-0">
+              <p className="text-xl sm:text-2xl font-bold">{stats.totalTours}</p>
               <p className="text-xs text-gray-500">ทัวร์ทั้งหมด</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stats.totalErrors > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-              <AlertCircle className={`w-5 h-5 ${stats.totalErrors > 0 ? 'text-red-600' : 'text-gray-400'}`} />
+        <Card className="p-3 sm:p-4 col-span-2 sm:col-span-1">
+          <div className="flex items-center gap-2 sm:gap-3">
+            
+            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${stats.totalErrors > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
+              <AlertCircle className={`w-4 h-4 sm:w-5 sm:h-5 ${stats.totalErrors > 0 ? 'text-red-600' : 'text-gray-400'}`} />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.totalErrors}</p>
+            <div className="min-w-0">
+              <p className="text-xl sm:text-2xl font-bold">{stats.totalErrors}</p>
               <p className="text-xs text-gray-500">ข้อผิดพลาด</p>
             </div>
           </div>
@@ -364,12 +365,12 @@ export default function IntegrationsPage() {
       {/* Integrations List */}
       <div className="space-y-4">
         {integrations.map((integration) => (
-          <Card key={integration.id} className={`p-6 ${!integration.is_active ? 'opacity-60' : ''}`}>
-            <div className="flex items-start justify-between">
+          <Card key={integration.id} className={`p-4 sm:p-6 ${!integration.is_active ? 'opacity-60' : ''}`}>
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               {/* Left: Info */}
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
                 {/* Wholesaler Logo */}
-                <div className="w-20 h-20 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {integration.wholesaler_logo ? (
                     <img 
                       src={integration.wholesaler_logo} 
@@ -377,17 +378,17 @@ export default function IntegrationsPage() {
                       className="w-full h-full object-contain"
                     />
                   ) : (
-                    <span className="text-lg font-bold text-gray-400">
+                    <span className="text-sm sm:text-lg font-bold text-gray-400">
                       {integration.wholesaler_name?.charAt(0).toUpperCase() || 'W'}
                     </span>
                   )}
                 </div>
                 
                 {/* Details */}
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
                     {getHealthIcon(integration.health_status)}
-                    <h3 className="text-lg font-semibold text-gray-900">{integration.wholesaler_name}</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">{integration.wholesaler_name}</h3>
                     {getHealthBadge(integration.health_status)}
                     {!integration.is_active && (
                       <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">ปิดใช้งาน</span>
@@ -397,10 +398,10 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                   
-                  <p className="text-sm text-gray-500 font-mono mb-3">{integration.api_base_url}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 font-mono mb-3 truncate">{integration.api_base_url}</p>
                   
                   {/* Stats Row */}
-                  <div className="flex items-center gap-6 text-sm flex-wrap">
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-6 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">ทัวร์:</span>
                       <span className="font-medium">{integration.tours_count}</span>
@@ -413,8 +414,8 @@ export default function IntegrationsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Timer className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-gray-500">Next Sync:</span>
+                      <Timer className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-500">Next:</span>
                       {(() => {
                         const next = formatNextSync(integration.next_sync_at, integration.sync_enabled);
                         return <span className={`font-medium ${next.color}`}>{next.text}</span>;
@@ -427,7 +428,7 @@ export default function IntegrationsPage() {
                     </div>
                     
                     {integration.errors_count > 0 && (
-                      <div className="flex items-center gap-2 text-red-600">
+                      <div className="flex items-center gap-2 text-red-600 col-span-2">
                         <AlertCircle className="w-4 h-4" />
                         <span className="font-medium">{integration.errors_count} ข้อผิดพลาด</span>
                       </div>
@@ -435,7 +436,7 @@ export default function IntegrationsPage() {
                   </div>
                   
                   {/* Features */}
-                  <div className="flex items-center gap-3 mt-3">
+                  <div className="flex items-center gap-2 sm:gap-3 mt-3 flex-wrap">
                     <span className="text-xs text-gray-500">ความสามารถ:</span>
                     {integration.supports_availability_check && (
                       <span className="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded">เช็คที่ว่าง</span>
@@ -451,14 +452,14 @@ export default function IntegrationsPage() {
               </div>
               
               {/* Right: Actions */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap border-t lg:border-t-0 pt-3 lg:pt-0 flex-shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleCheckTourCount(integration.id, integration.wholesaler_name)}
                   disabled={!integration.is_active || tourCountModal.loading && tourCountModal.integrationId === integration.id}
                   title="ตรวจสอบจำนวนทัวร์จาก API"
-                  className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                  className="bg-blue-50 hover:bg-blue-100 border-blue-200 flex-1 sm:flex-none"
                 >
                   {tourCountModal.loading && tourCountModal.integrationId === integration.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -474,6 +475,7 @@ export default function IntegrationsPage() {
                   onClick={() => handleSyncNow(integration.id)}
                   disabled={!integration.is_active || syncing === integration.id}
                   title="ดึงข้อมูลทัวร์จาก Wholesaler ทันที"
+                  className="flex-1 sm:flex-none"
                 >
                   {syncing === integration.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
