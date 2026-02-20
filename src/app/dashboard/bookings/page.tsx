@@ -232,9 +232,10 @@ export default function BookingsPage() {
         page,
         per_page: 20,
       });
-      setBookings(res.data || []);
-      setTotalPages(res.last_page || 1);
-      setTotal(res.total || 0);
+      const bookingData = res.data;
+      setBookings(bookingData?.data || []);
+      setTotalPages(bookingData?.last_page || 1);
+      setTotal(bookingData?.total || 0);
     } catch (err) {
       console.error('Failed to fetch bookings', err);
     } finally {
@@ -245,7 +246,7 @@ export default function BookingsPage() {
   const fetchStats = useCallback(async () => {
     try {
       const res = await bookingsApi.statistics();
-      setStats(res);
+      setStats(res.data || null);
     } catch (err) {
       console.error('Failed to fetch stats', err);
     }
