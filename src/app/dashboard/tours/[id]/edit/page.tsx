@@ -38,6 +38,7 @@ import {
   Link2,
   Copy,
   Pencil,
+  Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -589,6 +590,23 @@ export default function EditTourPage() {
   const [deletingCity, setDeletingCity] = useState<number | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadingCustomImage, setUploadingCustomImage] = useState(false);
+  const [uploadingCustomPdf, setUploadingCustomPdf] = useState(false);
+  const [mediaInfo, setMediaInfo] = useState<{
+    api_cover_image_url: string | null;
+    api_cover_image_alt: string | null;
+    api_pdf_url: string | null;
+    custom_cover_image_url: string | null;
+    custom_cover_image_alt: string | null;
+    custom_pdf_url: string | null;
+    generate_pdf_url: string | null;
+    cover_image_source: string;
+    pdf_source: string;
+    effective_cover_image_url: string | null;
+    effective_cover_image_alt: string | null;
+    effective_pdf_url: string | null;
+  } | null>(null);
+
   const [transports, setTransports] = useState<{ id: number; code: string; name: string; type: string; image?: string }[]>([]);
   const [transportSearch, setTransportSearch] = useState('');
   const [showTransportDropdown, setShowTransportDropdown] = useState(false);
@@ -770,6 +788,15 @@ export default function EditTourPage() {
     };
     fetchData();
   }, [tourId]);
+
+  // Load media info when tour is loaded
+  useEffect(() => {
+    if (tour?.id) {
+      toursApi.getMediaInfo(tour.id).then(res => {
+        if (res.success && res.data) setMediaInfo(res.data);
+      }).catch(err => console.error('Load media info:', err));
+    }
+  }, [tour?.id]);
 
   // Load periods when tab changes to periods or view (for preview)
   useEffect(() => {
@@ -1083,6 +1110,138 @@ export default function EditTourPage() {
     } finally {
       setUploadingPdf(false);
     }
+  };
+
+  // ===== Custom Media Override Handlers =====
+  const loadMediaInfo = async () => {
+    if (!tour) return;
+    try {
+      const result = await toursApi.getMediaInfo(tour.id);
+      if (result.success && result.data) {
+        setMediaInfo(result.data);
+      }
+    } catch (error) {
+      console.error('Load media info error:', error);
+    }
+  };
+
+  const handleUploadCustomImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !tour) return;
+
+    setUploadingCustomImage(true);
+    try {
+      const alt = `${formData.tour_code}-${formData.title}-custom`;
+      const result = await toursApi.uploadCustomCoverImage(tour.id, file, alt);
+      if (result.success && result.data) {
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          custom_cover_image_url: result.data!.custom_cover_image_url,
+          custom_cover_image_alt: result.data!.custom_cover_image_alt || null,
+          cover_image_source: result.data!.cover_image_source,
+          effective_cover_image_url: result.data!.effective_cover_image_url,
+          effective_cover_image_alt: result.data!.effective_cover_image_alt || null,
+        } : null);
+        alert('อัปโหลดรูปปก Custom สำเร็จ');
+      } else {
+        alert(result.message || 'อัปโหลดล้มเหลว');
+      }
+    } catch (error) {
+      console.error('Upload custom image error:', error);
+      alert('เกิดข้อผิดพลาดในการอัปโหลด');
+    } finally {
+      setUploadingCustomImage(false);
+    }
+  };
+
+  const handleUploadCustomPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !tour) return;
+
+    setUploadingCustomPdf(true);
+    try {
+      const result = await toursApi.uploadCustomPdf(tour.id, file);
+      if (result.success && result.data) {
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          custom_pdf_url: result.data!.custom_pdf_url,
+          pdf_source: result.data!.pdf_source,
+          effective_pdf_url: result.data!.effective_pdf_url,
+        } : null);
+        alert('อัปโหลด PDF Custom สำเร็จ');
+      } else {
+        alert(result.message || 'อัปโหลด PDF ล้มเหลว');
+      }
+    } catch (error) {
+      console.error('Upload custom PDF error:', error);
+      alert('เกิดข้อผิดพลาดในการอัปโหลด PDF');
+    } finally {
+      setUploadingCustomPdf(false);
+    }
+  };
+
+  const handleSetMediaSource = async (field: 'cover_image' | 'pdf', source: 'api' | 'custom' | 'generate') => {
+    if (!tour) return;
+    try {
+      const result = await toursApi.setMediaSource(tour.id, field, source);
+      if (result.success && result.data) {
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          cover_image_source: result.data!.cover_image_source,
+          pdf_source: result.data!.pdf_source,
+          effective_cover_image_url: result.data!.effective_cover_image_url,
+          effective_cover_image_alt: result.data!.effective_cover_image_alt || null,
+          effective_pdf_url: result.data!.effective_pdf_url,
+        } : null);
+      } else {
+        alert(result.message || 'เปลี่ยนแหล่งข้อมูลล้มเหลว');
+      }
+    } catch (error) {
+      console.error('Set media source error:', error);
+      alert('เกิดข้อผิดพลาด');
+    }
+  };
+
+  const handleRemoveCustomImage = async () => {
+    if (!tour || !confirm('ต้องการลบรูปปก Custom หรือไม่? จะกลับไปใช้รูปจาก API')) return;
+    try {
+      const result = await toursApi.removeCustomCoverImage(tour.id);
+      if (result.success && result.data) {
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          custom_cover_image_url: null,
+          custom_cover_image_alt: null,
+          cover_image_source: 'api',
+          effective_cover_image_url: result.data!.effective_cover_image_url,
+          effective_cover_image_alt: result.data!.effective_cover_image_alt || null,
+        } : null);
+      }
+    } catch (error) {
+      console.error('Remove custom image error:', error);
+    }
+  };
+
+  const handleRemoveCustomPdf = async () => {
+    if (!tour || !confirm('ต้องการลบ PDF Custom หรือไม่? จะกลับไปใช้ PDF จาก API')) return;
+    try {
+      const result = await toursApi.removeCustomPdf(tour.id);
+      if (result.success && result.data) {
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          custom_pdf_url: null,
+          pdf_source: 'api',
+          effective_pdf_url: result.data!.effective_pdf_url,
+        } : null);
+      }
+    } catch (error) {
+      console.error('Remove custom PDF error:', error);
+    }
+  };
+
+  const handleGeneratePdf = () => {
+    if (!tour) return;
+    const url = toursApi.getGeneratePdfUrl(tour.id);
+    window.open(url, '_blank');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -3561,168 +3720,229 @@ export default function EditTourPage() {
 
   const renderMediaTab = () => (
     <div className="space-y-6">
+      {/* 2-column layout: Left = รูปปก, Right = PDF */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cover Image Section */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-gray-600" />
-              <h4 className="font-semibold text-gray-900">รูปปก (Cover Image)</h4>
-            </div>
-            <div className="flex gap-2">
-              <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">600×600</span>
-              <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">WebP</span>
+
+        {/* ===== LEFT CARD: กำหนดรูปภาพ ===== */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-blue-600" /> กำหนดรูปปก
+            </h3>
+            <div className="flex gap-1.5">
+              {[
+                { value: 'api' as const, label: 'API', color: 'blue' },
+                { value: 'custom' as const, label: 'Custom', color: 'purple' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    if (opt.value === 'custom' && !mediaInfo?.custom_cover_image_url) { alert('กรุณาอัปโหลดรูป Custom ก่อน'); return; }
+                    handleSetMediaSource('cover_image', opt.value);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                    mediaInfo?.cover_image_source === opt.value
+                      ? `bg-${opt.color}-100 text-${opt.color}-700 ring-1 ring-${opt.color}-400`
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className={`w-3 h-3 rounded-full border-[1.5px] flex items-center justify-center ${mediaInfo?.cover_image_source === opt.value ? `border-${opt.color}-500` : 'border-gray-400'}`}>
+                    {mediaInfo?.cover_image_source === opt.value && <div className={`w-1.5 h-1.5 rounded-full bg-${opt.color}-500`} />}
+                  </div>
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
-          
-          <p className="text-sm text-gray-500 mb-4">รูปจะถูก resize และแปลงเป็น WebP อัตโนมัติ</p>
-          
-          {/* ชื่อไฟล์ที่จะใช้ */}
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-600 mb-1">ชื่อไฟล์และ Alt ที่จะใช้:</p>
-            <p className="text-sm font-medium text-blue-900 break-all">
-              {formData.tour_code && formData.title 
-                ? `${formData.tour_code}-${formData.title}.webp`
-                : 'กรุณากรอก รหัสทัวร์ และ ชื่อทัวร์ ก่อน'}
-            </p>
-          </div>
-          
-          {/* Preview */}
-          {(formData.cover_image_url || tour?.cover_image_url) ? (
-            <div className="mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={formData.cover_image_url || tour?.cover_image_url || ''}
-                alt="Cover preview"
-                className="w-48 h-48 object-cover rounded-lg border border-gray-200"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            </div>
-          ) : (
-            <div className="mb-4 w-48 h-48 bg-gray-50 rounded-lg border border-gray-200 border-dashed flex flex-col items-center justify-center">
-              <ImageIcon className="w-10 h-10 text-gray-300" />
-              <span className="text-gray-400 text-sm mt-2">ยังไม่มีรูป</span>
-            </div>
-          )}
-          
-          {/* Upload Zone */}
-          <label className="block cursor-pointer">
-            <input type="file" accept="image/*" onChange={handleUploadImage} disabled={uploadingImage} className="hidden" />
-            <div className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-              uploadingImage 
-                ? 'border-gray-300 bg-gray-50' 
-                : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-            }`}>
-              {uploadingImage ? (
-                <div className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                  <span className="text-gray-600">กำลังอัปโหลด...</span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2">
-                  <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-600">คลิกเพื่ออัปโหลดรูปภาพ</span>
-                </div>
-              )}
-            </div>
-          </label>
-          
-          {/* URL Input */}
-          <div className="mt-4 space-y-3">
+          <div className="p-5 space-y-5">
+            {/* API Image */}
             <div>
-              <label className="block text-sm text-gray-600 mb-1">หรือใส่ URL</label>
-              <input
-                type="url"
-                name="cover_image_url"
-                value={formData.cover_image_url}
-                onChange={handleChange}
-                placeholder="https://..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
+              <p className="text-sm font-medium text-gray-700 mb-2">รูปจาก API</p>
+              <div className="flex items-start gap-4">
+                <div className="w-32 h-32 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex-shrink-0">
+                  {(formData.cover_image_url || tour?.cover_image_url) ? (
+                    <img src={formData.cover_image_url || tour?.cover_image_url || ''} alt="API" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+                      <ImageIcon className="w-8 h-8" />
+                      <span className="text-xs mt-1">ไม่มีรูป</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 pt-1">
+                  <p className="text-sm text-gray-500 mb-3">อัปโหลดเพื่อเปลี่ยนรูป API</p>
+                  <label className="block cursor-pointer">
+                    <input type="file" accept="image/*" onChange={handleUploadImage} disabled={uploadingImage} className="hidden" />
+                    <div className={`rounded-lg border border-dashed py-2.5 text-center text-sm transition-colors ${uploadingImage ? 'border-gray-200 text-gray-400' : 'border-blue-300 hover:bg-blue-50 text-blue-600'}`}>
+                      {uploadingImage ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />อัปโหลด...</> : <><Upload className="w-4 h-4 inline mr-1.5" />เปลี่ยนรูป</>}
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
+
+            <hr className="border-gray-100" />
+
+            {/* Custom Image */}
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Alt Text</label>
-              <input
-                type="text"
-                name="cover_image_alt"
-                value={formData.cover_image_alt}
-                onChange={handleChange}
-                placeholder="คำอธิบายรูปภาพ"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
+              <p className="text-sm font-medium text-gray-700 mb-2">รูป Custom</p>
+              <div className="flex items-start gap-4">
+                <div className="w-32 h-32 rounded-lg border border-purple-200 overflow-hidden bg-purple-50/30 flex-shrink-0 relative group">
+                  {mediaInfo?.custom_cover_image_url ? (
+                    <>
+                      <img src={mediaInfo.custom_cover_image_url} alt="Custom" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <button onClick={handleRemoveCustomImage} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="ลบ">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-purple-300">
+                      <Wand2 className="w-8 h-8" />
+                      <span className="text-xs mt-1">ยังไม่มี</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 pt-1">
+                  <p className="text-sm text-gray-500 mb-3">อัปโหลดรูปที่ต้องการใช้แทน</p>
+                  <label className="block cursor-pointer">
+                    <input type="file" accept="image/*" onChange={handleUploadCustomImage} disabled={uploadingCustomImage} className="hidden" />
+                    <div className={`rounded-lg border border-dashed py-2.5 text-center text-sm transition-colors ${uploadingCustomImage ? 'border-gray-200 text-gray-400' : 'border-purple-300 hover:bg-purple-50 text-purple-600'}`}>
+                      {uploadingCustomImage ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />อัปโหลด...</> : <><Upload className="w-4 h-4 inline mr-1.5" />อัปโหลดรูป Custom</>}
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* PDF Section */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="w-5 h-5 text-gray-600" />
-            <h4 className="font-semibold text-gray-900">ไฟล์ PDF โปรแกรมทัวร์</h4>
-          </div>
-          
-          <p className="text-sm text-gray-500 mb-4">อัปโหลดไฟล์ PDF รายละเอียดโปรแกรมทัวร์</p>
-          
-          {/* Preview */}
-          {(formData.pdf_url || tour?.pdf_url) ? (
-            <a
-              href={formData.pdf_url || tour?.pdf_url || ''}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <FileText className="w-8 h-8 text-red-500" />
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">โปรแกรมทัวร์.pdf</p>
-                  <p className="text-sm text-gray-500">คลิกเพื่อเปิดดู</p>
-                </div>
-                <Eye className="w-5 h-5 text-gray-400" />
-              </div>
-            </a>
-          ) : (
-            <div className="mb-4 p-6 bg-gray-50 rounded-lg border border-gray-200 border-dashed text-center">
-              <FileText className="w-10 h-10 text-gray-300 mx-auto" />
-              <span className="text-gray-400 text-sm mt-2 block">ยังไม่มีไฟล์ PDF</span>
+        {/* ===== RIGHT CARD: กำหนด PDF ===== */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" /> กำหนด PDF
+            </h3>
+            <div className="flex gap-1.5">
+              {[
+                { value: 'api' as const, label: 'API', color: 'blue' },
+                { value: 'generate' as const, label: 'สร้างอัตโนมัติ', color: 'emerald' },
+                { value: 'custom' as const, label: 'Custom', color: 'purple' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    if (opt.value === 'custom' && !mediaInfo?.custom_pdf_url) { alert('กรุณาอัปโหลด PDF Custom ก่อน'); return; }
+                    handleSetMediaSource('pdf', opt.value);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                    mediaInfo?.pdf_source === opt.value
+                      ? `bg-${opt.color}-100 text-${opt.color}-700 ring-1 ring-${opt.color}-400`
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className={`w-3 h-3 rounded-full border-[1.5px] flex items-center justify-center ${mediaInfo?.pdf_source === opt.value ? `border-${opt.color}-500` : 'border-gray-400'}`}>
+                    {mediaInfo?.pdf_source === opt.value && <div className={`w-1.5 h-1.5 rounded-full bg-${opt.color}-500`} />}
+                  </div>
+                  {opt.label}
+                </button>
+              ))}
             </div>
-          )}
-          
-          {/* Upload Zone */}
-          <label className="block cursor-pointer">
-            <input type="file" accept=".pdf" onChange={handleUploadPdf} disabled={uploadingPdf} className="hidden" />
-            <div className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-              uploadingPdf 
-                ? 'border-gray-300 bg-gray-50' 
-                : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-            }`}>
-              {uploadingPdf ? (
-                <div className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                  <span className="text-gray-600">กำลังอัปโหลด...</span>
+          </div>
+          <div className="p-5 space-y-5">
+            {/* Generate info */}
+            {mediaInfo?.pdf_source === 'generate' && (
+              <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700">
+                <Wand2 className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                PDF สร้าง real-time จากข้อมูลทัวร์ ลูกค้าเปิดดูจะได้ข้อมูลล่าสุดเสมอ
+              </div>
+            )}
+
+            {/* Preview button */}
+            <button
+              onClick={handleGeneratePdf}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+            >
+              <Eye className="w-4 h-4" /> ดูตัวอย่าง PDF สร้างจากข้อมูล
+            </button>
+
+            {/* API PDF */}
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">PDF จาก API</p>
+              {(formData.pdf_url || tour?.pdf_url) ? (
+                <a href={formData.pdf_url || tour?.pdf_url || ''} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors mb-2">
+                  <FileText className="w-6 h-6 text-red-500 flex-shrink-0" />
+                  <span className="flex-1 truncate text-sm text-gray-700">โปรแกรมทัวร์</span>
+                  <Eye className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                </a>
+              ) : (
+                <div className="flex items-center justify-center px-4 py-4 rounded-lg border border-dashed border-gray-200 mb-2 text-sm text-gray-400">ยังไม่มี PDF</div>
+              )}
+              <label className="block cursor-pointer">
+                <input type="file" accept=".pdf" onChange={handleUploadPdf} disabled={uploadingPdf} className="hidden" />
+                <div className={`rounded-lg border border-dashed py-2.5 text-center text-sm transition-colors ${uploadingPdf ? 'border-gray-200 text-gray-400' : 'border-blue-300 hover:bg-blue-50 text-blue-600'}`}>
+                  {uploadingPdf ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />อัปโหลด...</> : <><Upload className="w-4 h-4 inline mr-1.5" />อัปโหลด PDF</>}
+                </div>
+              </label>
+            </div>
+
+            <hr className="border-gray-100" />
+
+            {/* Custom PDF */}
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">PDF Custom</p>
+              {mediaInfo?.custom_pdf_url ? (
+                <div className="relative group mb-2">
+                  <a href={mediaInfo.custom_pdf_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 rounded-lg border border-purple-200 hover:bg-purple-50 transition-colors">
+                    <FileText className="w-6 h-6 text-purple-600 flex-shrink-0" />
+                    <span className="flex-1 truncate text-sm text-gray-700">PDF Custom</span>
+                    <Eye className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  </a>
+                  <button onClick={handleRemoveCustomPdf} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="ลบ">
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-2">
-                  <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-600">คลิกเพื่ออัปโหลด PDF</span>
-                </div>
+                <div className="flex items-center justify-center px-4 py-4 rounded-lg border border-dashed border-purple-200 mb-2 text-sm text-purple-400">ยังไม่มี</div>
               )}
+              <label className="block cursor-pointer">
+                <input type="file" accept=".pdf" onChange={handleUploadCustomPdf} disabled={uploadingCustomPdf} className="hidden" />
+                <div className={`rounded-lg border border-dashed py-2.5 text-center text-sm transition-colors ${uploadingCustomPdf ? 'border-gray-200 text-gray-400' : 'border-purple-300 hover:bg-purple-50 text-purple-600'}`}>
+                  {uploadingCustomPdf ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />อัปโหลด...</> : <><Upload className="w-4 h-4 inline mr-1.5" />อัปโหลด PDF Custom</>}
+                </div>
+              </label>
             </div>
-          </label>
-          
-          {/* URL Input */}
-          <div className="mt-4">
-            <label className="block text-sm text-gray-600 mb-1">หรือใส่ URL</label>
-            <input
-              type="url"
-              name="pdf_url"
-              value={formData.pdf_url}
-              onChange={handleChange}
-              placeholder="https://..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
           </div>
         </div>
+
       </div>
+
+      {/* ===== Advanced ===== */}
+      <details className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <summary className="px-5 py-3 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm font-medium text-gray-500">
+          <Link2 className="w-4 h-4" /> แก้ไข URL โดยตรง (Advanced)
+        </summary>
+        <div className="p-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Cover Image URL</label>
+              <input type="url" name="cover_image_url" value={formData.cover_image_url} onChange={handleChange} placeholder="https://..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Cover Image Alt</label>
+              <input type="text" name="cover_image_alt" value={formData.cover_image_alt} onChange={handleChange} placeholder="คำอธิบายรูปภาพ" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">PDF URL</label>
+              <input type="url" name="pdf_url" value={formData.pdf_url} onChange={handleChange} placeholder="https://..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div className="flex items-end">
+              <button onClick={loadMediaInfo} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm transition-colors flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" /> รีเฟรช
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
   );
 
@@ -3742,10 +3962,10 @@ export default function EditTourPage() {
           <div className="group bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
             {/* Cover Image - Clean, No Overlay */}
             <div className="relative w-full aspect-square overflow-hidden">
-              {formData.cover_image_url ? (
+              {(mediaInfo?.effective_cover_image_url || formData.cover_image_url) ? (
                 <img
-                  src={formData.cover_image_url}
-                  alt={formData.cover_image_alt || formData.title}
+                  src={mediaInfo?.effective_cover_image_url || formData.cover_image_url}
+                  alt={mediaInfo?.effective_cover_image_alt || formData.cover_image_alt || formData.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
               ) : (
@@ -3933,12 +4153,12 @@ export default function EditTourPage() {
               {/* Thumbnails - Show cover + gallery images */}
               <div className="w-20 flex flex-col gap-1 p-1 bg-gray-50">
                 {/* Cover image as first thumbnail */}
-                {formData.cover_image_url && (
+                {(mediaInfo?.effective_cover_image_url || formData.cover_image_url) && (
                   <div 
                     onClick={() => setSelectedPreviewImage(-1)}
                     className={`aspect-square rounded overflow-hidden cursor-pointer border-2 ${selectedPreviewImage === -1 ? 'border-orange-500' : 'border-transparent hover:border-orange-300'}`}
                   >
-                    <img src={formData.cover_image_url} alt="" className="w-full h-full object-cover" />
+                    <img src={mediaInfo?.effective_cover_image_url || formData.cover_image_url} alt="" className="w-full h-full object-cover" />
                   </div>
                 )}
                 {/* Gallery images */}
@@ -3972,10 +4192,10 @@ export default function EditTourPage() {
               {/* Main Image */}
               <div className="w-72 h-72 relative flex-shrink-0">
                 {/* Show selected image */}
-                {selectedPreviewImage === -1 && formData.cover_image_url ? (
+                {selectedPreviewImage === -1 && (mediaInfo?.effective_cover_image_url || formData.cover_image_url) ? (
                   <img
-                    src={formData.cover_image_url}
-                    alt={formData.cover_image_alt || formData.title}
+                    src={mediaInfo?.effective_cover_image_url || formData.cover_image_url}
+                    alt={mediaInfo?.effective_cover_image_alt || formData.cover_image_alt || formData.title}
                     className="w-72 h-72 object-cover"
                   />
                 ) : selectedPreviewImage >= 0 && galleryImages[selectedPreviewImage] ? (

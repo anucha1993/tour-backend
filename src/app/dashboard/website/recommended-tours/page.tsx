@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Card, Input } from '@/components/ui';
 import {
   Star,
@@ -27,6 +27,8 @@ import {
   Weight,
   CalendarClock,
   Save,
+  Pin,
+  Check,
 } from 'lucide-react';
 import {
   recommendedToursApi,
@@ -96,6 +98,17 @@ interface PreviewTour {
   image_url: string | null;
 }
 
+interface PinnedTourInfo {
+  id: number;
+  title: string;
+  tour_code: string;
+  country_name: string;
+  days: number;
+  nights: number;
+  price: number | null;
+  image_url: string | null;
+}
+
 export default function RecommendedToursPage() {
   // State
   const [sections, setSections] = useState<RecommendedTourSection[]>([]);
@@ -127,6 +140,7 @@ export default function RecommendedToursPage() {
     name: '',
     description: '',
     conditions: [],
+    pinned_tour_ids: [],
     display_limit: 8,
     sort_by: 'popular',
     sort_order: 0,
@@ -135,6 +149,14 @@ export default function RecommendedToursPage() {
     schedule_end: null,
     is_active: true,
   });
+
+  // Pinned tours state
+  const [pinnedTours, setPinnedTours] = useState<PinnedTourInfo[]>([]);
+  const [tourSearchQuery, setTourSearchQuery] = useState('');
+  const [tourSearchResults, setTourSearchResults] = useState<PinnedTourInfo[]>([]);
+  const [searchingTours, setSearchingTours] = useState(false);
+  const [showTourSearch, setShowTourSearch] = useState(false);
+  const tourSearchDebounce = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch sections
   const fetchSections = useCallback(async () => {
@@ -198,6 +220,7 @@ export default function RecommendedToursPage() {
       name: '',
       description: '',
       conditions: [],
+      pinned_tour_ids: [],
       display_limit: 8,
       sort_by: 'popular',
       sort_order: 0,
@@ -208,6 +231,10 @@ export default function RecommendedToursPage() {
     });
     setEditSection(null);
     setInlinePreviewTours([]);
+    setPinnedTours([]);
+    setTourSearchQuery('');
+    setTourSearchResults([]);
+    setShowTourSearch(false);
   };
 
   // Inline preview
@@ -217,6 +244,7 @@ export default function RecommendedToursPage() {
     try {
       const response = await recommendedToursApi.previewConditions({
         conditions: formData.conditions || [],
+        pinned_tour_ids: formData.pinned_tour_ids || [],
         sort_by: formData.sort_by || 'popular',
         display_limit: Math.min(50, formData.display_limit || 8),
       });
@@ -283,6 +311,7 @@ export default function RecommendedToursPage() {
       name: section.name,
       description: section.description || '',
       conditions: section.conditions || [],
+      pinned_tour_ids: section.pinned_tour_ids || [],
       display_limit: section.display_limit,
       sort_by: section.sort_by,
       sort_order: section.sort_order,
@@ -293,6 +322,91 @@ export default function RecommendedToursPage() {
     });
     setInlinePreviewTours([]);
     setShowModal(true);
+
+    // Load pinned tour details
+    if (section.pinned_tour_ids && section.pinned_tour_ids.length > 0) {
+      loadPinnedTourDetails(section.pinned_tour_ids);
+    } else {
+      setPinnedTours([]);
+    }
+  };
+
+  // Load pinned tour details by IDs
+  const loadPinnedTourDetails = async (ids: number[]) => {
+    if (ids.length === 0) { setPinnedTours([]); return; }
+    try {
+      // Search with empty query to get all, then filter by IDs
+      // We'll fetch details for each pinned tour
+      const response = await recommendedToursApi.searchTours('');
+      if (response?.data) {
+        const allTours = response.data as PinnedTourInfo[];
+        const matched = ids
+          .map(id => allTours.find(t => t.id === id))
+          .filter(Boolean) as PinnedTourInfo[];
+        setPinnedTours(matched);
+
+        // For tours not found in first 30, search individually
+        const missingIds = ids.filter(id => !matched.find(t => t.id === id));
+        if (missingIds.length > 0) {
+          for (const mid of missingIds) {
+            const res2 = await recommendedToursApi.searchTours(String(mid));
+            if (res2?.data) {
+              const found = (res2.data as PinnedTourInfo[]).find(t => t.id === mid);
+              if (found) {
+                setPinnedTours(prev => {
+                  const idx = ids.indexOf(mid);
+                  const updated = [...prev];
+                  updated.splice(idx, 0, found);
+                  return updated;
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load pinned tour details:', error);
+    }
+  };
+
+  // Search tours for pinning (debounced)
+  const handleTourSearch = (query: string) => {
+    setTourSearchQuery(query);
+    if (tourSearchDebounce.current) clearTimeout(tourSearchDebounce.current);
+    if (!query.trim()) {
+      setTourSearchResults([]);
+      return;
+    }
+    setSearchingTours(true);
+    tourSearchDebounce.current = setTimeout(async () => {
+      try {
+        const response = await recommendedToursApi.searchTours(query);
+        if (response?.data) {
+          setTourSearchResults(response.data as PinnedTourInfo[]);
+        }
+      } catch (error) {
+        console.error('Tour search failed:', error);
+      } finally {
+        setSearchingTours(false);
+      }
+    }, 400);
+  };
+
+  // Add a tour to pinned list
+  const addPinnedTour = (tour: PinnedTourInfo) => {
+    const currentIds = formData.pinned_tour_ids || [];
+    if (currentIds.includes(tour.id)) return;
+    setFormData({ ...formData, pinned_tour_ids: [...currentIds, tour.id] });
+    setPinnedTours(prev => [...prev, tour]);
+  };
+
+  // Remove a tour from pinned list
+  const removePinnedTour = (tourId: number) => {
+    setFormData({
+      ...formData,
+      pinned_tour_ids: (formData.pinned_tour_ids || []).filter(id => id !== tourId),
+    });
+    setPinnedTours(prev => prev.filter(t => t.id !== tourId));
   };
 
   // Preview saved section
@@ -599,6 +713,15 @@ export default function RecommendedToursPage() {
                       <Filter className="w-3.5 h-3.5" />
                       {getConditionSummary(section.conditions)}
                     </span>
+                    {section.pinned_tour_ids && section.pinned_tour_ids.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <Pin className="w-3.5 h-3.5" />
+                          ปักหมุด {section.pinned_tour_ids.length} ทัวร์
+                        </span>
+                      </>
+                    )}
                     <span>•</span>
                     <span>จำกัด {section.display_limit} ทัวร์</span>
                     <span>•</span>
@@ -949,6 +1072,139 @@ export default function RecommendedToursPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* ── Pinned Tours (Manual Selection) ── */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                    <Pin className="w-4 h-4 text-blue-500" />
+                    ปักหมุดทัวร์ (เลือกเอง)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTourSearch(!showTourSearch)}
+                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    {showTourSearch ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                    {showTourSearch ? 'ปิดค้นหา' : 'เพิ่มทัวร์'}
+                  </button>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                  <div className="flex items-start gap-2">
+                    <Pin className="w-4 h-4 text-blue-500 mt-0.5" />
+                    <p className="text-sm text-blue-700">
+                      ทัวร์ที่ปักหมุดจะ<strong>แสดงก่อนเสมอ</strong> (อันดับต้น) จากนั้นจะเติมด้วยทัวร์จากเงื่อนไขจนครบจำนวนที่กำหนด
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tour Search Box */}
+                {showTourSearch && (
+                  <div className="mb-3 border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="p-3 bg-gray-50 border-b border-gray-200">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="ค้นหาทัวร์ด้วยชื่อหรือรหัสทัวร์..."
+                          value={tourSearchQuery}
+                          onChange={(e) => handleTourSearch(e.target.value)}
+                        />
+                        {searchingTours && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                        )}
+                      </div>
+                    </div>
+                    {tourSearchResults.length > 0 && (
+                      <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+                        {tourSearchResults.map(tour => {
+                          const isPinned = (formData.pinned_tour_ids || []).includes(tour.id);
+                          return (
+                            <button
+                              key={tour.id}
+                              type="button"
+                              onClick={() => !isPinned && addPinnedTour(tour)}
+                              disabled={isPinned}
+                              className={`w-full text-left px-3 py-2 flex items-center gap-3 text-sm transition ${
+                                isPinned ? 'bg-blue-50 opacity-60 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'
+                              }`}
+                            >
+                              {isPinned ? (
+                                <Check className="w-4 h-4 text-blue-500 shrink-0" />
+                              ) : (
+                                <Plus className="w-4 h-4 text-gray-400 shrink-0" />
+                              )}
+                              <span className="text-gray-400 text-xs font-mono shrink-0">{tour.tour_code}</span>
+                              <span className="flex-1 truncate">{tour.title}</span>
+                              <span className="text-xs text-gray-500 shrink-0">{tour.country_name}</span>
+                              <span className="text-xs text-gray-500 shrink-0">{tour.days}D{tour.nights}N</span>
+                              {tour.price && (
+                                <span className="text-xs font-medium text-blue-600 shrink-0">
+                                  ฿{Number(tour.price).toLocaleString()}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {tourSearchQuery && !searchingTours && tourSearchResults.length === 0 && (
+                      <div className="p-4 text-center text-sm text-gray-400">
+                        ไม่พบทัวร์ที่ตรงกับ &quot;{tourSearchQuery}&quot;
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Pinned Tour List */}
+                {pinnedTours.length > 0 ? (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 border-b border-blue-200 flex items-center gap-1.5">
+                      <Pin className="w-3.5 h-3.5" />
+                      ปักหมุด {pinnedTours.length} ทัวร์
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {pinnedTours.map((tour, idx) => (
+                        <div key={tour.id} className="px-3 py-2 flex items-center gap-3 text-sm bg-white">
+                          <span className="text-xs font-bold text-blue-500 w-5 text-center">{idx + 1}</span>
+                          <span className="text-gray-400 text-xs font-mono">{tour.tour_code}</span>
+                          <span className="flex-1 truncate">{tour.title}</span>
+                          <span className="text-xs text-gray-500">{tour.country_name}</span>
+                          <span className="text-xs text-gray-500">{tour.days}D{tour.nights}N</span>
+                          {tour.price && (
+                            <span className="text-xs font-medium text-blue-600">
+                              ฿{Number(tour.price).toLocaleString()}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removePinnedTour(tour.id)}
+                            className="p-1 text-gray-400 hover:text-red-500 transition"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  !showTourSearch && (
+                    <div className="text-center py-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <Pin className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                      <p className="text-sm text-gray-400">ยังไม่ได้ปักหมุดทัวร์</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowTourSearch(true)}
+                        className="text-xs text-blue-600 hover:text-blue-700 mt-1"
+                      >
+                        + ค้นหาทัวร์เพื่อปักหมุด
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
 
               {/* Inline Preview */}

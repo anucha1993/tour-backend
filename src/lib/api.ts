@@ -208,6 +208,7 @@ export interface RecommendedTourSection {
   name: string;
   description: string | null;
   conditions: TourTabCondition[] | null;
+  pinned_tour_ids: number[] | null;
   display_limit: number;
   sort_by: 'popular' | 'price_asc' | 'price_desc' | 'newest' | 'departure_date';
   sort_order: number;
@@ -1039,6 +1040,90 @@ export const toursApi = {
       body: formData,
     });
     return response.json() as Promise<ApiResponse<{ pdf_url: string }>>;
+  },
+
+  // Custom Media Override APIs
+  uploadCustomCoverImage: async (id: number, file: File, alt?: string) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (alt) formData.append('alt', alt);
+
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/tours/${id}/upload-custom-cover-image`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    return response.json() as Promise<ApiResponse<{
+      custom_cover_image_url: string;
+      custom_cover_image_alt?: string;
+      cover_image_source: string;
+      effective_cover_image_url: string;
+      effective_cover_image_alt?: string;
+    }>>;
+  },
+
+  uploadCustomPdf: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/tours/${id}/upload-custom-pdf`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    return response.json() as Promise<ApiResponse<{
+      custom_pdf_url: string;
+      pdf_source: string;
+      effective_pdf_url: string;
+    }>>;
+  },
+
+  setMediaSource: (id: number, field: 'cover_image' | 'pdf', source: 'api' | 'custom' | 'generate') =>
+    apiRequest<{
+      cover_image_source: string;
+      pdf_source: string;
+      effective_cover_image_url: string;
+      effective_cover_image_alt?: string;
+      effective_pdf_url: string;
+    }>(`/tours/${id}/set-media-source`, {
+      method: 'POST',
+      body: JSON.stringify({ field, source }),
+    }),
+
+  getMediaInfo: (id: number) =>
+    apiRequest<{
+      api_cover_image_url: string | null;
+      api_cover_image_alt: string | null;
+      api_pdf_url: string | null;
+      custom_cover_image_url: string | null;
+      custom_cover_image_alt: string | null;
+      custom_pdf_url: string | null;
+      generate_pdf_url: string | null;
+      cover_image_source: string;
+      pdf_source: string;
+      effective_cover_image_url: string | null;
+      effective_cover_image_alt: string | null;
+      effective_pdf_url: string | null;
+    }>(`/tours/${id}/media-info`),
+
+  removeCustomCoverImage: (id: number) =>
+    apiRequest<{
+      cover_image_source: string;
+      effective_cover_image_url: string;
+      effective_cover_image_alt?: string;
+    }>(`/tours/${id}/custom-cover-image`, { method: 'DELETE' }),
+
+  removeCustomPdf: (id: number) =>
+    apiRequest<{
+      pdf_source: string;
+      effective_pdf_url: string;
+    }>(`/tours/${id}/custom-pdf`, { method: 'DELETE' }),
+
+  /** Get URL for realtime PDF preview (opens in browser) */
+  getGeneratePdfUrl: (id: number): string => {
+    return `${API_BASE_URL}/tours/${id}/generate-pdf`;
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3022,6 +3107,7 @@ export const recommendedToursApi = {
 
   previewConditions: (data: {
     conditions?: TourTabCondition[];
+    pinned_tour_ids?: number[];
     display_limit?: number;
     sort_by?: string;
   }) =>
@@ -3042,6 +3128,19 @@ export const recommendedToursApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  searchTours: (q?: string) =>
+    apiRequest<Array<{
+      id: number;
+      title: string;
+      tour_code: string;
+      country_name: string;
+      days: number;
+      nights: number;
+      price: number | null;
+      image_url: string | null;
+      status: string;
+    }>>(`/recommended-tours/search-tours?q=${encodeURIComponent(q || '')}`),
 };
 
 // ===================== Dashboard API =====================
@@ -5131,4 +5230,105 @@ export const promotionNotificationsApi = {
       `/promotion-notifications/claims/${claimId}/mark-used`,
       { method: 'PATCH' }
     ),
+};
+
+// ===================== Bookings (admin) =====================
+
+export interface AdminBooking {
+  id: number;
+  booking_code: string;
+  web_member_id: number;
+  tour_id: number;
+  period_id: number;
+  flash_sale_item_id: number | null;
+  qty_adult: number;
+  qty_adult_single: number;
+  qty_child_bed: number;
+  qty_child_nobed: number;
+  price_adult: string;
+  price_single: string;
+  price_child_bed: string;
+  price_child_nobed: string;
+  total_amount: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  sale_code: string | null;
+  special_request: string | null;
+  status: 'pending' | 'confirmed' | 'paid' | 'cancelled' | 'completed';
+  source: 'website' | 'flash_sale';
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+  member?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    avatar?: string;
+  };
+  tour?: {
+    id: number;
+    title: string;
+    slug: string;
+    tour_code: string;
+    duration_days?: number;
+    duration_nights?: number;
+  };
+  period?: {
+    id: number;
+    start_date: string;
+    end_date: string;
+    capacity?: number;
+    booked?: number;
+  };
+  flash_sale_item?: {
+    id: number;
+    flash_price: string;
+    discount_percent: string;
+    flash_sale_id: number;
+    flash_sale?: {
+      id: number;
+      title: string;
+    };
+  };
+}
+
+export interface BookingStatistics {
+  total: number;
+  pending: number;
+  confirmed: number;
+  paid: number;
+  cancelled: number;
+  completed: number;
+  from_flash_sale: number;
+  from_website: number;
+}
+
+export const bookingsApi = {
+  list: (params?: { status?: string; source?: string; search?: string; page?: number; per_page?: number; sort_by?: string; sort_dir?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') searchParams.set(key, String(value));
+      });
+    }
+    return apiRequest<{ data: AdminBooking[]; current_page: number; last_page: number; total: number }>(
+      `/bookings?${searchParams.toString()}`
+    );
+  },
+
+  get: (id: number) =>
+    apiRequest<AdminBooking>(`/bookings/${id}`),
+
+  updateStatus: (id: number, data: { status: string; admin_note?: string }) =>
+    apiRequest<{ success: boolean; message: string; booking: AdminBooking }>(
+      `/bookings/${id}/status`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    ),
+
+  statistics: () =>
+    apiRequest<BookingStatistics>('/bookings/statistics'),
 };

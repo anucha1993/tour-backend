@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { toursApi, TourCounts, groupTourInquiriesApi, contactMessagesApi } from '@/lib/api';
+import { toursApi, TourCounts, groupTourInquiriesApi, contactMessagesApi, bookingsApi } from '@/lib/api';
 import QueueStatus from './QueueStatus';
 import {
   LayoutDashboard,
@@ -62,7 +62,7 @@ interface MenuItem {
 }
 
 // Function to build menu items with counts
-const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContactMsgCount?: number): MenuItem[] => [
+const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContactMsgCount?: number, newBookingCount?: number): MenuItem[] => [
   {
     title: 'แดชบอร์ด',
     href: '/dashboard',
@@ -88,6 +88,12 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
         icon: Search,
       },
     ],
+  },
+  {
+    title: 'ใบจอง',
+    href: '/dashboard/bookings',
+    icon: FileText,
+    badge: newBookingCount,
   },
   {
     title: 'ทัวร์',
@@ -481,6 +487,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
   const [tourCounts, setTourCounts] = useState<TourCounts | null>(null);
   const [newInquiryCount, setNewInquiryCount] = useState(0);
   const [newContactMsgCount, setNewContactMsgCount] = useState(0);
+  const [newBookingCount, setNewBookingCount] = useState(0);
   
   // Fetch tour counts
   useEffect(() => {
@@ -512,17 +519,26 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
         console.error('Failed to fetch contact message count:', error);
       }
     };
+    const fetchBookingCount = async () => {
+      try {
+        const stats = await bookingsApi.statistics() as unknown as { pending?: number };
+        if (stats?.pending !== undefined) setNewBookingCount(stats.pending);
+      } catch (error) {
+        console.error('Failed to fetch booking count:', error);
+      }
+    };
     fetchCounts();
     fetchInquiryCount();
     fetchContactMsgCount();
+    fetchBookingCount();
     
     // Refresh counts every 60 seconds
-    const interval = setInterval(() => { fetchCounts(); fetchInquiryCount(); fetchContactMsgCount(); }, 60000);
+    const interval = setInterval(() => { fetchCounts(); fetchInquiryCount(); fetchContactMsgCount(); fetchBookingCount(); }, 60000);
     return () => clearInterval(interval);
   }, []);
   
   // Build menu items with counts
-  const menuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined, newContactMsgCount || undefined);
+  const menuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined, newContactMsgCount || undefined, newBookingCount || undefined);
   
   // Build current full URL for matching
   const currentUrl = searchParams.toString() 
