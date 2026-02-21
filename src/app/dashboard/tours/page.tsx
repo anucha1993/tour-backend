@@ -10,7 +10,6 @@ import {
   Eye,
   Edit,
   Trash2,
-  Loader2,
   Calendar,
   MapPin,
   Star,
@@ -25,12 +24,18 @@ import {
   XCircle,
   FileEdit,
   Map,
+  Copy,
+  Check,
+  X,
+  Filter,
 } from 'lucide-react';
 import {
   toursApi,
+  countriesApi,
   Tour,
   TourCounts,
   TourTransport,
+  Country,
   TOUR_STATUS,
   TOUR_THEMES,
   TOUR_TYPES,
@@ -38,6 +43,9 @@ import {
 } from '@/lib/api';
 import TourPreviewModal from './TourPreviewModal';
 import TourPeriodsModal from './TourPeriodsModal';
+
+// ─── Date Search Mode ────────────────────────────────────────────
+type DateSearchMode = 'month' | 'range' | 'exact';
 
 // ─── Tab Definitions ─────────────────────────────────────────────
 // Each tab maps to a unique preset filter sent to the API
@@ -93,6 +101,54 @@ export default function ToursPage() {
   const [tourTypeFilter, setTourTypeFilter] = useState('');
   const [themeFilter, setThemeFilter] = useState('');
   const [counts, setCounts] = useState<TourCounts | null>(null);
+  
+  // Additional filters (like search page)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [countryFilter, setCountryFilter] = useState('');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+  const [minPriceFilter, setMinPriceFilter] = useState('');
+  const [maxPriceFilter, setMaxPriceFilter] = useState('');
+  
+  // Date search mode filters
+  const [dateSearchMode, setDateSearchMode] = useState<DateSearchMode>('range');
+  const [departureFrom, setDepartureFrom] = useState('');
+  const [departureTo, setDepartureTo] = useState('');
+  const [departureMonthFrom, setDepartureMonthFrom] = useState('');
+  const [departureMonthTo, setDepartureMonthTo] = useState('');
+  const [exactDeparture, setExactDeparture] = useState('');
+  const [exactReturn, setExactReturn] = useState('');
+  
+  // Sort
+  const [sortBy, setSortBy] = useState('created_at');
+  
+  // Countries from database
+  const [countries, setCountries] = useState<Country[]>([]);
+  
+  // Generate month options for the next 12 months
+  const generateMonthOptions = () => {
+    const months = [];
+    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const thaiMonthsFull = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+    const now = new Date();
+    
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const thaiYear = date.getFullYear() + 543;
+      months.push({
+        value,
+        label: `${thaiMonthsFull[date.getMonth()]} ${thaiYear}`,
+        shortLabel: `${thaiMonths[date.getMonth()]} ${thaiYear.toString().slice(-2)}`
+      });
+    }
+    return months;
+  };
+  
+  const monthOptions = generateMonthOptions();
+  // Copy states
+  const [copiedTourId, setCopiedTourId] = useState<number | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   // Modals
   const [previewTour, setPreviewTour] = useState<Tour | null>(null);
@@ -119,6 +175,19 @@ export default function ToursPage() {
 
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
+  // ─── Fetch countries (once on mount) ───────────────────────────
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const res = await countriesApi.list({ is_active: 'true' });
+        if (res.success && res.data) {
+          setCountries(res.data);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchCountries();
+  }, []);
+
   // ─── Fetch tours ───────────────────────────────────────────────
   const fetchTours = useCallback(async () => {
     // Cancel any in-flight request
@@ -139,6 +208,38 @@ export default function ToursPage() {
       if (search) params.search = search;
       if (tourTypeFilter) params.tour_type = tourTypeFilter;
       if (themeFilter) params.theme = themeFilter;
+      if (countryFilter) params.country_id = countryFilter;
+      if (minPriceFilter) params.min_price = minPriceFilter;
+      if (maxPriceFilter) params.max_price = maxPriceFilter;
+      if (sortBy) {
+        if (sortBy.startsWith('-')) {
+          params.sort_by = sortBy.substring(1);
+          params.sort_dir = 'desc';
+        } else {
+          params.sort_by = sortBy;
+          params.sort_dir = 'asc';
+        }
+      }
+      
+      // Handle date search based on mode
+      if (dateSearchMode === 'month' && departureMonthFrom) {
+        const [startYear, startMonth] = departureMonthFrom.split('-');
+        const startDate = `${startYear}-${startMonth}-01`;
+        const endMonthValue = departureMonthTo || departureMonthFrom;
+        const [endYear, endMonth] = endMonthValue.split('-');
+        const lastDay = new Date(Number(endYear), Number(endMonth), 0).getDate();
+        const endDate = `${endYear}-${endMonth}-${String(lastDay).padStart(2, '0')}`;
+        params.departure_from = startDate;
+        params.departure_to = endDate;
+      } else if (dateSearchMode === 'range') {
+        if (departureFrom) params.departure_from = departureFrom;
+        if (departureTo) params.departure_to = departureTo;
+      } else if (dateSearchMode === 'exact') {
+        if (exactDeparture) {
+          params.departure_from = exactDeparture;
+          params.departure_to = exactDeparture;
+        }
+      }
 
       const response = await toursApi.list(params, controller.signal);
 
@@ -153,9 +254,10 @@ export default function ToursPage() {
           setTotal(response.meta.total);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Abort errors are expected — ignore
-      if (err?.name === 'AbortError' || err?.message === 'The user aborted a request.') return;
+      const error = err as Error & { name?: string };
+      if (error?.name === 'AbortError' || error?.message === 'The user aborted a request.') return;
       if (thisRequestId !== requestIdRef.current) return;
       console.error('Failed to fetch tours:', err);
     } finally {
@@ -163,7 +265,7 @@ export default function ToursPage() {
         setLoading(false);
       }
     }
-  }, [currentPage, search, tourTypeFilter, themeFilter, activeTabDef]);
+  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
 
   useEffect(() => { fetchTours(); }, [fetchTours]);
 
@@ -179,6 +281,18 @@ export default function ToursPage() {
     setSearch('');
     setTourTypeFilter('');
     setThemeFilter('');
+    setCountryFilter('');
+    setCountrySearch('');
+    setMinPriceFilter('');
+    setMaxPriceFilter('');
+    setDateSearchMode('range');
+    setDepartureFrom('');
+    setDepartureTo('');
+    setDepartureMonthFrom('');
+    setDepartureMonthTo('');
+    setExactDeparture('');
+    setExactReturn('');
+    setSortBy('created_at');
     setCurrentPage(1);
     setSelectedTours(new Set());
 
@@ -299,14 +413,89 @@ export default function ToursPage() {
   };
 
   // Check if any additional filter is active (beyond tab preset)
-  const hasAdditionalFilters = tourTypeFilter || themeFilter || search;
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
   
   // Clear additional filters only
   const clearAdditionalFilters = () => {
     setTourTypeFilter('');
     setThemeFilter('');
     setSearch('');
+    setCountryFilter('');
+    setCountrySearch('');
+    setMinPriceFilter('');
+    setMaxPriceFilter('');
+    setDateSearchMode('range');
+    setDepartureFrom('');
+    setDepartureTo('');
+    setDepartureMonthFrom('');
+    setDepartureMonthTo('');
+    setExactDeparture('');
+    setExactReturn('');
+    setSortBy('created_at');
     setCurrentPage(1);
+  };
+
+  // ─── Copy Functions ─────────────────────────────────────────────
+  const formatTourForCopy = (tour: Tour): string => {
+    const code = tour.tour_code || '';
+    const title = tour.title || '';
+    const days = tour.duration_days || '';
+    const nights = tour.duration_nights || '';
+    
+    // Build airline info from transports
+    const airlineNames = tour.transports
+      ?.map(t => t.transport?.name || t.transport_name)
+      .filter((v, i, a) => a.indexOf(v) === i) // unique
+      .join(', ') || '';
+    
+    const formatFullDate = (date: Date) => date.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+    
+    // Get periods for date range
+    const periods = tour.periods || [];
+    let dateRange = '';
+    if (periods.length > 0) {
+      const dates = periods
+        .map(p => p.start_date ? new Date(p.start_date) : null)
+        .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
+      if (dates.length > 0) {
+        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+        dateRange = `${formatFullDate(minDate)} - ${formatFullDate(maxDate)}`;
+      }
+    }
+    
+    // Get price
+    const price = tour.display_price || tour.min_price || '';
+    
+    // Get PDF URL
+    const pdfUrl = tour.pdf_url || '';
+    
+    let text = `รหัสทัวร์ : ${code}\n`;
+    text += `${title} (${days} วัน ${nights} คืน)\n`;
+    if (dateRange) text += `ช่วงเดินทาง : ${dateRange}\n`;
+    if (airlineNames) text += `สายการบิน : ${airlineNames}\n`;
+    if (price) text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(Number(price))}\n`;
+    if (pdfUrl) {
+      text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
+    }
+    
+    return text;
+  };
+
+  // Copy single tour
+  const handleCopyTour = async (tour: Tour) => {
+    const text = formatTourForCopy(tour);
+    await navigator.clipboard.writeText(text);
+    setCopiedTourId(tour.id);
+    setTimeout(() => setCopiedTourId(null), 2000);
+  };
+
+  // Copy all tours
+  const handleCopyAll = async () => {
+    const allText = tours.map(tour => formatTourForCopy(tour)).join('\n\n---\n\n');
+    await navigator.clipboard.writeText(allText);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
   };
 
   return (
@@ -417,16 +606,386 @@ export default function ToursPage() {
               ))}
             </select>
 
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-1 ${
+                showAdvancedFilters ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              ตัวกรองเพิ่มเติม
+            </button>
+
             {hasAdditionalFilters && (
               <button
                 onClick={clearAdditionalFilters}
-                className="px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                className="px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
               >
+                <X className="w-4 h-4" />
                 ล้างตัวกรอง
+              </button>
+            )}
+            
+            {/* Copy All Button */}
+            {tours.length > 0 && (
+              <button
+                onClick={handleCopyAll}
+                disabled={copiedAll}
+                className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-1 ${
+                  copiedAll ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {copiedAll ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copiedAll ? 'คัดลอกแล้ว!' : `คัดลอกทั้งหมด (${tours.length})`}
               </button>
             )}
           </div>
         </div>
+        
+        {/* Advanced Filters Expandable Section */}
+        {showAdvancedFilters && (
+          <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+            {/* Date Search Mode Selection */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="inline w-4 h-4 mr-1" />
+                  รูปแบบการค้นหาวันเดินทาง
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateSearchMode('month');
+                      setDepartureFrom('');
+                      setDepartureTo('');
+                      setExactDeparture('');
+                      setExactReturn('');
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      dateSearchMode === 'month'
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    📅 ค้นหาตามเดือน
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateSearchMode('range');
+                      setDepartureMonthFrom('');
+                      setDepartureMonthTo('');
+                      setExactDeparture('');
+                      setExactReturn('');
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      dateSearchMode === 'range'
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    📆 ค้นหาช่วงวัน
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateSearchMode('exact');
+                      setDepartureMonthFrom('');
+                      setDepartureMonthTo('');
+                      setDepartureFrom('');
+                      setDepartureTo('');
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      dateSearchMode === 'exact'
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    🎯 ค้นหาวันที่ตรงกัน
+                  </button>
+                </div>
+              </div>
+
+              {/* Month Search Mode */}
+              {dateSearchMode === 'month' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-600 mb-2">
+                        <span className="font-medium text-gray-700">เดือนเริ่มต้น</span>
+                        <span className="text-gray-400 ml-1">(คลิกเลือก)</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {monthOptions.map((month) => {
+                          const isStartMonth = departureMonthFrom === month.value;
+                          const isEndMonth = departureMonthTo === month.value;
+                          const isInRange = departureMonthFrom && departureMonthTo && 
+                            month.value >= departureMonthFrom && month.value <= departureMonthTo;
+                          const isOnlyStart = isStartMonth && !departureMonthTo;
+                          
+                          return (
+                            <button
+                              key={month.value}
+                              type="button"
+                              onClick={() => {
+                                if (!departureMonthFrom || (departureMonthFrom && departureMonthTo)) {
+                                  setDepartureMonthFrom(month.value);
+                                  setDepartureMonthTo('');
+                                } else if (month.value < departureMonthFrom) {
+                                  setDepartureMonthFrom(month.value);
+                                } else if (month.value === departureMonthFrom) {
+                                  setDepartureMonthTo(month.value);
+                                } else {
+                                  setDepartureMonthTo(month.value);
+                                }
+                                setCurrentPage(1);
+                              }}
+                              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                isStartMonth || isEndMonth
+                                  ? 'bg-green-500 text-white shadow-md'
+                                  : isInRange
+                                    ? 'bg-green-100 text-green-700 border border-green-300'
+                                    : isOnlyStart
+                                      ? 'bg-green-500 text-white shadow-md ring-2 ring-green-300'
+                                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-green-50 hover:border-green-300'
+                              }`}
+                            >
+                              {month.shortLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Selected Range Display */}
+                  {departureMonthFrom && (
+                    <div className="flex items-center justify-between bg-green-50 rounded-lg px-4 py-2">
+                      <p className="text-sm text-green-700 flex items-center gap-2">
+                        <Check className="w-4 h-4" />
+                        {departureMonthTo && departureMonthTo !== departureMonthFrom ? (
+                          <>
+                            ค้นหาทัวร์ช่วง <strong>{monthOptions.find(m => m.value === departureMonthFrom)?.label}</strong> 
+                            <span className="mx-1">ถึง</span>
+                            <strong>{monthOptions.find(m => m.value === departureMonthTo)?.label}</strong>
+                          </>
+                        ) : (
+                          <>
+                            ค้นหาทัวร์เดือน <strong>{monthOptions.find(m => m.value === departureMonthFrom)?.label}</strong>
+                            {!departureMonthTo && <span className="text-green-600 ml-2">(คลิกเดือนสิ้นสุด หรือคลิกเดือนเดิมเพื่อเลือกเดือนเดียว)</span>}
+                          </>
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setDepartureMonthFrom(''); setDepartureMonthTo(''); }}
+                        className="text-green-600 hover:text-green-800"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Range Search Mode */}
+              {dateSearchMode === 'range' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">วันเดินทางไป</label>
+                    <input
+                      type="date"
+                      value={departureFrom}
+                      onChange={(e) => { setDepartureFrom(e.target.value); setCurrentPage(1); }}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">วันเดินทางกลับ (ถ้ามี)</label>
+                    <input
+                      type="date"
+                      value={departureTo}
+                      min={departureFrom}
+                      onChange={(e) => { setDepartureTo(e.target.value); setCurrentPage(1); }}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Exact Search Mode */}
+              {dateSearchMode === 'exact' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-500">ระบุวันที่ต้องการเดินทางตรงๆ ระบบจะค้นหาทัวร์ที่มีวันเดินทางตรงกับที่ระบุ</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">วันเดินทางไป</label>
+                      <input
+                        type="date"
+                        value={exactDeparture}
+                        onChange={(e) => { setExactDeparture(e.target.value); setCurrentPage(1); }}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">วันเดินทางกลับ (ถ้ามี)</label>
+                      <input
+                        type="date"
+                        value={exactReturn}
+                        min={exactDeparture}
+                        onChange={(e) => { setExactReturn(e.target.value); setCurrentPage(1); }}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Other Filters Grid - Equal Width Columns */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Country - Searchable Dropdown */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <MapPin className="inline w-4 h-4 mr-1" />
+                  ประเทศ
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ค้นหาประเทศ..."
+                    value={countrySearch || countries.find(c => String(c.id) === countryFilter)?.name_th || (countryFilter ? countries.find(c => String(c.id) === countryFilter)?.name_en : '')}
+                    onChange={(e) => {
+                      setCountrySearch(e.target.value);
+                      setCountryDropdownOpen(true);
+                    }}
+                    onFocus={() => setCountryDropdownOpen(true)}
+                    className="w-full pl-3 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {countryFilter && (
+                    <button
+                      onClick={() => {
+                        setCountryFilter('');
+                        setCountrySearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Dropdown List */}
+                {countryDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {/* All option */}
+                    <button
+                      onClick={() => {
+                        setCountryFilter('');
+                        setCountrySearch('');
+                        setCountryDropdownOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between ${
+                        !countryFilter ? 'bg-blue-50 text-blue-700' : ''
+                      }`}
+                    >
+                      <span>ทั้งหมด</span>
+                      {!countryFilter && <span className="text-blue-600">✓</span>}
+                    </button>
+                    {/* Dynamic countries from API */}
+                    {countries
+                      .filter(country => {
+                        if (!countrySearch) return true;
+                        const search = countrySearch.toLowerCase();
+                        return (
+                          country.name_en.toLowerCase().includes(search) ||
+                          (country.name_th?.toLowerCase() || '').includes(search) ||
+                          country.iso2.toLowerCase().includes(search)
+                        );
+                      })
+                      .map((country) => (
+                        <button
+                          key={country.id}
+                          onClick={() => {
+                            setCountryFilter(String(country.id));
+                            setCountrySearch('');
+                            setCountryDropdownOpen(false);
+                            setCurrentPage(1);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between ${
+                            countryFilter === String(country.id) ? 'bg-blue-50 text-blue-700' : ''
+                          }`}
+                        >
+                          <span>
+                            {country.flag_emoji && <span className="mr-2">{country.flag_emoji}</span>}
+                            {country.name_th || country.name_en}
+                            <span className="text-gray-400 ml-1">({country.name_en})</span>
+                          </span>
+                          {countryFilter === String(country.id) && (
+                            <span className="text-blue-600">✓</span>
+                          )}
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+                
+                {/* Click outside to close */}
+                {countryDropdownOpen && (
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => {
+                      setCountryDropdownOpen(false);
+                      setCountrySearch('');
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Price Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">💰 ราคา (บาท)</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    placeholder="ต่ำสุด"
+                    value={minPriceFilter}
+                    onChange={(e) => { setMinPriceFilter(e.target.value); setCurrentPage(1); }}
+                    className="flex-1 min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <span className="text-gray-400 flex-shrink-0">-</span>
+                  <input
+                    type="number"
+                    placeholder="สูงสุด"
+                    value={maxPriceFilter}
+                    onChange={(e) => { setMaxPriceFilter(e.target.value); setCurrentPage(1); }}
+                    className="flex-1 min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">📊 เรียงตาม</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="created_at">วันที่สร้าง (ล่าสุด)</option>
+                  <option value="-created_at">วันที่สร้าง (เก่าสุด)</option>
+                  <option value="display_price">ราคาต่ำ → สูง</option>
+                  <option value="-display_price">ราคาสูง → ต่ำ</option>
+                  <option value="next_departure_date">วันเดินทางใกล้</option>
+                  <option value="title">ชื่อ A-Z</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Tours Table */}
@@ -804,6 +1363,17 @@ export default function ToursPage() {
                     {/* Actions */}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleCopyTour(tour)}
+                          className={`p-1.5 rounded transition-colors ${
+                            copiedTourId === tour.id 
+                              ? 'bg-green-100 text-green-600' 
+                              : 'hover:bg-gray-100 text-gray-500 hover:text-green-600'
+                          }`}
+                          title={copiedTourId === tour.id ? 'คัดลอกแล้ว!' : 'คัดลอกข้อมูล'}
+                        >
+                          {copiedTourId === tour.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
                         <button
                           onClick={() => setPreviewTour(tour)}
                           className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"

@@ -56,6 +56,7 @@ interface Tour {
   primary_country_id_name?: string; // Display name from countries table
   transport_id?: string;
   transport_id_name?: string; // Display name from transports table
+  cover_image_url?: string; // Cover image URL from API mapping
   // Meta fields
   periods?: Period[];
   _integration_id: number;
@@ -95,6 +96,7 @@ interface TourCodeLookup {
   tour_id: number | null;
   tour_code: string | null;
   sync_status: string | null;
+  pdf_url: string | null;
 }
 
 // Country list with Thai names
@@ -250,32 +252,29 @@ export default function SalesSearchPage() {
   };
 
   const lookupTourCodes = async (toursData: Tour[]) => {
-    // Build lookup request - use external_id for matching
-    const externalIds = toursData.map(tour => {
-      const extId = getExternalIdFromTour(tour);
+    // Build lookup request - use wholesaler_tour_code for matching (works across different integrations)
+    const lookupItems = toursData.map(tour => {
+      const wholesalerTourCode = tour.wholesaler_tour_code || tour._raw?.ProductCode || tour._raw?.tour_code || '';
       return {
-        integration_id: tour._integration_id,
-        external_id: extId,
+        wholesaler_tour_code: wholesalerTourCode,
       };
-    }).filter(item => item.integration_id && item.external_id) as { 
-      integration_id: number; 
-      external_id: string;
+    }).filter(item => item.wholesaler_tour_code) as { 
+      wholesaler_tour_code: string;
     }[];
-
-    console.log('Lookup request - externalIds:', externalIds.slice(0, 5)); // Debug: show first 5
-    console.log('First tour data:', toursData[0]); // Debug: show first tour
     
-    if (externalIds.length === 0) return;
+    if (lookupItems.length === 0) return;
 
     try {
+      const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_BASE_URL}/tours/lookup-codes`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Cache-Control': 'no-cache',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ external_ids: externalIds }),
+        body: JSON.stringify({ wholesaler_tour_codes: lookupItems }),
       });
 
       // Check if response is OK and is JSON
@@ -291,9 +290,7 @@ export default function SalesSearchPage() {
       }
 
       const data = await response.json();
-      console.log('Lookup response:', data);
       if (data.success) {
-        console.log('Setting tourCodeMap:', data.data);
         setTourCodeMap(data.data);
       }
     } catch {
@@ -474,13 +471,26 @@ export default function SalesSearchPage() {
   // Format tour data สำหรับ copy
   const formatTourForCopy = (tour: Tour): string => {
     const raw = tour._raw;
-    const code = tour.wholesaler_tour_code || raw?.ProductCode || '';
+    
+    // Check if tour exists in our database using wholesaler_tour_code
+    const wholesalerTourCode = tour.wholesaler_tour_code || raw?.ProductCode || raw?.tour_code || '';
+    const syncInfo = wholesalerTourCode ? tourCodeMap[wholesalerTourCode] : null;
+    
+    // Use our database tour_code and pdf_url if synced, otherwise use API data
+    const code = (syncInfo?.synced && syncInfo?.tour_code) 
+      ? syncInfo.tour_code 
+      : (tour.wholesaler_tour_code || raw?.ProductCode || '');
     const title = tour.title || raw?.ProductName || '';
     const days = tour.duration_days || raw?.Days || '';
     const nights = tour.duration_nights || raw?.Nights || '';
     const airline = tour.transport_id || '';
     const airlineCode = '';
-    const pdfUrl = raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '';
+    
+    // Use effective_pdf_url from our database if synced (respects pdf_source: api/generate/custom)
+    // Otherwise use API data
+    const pdfUrl = (syncInfo?.synced && syncInfo?.pdf_url) 
+      ? syncInfo.pdf_url 
+      : (raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '');
     
     const formatFullDate = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
     
@@ -626,9 +636,9 @@ export default function SalesSearchPage() {
       const unsyncedKeys = tours
         .map((tour, index) => {
           const key = getTourKey(tour, index);
-          // Use external_id for lookup (same as lookupTourCodes)
-          const lookupKey = getExternalIdFromTour(tour);
-          const syncInfo = lookupKey ? tourCodeMap[`${tour._integration_id}_${lookupKey}`] : null;
+          // Use wholesaler_tour_code for lookup
+          const wholesalerTourCode = tour.wholesaler_tour_code || tour._raw?.ProductCode || tour._raw?.tour_code || '';
+          const syncInfo = wholesalerTourCode ? tourCodeMap[wholesalerTourCode] : null;
           if (!syncInfo?.synced) {
             return key;
           }
@@ -1376,6 +1386,7 @@ export default function SalesSearchPage() {
                       </th>
                       <th className="px-2 py-3 text-center font-medium text-gray-700 w-10">#</th>
                       <th className="px-2 py-3 text-center font-medium text-gray-700 w-12">จอง</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-700 w-16">รูป</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-700">รหัสทัวร์</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-700">ชื่อทัวร์</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-700">ระยะเวลา</th>
@@ -1465,10 +1476,9 @@ export default function SalesSearchPage() {
                       const getPdfUrl = () => raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '';
                       const totalPeriods = tour.periods?.length || raw?.Periods?.length || 0;
 
-                      // Get synced tour code from lookup (use external_id for matching)
-                      const extId = getExternalIdFromTour(tour);
-                      const lookupKey = extId ? `${tour._integration_id}_${extId}` : '';
-                      const syncInfo = lookupKey ? tourCodeMap[lookupKey] : null;
+                      // Get synced tour code from lookup (use wholesaler_tour_code for matching)
+                      const wholesalerTourCodeForLookup = tour.wholesaler_tour_code || raw?.ProductCode || raw?.tour_code || '';
+                      const syncInfo = wholesalerTourCodeForLookup ? tourCodeMap[wholesalerTourCodeForLookup] : null;
                       const syncedTourCode = syncInfo?.tour_code;
                       const isSynced = syncInfo?.synced ?? false;
 
@@ -1508,6 +1518,24 @@ export default function SalesSearchPage() {
                             >
                               <Plane className="w-5 h-5" />
                             </button>
+                          </td>
+                          
+                          {/* รูปภาพ */}
+                          <td className="px-2 py-3 text-center">
+                            {tour.cover_image_url ? (
+                              <img 
+                                src={tour.cover_image_url}
+                                alt={getTourTitle()}
+                                className="w-12 h-12 object-cover rounded border border-gray-200"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                                <MapPin className="w-4 h-4 text-gray-300" />
+                              </div>
+                            )}
                           </td>
                           
                           {/* รหัส */}
