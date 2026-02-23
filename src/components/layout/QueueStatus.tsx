@@ -95,13 +95,29 @@ export default function QueueStatus() {
     try {
       const response = await syncApi.getRunning();
       if (response.success && response.data) {
-        setRunningSyncs(Array.isArray(response.data) ? response.data : []);
+        const syncs = Array.isArray(response.data) ? response.data : [];
+        setRunningSyncs(syncs);
+        
+        // AUTO-FIX: ถ้ามี sync ค้าง (is_stuck) เกิน 2 นาที → auto-call fixStuckSyncs
+        const stuckSyncs = syncs.filter(s => s.is_stuck);
+        if (stuckSyncs.length > 0 && !fixing) {
+          console.warn(`Auto-fixing ${stuckSyncs.length} stuck syncs...`);
+          try {
+            await apiClient.post('/queue/fix-stuck', {});
+            // Refresh after fix
+            setTimeout(() => {
+              fetchStatus();
+            }, 1000);
+          } catch {
+            // Silently fail
+          }
+        }
       }
     } catch (error) {
       // Silently fail - endpoint might not exist yet
       console.error('Failed to fetch running syncs:', error);
     }
-  }, []);
+  }, [fixing]);
 
   useEffect(() => {
     fetchStatus();
