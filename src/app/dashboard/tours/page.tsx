@@ -28,14 +28,17 @@ import {
   Check,
   X,
   Filter,
+  Building2,
 } from 'lucide-react';
 import {
   toursApi,
   countriesApi,
+  wholesalersApi,
   Tour,
   TourCounts,
   TourTransport,
   Country,
+  Wholesaler,
   TOUR_STATUS,
   TOUR_THEMES,
   TOUR_TYPES,
@@ -125,6 +128,12 @@ export default function ToursPage() {
   // Countries from database
   const [countries, setCountries] = useState<Country[]>([]);
   
+  // Wholesalers from database
+  const [wholesalers, setWholesalers] = useState<Wholesaler[]>([]);
+  const [wholesalerFilter, setWholesalerFilter] = useState('');
+  const [wholesalerSearch, setWholesalerSearch] = useState('');
+  const [wholesalerDropdownOpen, setWholesalerDropdownOpen] = useState(false);
+  
   // Generate month options for the next 12 months
   const generateMonthOptions = () => {
     const months = [];
@@ -188,6 +197,19 @@ export default function ToursPage() {
     fetchCountries();
   }, []);
 
+  // ─── Fetch wholesalers (once on mount) ─────────────────────────
+  useEffect(() => {
+    const fetchWholesalers = async () => {
+      try {
+        const res = await wholesalersApi.list({ is_active: 'true' });
+        if (res.success && res.data) {
+          setWholesalers(res.data);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchWholesalers();
+  }, []);
+
   // ─── Fetch tours ───────────────────────────────────────────────
   const fetchTours = useCallback(async () => {
     // Cancel any in-flight request
@@ -209,6 +231,7 @@ export default function ToursPage() {
       if (tourTypeFilter) params.tour_type = tourTypeFilter;
       if (themeFilter) params.theme = themeFilter;
       if (countryFilter) params.country_id = countryFilter;
+      if (wholesalerFilter) params.wholesaler_id = wholesalerFilter;
       if (minPriceFilter) params.min_price = minPriceFilter;
       if (maxPriceFilter) params.max_price = maxPriceFilter;
       if (sortBy) {
@@ -265,7 +288,7 @@ export default function ToursPage() {
         setLoading(false);
       }
     }
-  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
+  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
 
   useEffect(() => { fetchTours(); }, [fetchTours]);
 
@@ -283,6 +306,8 @@ export default function ToursPage() {
     setThemeFilter('');
     setCountryFilter('');
     setCountrySearch('');
+    setWholesalerFilter('');
+    setWholesalerSearch('');
     setMinPriceFilter('');
     setMaxPriceFilter('');
     setDateSearchMode('range');
@@ -413,7 +438,7 @@ export default function ToursPage() {
   };
 
   // Check if any additional filter is active (beyond tab preset)
-  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
   
   // Clear additional filters only
   const clearAdditionalFilters = () => {
@@ -422,6 +447,8 @@ export default function ToursPage() {
     setSearch('');
     setCountryFilter('');
     setCountrySearch('');
+    setWholesalerFilter('');
+    setWholesalerSearch('');
     setMinPriceFilter('');
     setMaxPriceFilter('');
     setDateSearchMode('range');
@@ -844,7 +871,7 @@ export default function ToursPage() {
             </div>
 
             {/* Other Filters Grid - Equal Width Columns */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Country - Searchable Dropdown */}
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -940,6 +967,104 @@ export default function ToursPage() {
                     onClick={() => {
                       setCountryDropdownOpen(false);
                       setCountrySearch('');
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Wholesaler - Searchable Dropdown */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Building2 className="inline w-4 h-4 mr-1" />
+                  Wholesaler
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ค้นหา Wholesaler..."
+                    value={wholesalerSearch || wholesalers.find(w => String(w.id) === wholesalerFilter)?.name || ''}
+                    onChange={(e) => {
+                      setWholesalerSearch(e.target.value);
+                      setWholesalerDropdownOpen(true);
+                    }}
+                    onFocus={() => setWholesalerDropdownOpen(true)}
+                    className="w-full pl-3 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {wholesalerFilter && (
+                    <button
+                      onClick={() => {
+                        setWholesalerFilter('');
+                        setWholesalerSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Dropdown List */}
+                {wholesalerDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {/* All option */}
+                    <button
+                      onClick={() => {
+                        setWholesalerFilter('');
+                        setWholesalerSearch('');
+                        setWholesalerDropdownOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between ${
+                        !wholesalerFilter ? 'bg-blue-50 text-blue-700' : ''
+                      }`}
+                    >
+                      <span>ทั้งหมด</span>
+                      {!wholesalerFilter && <span className="text-blue-600">✓</span>}
+                    </button>
+                    {/* Dynamic wholesalers from API */}
+                    {wholesalers
+                      .filter(wholesaler => {
+                        if (!wholesalerSearch) return true;
+                        const search = wholesalerSearch.toLowerCase();
+                        return (
+                          wholesaler.name.toLowerCase().includes(search) ||
+                          wholesaler.code.toLowerCase().includes(search)
+                        );
+                      })
+                      .map((wholesaler) => (
+                        <button
+                          key={wholesaler.id}
+                          onClick={() => {
+                            setWholesalerFilter(String(wholesaler.id));
+                            setWholesalerSearch('');
+                            setWholesalerDropdownOpen(false);
+                            setCurrentPage(1);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between ${
+                            wholesalerFilter === String(wholesaler.id) ? 'bg-blue-50 text-blue-700' : ''
+                          }`}
+                        >
+                          <span>
+                            {wholesaler.name}
+                            <span className="text-gray-400 ml-1">({wholesaler.code})</span>
+                          </span>
+                          {wholesalerFilter === String(wholesaler.id) && (
+                            <span className="text-blue-600">✓</span>
+                          )}
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+                
+                {/* Click outside to close */}
+                {wholesalerDropdownOpen && (
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => {
+                      setWholesalerDropdownOpen(false);
+                      setWholesalerSearch('');
                     }}
                   />
                 )}
