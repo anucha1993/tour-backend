@@ -3470,6 +3470,24 @@ export const systemSettingsApi = {
 
 // ===================== International Tour Settings Types =====================
 
+export interface InternationalTourCountryCover {
+  id: number;
+  setting_id: number;
+  country_id: number;
+  image_url: string | null;
+  cloudflare_id: string | null;
+  image_position: string;
+  alt_text: string | null;
+  sort_order: number;
+  country?: {
+    id: number;
+    name_en: string;
+    name_th: string | null;
+    iso2: string;
+    flag_emoji: string | null;
+  };
+}
+
 export interface InternationalTourSetting {
   id: number;
   name: string;
@@ -3498,6 +3516,7 @@ export interface InternationalTourSetting {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  country_covers?: InternationalTourCountryCover[];
 }
 
 export interface InternationalTourConditionOptions {
@@ -3591,11 +3610,57 @@ export const internationalTourSettingsApi = {
     apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}/cover-image`, {
       method: 'DELETE',
     }),
+
+  // Upload country cover image
+  uploadCountryCover: (settingId: number, countryId: number, file: File, position?: string, altText?: string) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (position) formData.append('image_position', position);
+    if (altText) formData.append('alt_text', altText);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/international-tour-settings/${settingId}/country-cover/${countryId}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<ApiResponse<{ image_url: string; cloudflare_id: string }>>;
+  },
+
+  // Delete country cover image
+  deleteCountryCover: (settingId: number, countryId: number) =>
+    apiRequest(`/international-tour-settings/${settingId}/country-cover/${countryId}`, {
+      method: 'DELETE',
+    }),
+
+  // Update country cover position
+  updateCountryCoverPosition: (settingId: number, countryId: number, position: string) =>
+    apiRequest(`/international-tour-settings/${settingId}/country-cover/${countryId}/position`, {
+      method: 'PATCH',
+      body: JSON.stringify({ image_position: position }),
+    }),
 };
 
 // =====================
 // Domestic Tour Settings (Admin)
 // =====================
+
+export interface DomesticTourCityCover {
+  id?: number;
+  setting_id?: number;
+  city_id: number;
+  image_url: string | null;
+  cloudflare_id: string | null;
+  image_position: string;
+  alt_text: string | null;
+  city?: {
+    id: number;
+    name_en: string;
+    name_th: string;
+    slug: string;
+  };
+}
 
 export interface DomesticTourSetting {
   id: number;
@@ -3622,6 +3687,7 @@ export interface DomesticTourSetting {
   filter_price_range: boolean;
   is_active: boolean;
   sort_order: number;
+  city_covers?: DomesticTourCityCover[];
   created_at: string;
   updated_at: string;
 }
@@ -3632,6 +3698,7 @@ export interface DomesticTourConditionOptions {
   wholesalers: Array<{ id: number; name: string; code: string }>;
   tour_types: Record<string, string>;
   airlines: Array<{ id: number; code: string; name: string; image: string | null }>;
+  cities: Array<{ id: number; name_en: string; name_th: string; slug: string }>;
 }
 
 export interface DomesticTourPreview {
@@ -3704,6 +3771,34 @@ export const domesticTourSettingsApi = {
   deleteCoverImage: (id: number) =>
     apiRequest<{ data: DomesticTourSetting }>(`/domestic-tour-settings/${id}/cover-image`, {
       method: 'DELETE',
+    }),
+
+  // Upload city cover image
+  uploadCityCover: (settingId: number, cityId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return fetch(`${API_BASE_URL}/domestic-tour-settings/${settingId}/city-cover/${cityId}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(res => res.json()) as Promise<{ success: boolean; image_url?: string; cloudflare_id?: string; message?: string }>;
+  },
+
+  // Delete city cover image
+  deleteCityCover: (settingId: number, cityId: number) =>
+    apiRequest(`/domestic-tour-settings/${settingId}/city-cover/${cityId}`, {
+      method: 'DELETE',
+    }),
+
+  // Update city cover position
+  updateCityCoverPosition: (settingId: number, cityId: number, position: string) =>
+    apiRequest(`/domestic-tour-settings/${settingId}/city-cover/${cityId}/position`, {
+      method: 'PATCH',
+      body: JSON.stringify({ image_position: position }),
     }),
 };
 

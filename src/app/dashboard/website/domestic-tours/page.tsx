@@ -31,6 +31,7 @@ import {
   domesticTourSettingsApi,
   DomesticTourSetting,
   DomesticTourConditionOptions,
+  DomesticTourCityCover,
   TourTabCondition,
 } from '@/lib/api';
 
@@ -86,7 +87,31 @@ export default function DomesticToursSettingsPage() {
   // Cover image
   const [uploadingCover, setUploadingCover] = useState(false);
   const [deletingCover, setDeletingCover] = useState(false);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  // City covers
+  interface CityCoverData {
+    city_id: number;
+    image_url: string | null;
+    cloudflare_id: string | null;
+    image_position: string;
+    alt_text: string;
+    isUploading?: boolean;
+    imageVersion?: number;
+  }
+  const [cityCovers, setCityCovers] = useState<CityCoverData[]>([]);
+  const [citySearch, setCitySearch] = useState('');
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const cityCoverInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  // Helper function to add cache busting to image URL
+  const getImageUrl = (url: string | null, version?: number) => {
+    if (!url) return null;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}v=${version || Date.now()}`;
+  };
 
   // Form
   const [formData, setFormData] = useState<Partial<DomesticTourSetting>>({
@@ -163,6 +188,10 @@ export default function DomesticToursSettingsPage() {
     setEditItem(null);
     setPreviewTours([]);
     setPreviewCount(0);
+    setPendingCoverFile(null);
+    setCoverPreviewUrl(null);
+    setCityCovers([]);
+    setCitySearch('');
   };
 
   const handleSave = async () => {
@@ -172,11 +201,23 @@ export default function DomesticToursSettingsPage() {
     }
     setSaving(true);
     try {
+      let newSettingId: number | null = null;
       if (editItem) {
         await domesticTourSettingsApi.update(editItem.id, formData);
       } else {
-        await domesticTourSettingsApi.create(formData);
+        const response = await domesticTourSettingsApi.create(formData) as any;
+        newSettingId = response?.data?.data?.id || response?.data?.id || null;
       }
+      
+      // Upload pending cover image for new items
+      if (pendingCoverFile && newSettingId) {
+        try {
+          await domesticTourSettingsApi.uploadCoverImage(newSettingId, pendingCoverFile);
+        } catch (err) {
+          console.error('Failed to upload cover image:', err);
+        }
+      }
+      
       setShowModal(false);
       resetForm();
       fetchSettings();
@@ -219,6 +260,18 @@ export default function DomesticToursSettingsPage() {
     });
     setPreviewTours([]);
     setPreviewCount(0);
+    setPendingCoverFile(null);
+    setCoverPreviewUrl(null);
+    // Load city covers
+    const loadedCovers = (item.city_covers || []).map(c => ({
+      city_id: c.city_id,
+      image_url: c.image_url,
+      cloudflare_id: c.cloudflare_id,
+      image_position: c.image_position || 'center',
+      alt_text: c.alt_text || '',
+    }));
+    setCityCovers(loadedCovers);
+    setCitySearch('');
     setShowModal(true);
   };
 
@@ -258,6 +311,114 @@ export default function DomesticToursSettingsPage() {
       console.error('Preview failed:', error);
     } finally {
       setLoadingPreview(false);
+    }
+  };
+
+  // City cover helpers
+  const getCityInfo = (cityId: number) => {
+    return conditionOptions?.cities?.find(c => c.id === cityId);
+  };
+
+  const addCityCover = (cityId: number) => {
+    if (cityCovers.some(c => c.city_id === cityId)) return;
+    setCityCovers(prev => [...prev, {
+      city_id: cityId,
+      image_url: null,
+      cloudflare_id: null,
+      image_position: 'center',
+      alt_text: '',
+    }]);
+  };
+
+  const removeCityCover = async (cityId: number) => {
+    // If editing existing setting, delete from server
+    if (editItem) {
+      const cover = cityCovers.find(c => c.city_id === cityId);
+      if (cover?.cloudflare_id) {
+        try {
+          await domesticTourSettingsApi.deleteCityCover(editItem.id, cityId);
+        } catch (e) {
+          console.error('Failed to delete city cover:', e);
+        }
+      }
+    }
+    setCityCovers(prev => prev.filter(c => c.city_id !== cityId));
+  };
+
+  const handleCityCoverUpload = async (cityId: number, file: File) => {
+    if (!editItem) {
+      // For new settings, store preview only
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCityCovers(prev => prev.map(c =>
+          c.city_id === cityId
+            ? { ...c, image_url: e.target?.result as string, isUploading: false }
+            : c
+        ));
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // For existing settings, upload directly
+    setCityCovers(prev => prev.map(c =>
+      c.city_id === cityId ? { ...c, isUploading: true } : c
+    ));
+
+    try {
+      const response = await domesticTourSettingsApi.uploadCityCover(editItem.id, cityId, file);
+      if (response.success) {
+        setCityCovers(prev => prev.map(c =>
+          c.city_id === cityId
+            ? {
+                ...c,
+                image_url: response.image_url || null,
+                cloudflare_id: response.cloudflare_id || null,
+                isUploading: false,
+                imageVersion: Date.now(),
+              }
+            : c
+        ));
+        fetchSettings();
+      }
+    } catch (error) {
+      console.error('Failed to upload city cover:', error);
+      setCityCovers(prev => prev.map(c =>
+        c.city_id === cityId ? { ...c, isUploading: false } : c
+      ));
+    }
+  };
+
+  const handleCityCoverDelete = async (cityId: number) => {
+    if (!editItem) {
+      setCityCovers(prev => prev.map(c =>
+        c.city_id === cityId ? { ...c, image_url: null, cloudflare_id: null } : c
+      ));
+      return;
+    }
+
+    try {
+      await domesticTourSettingsApi.deleteCityCover(editItem.id, cityId);
+      setCityCovers(prev => prev.map(c =>
+        c.city_id === cityId ? { ...c, image_url: null, cloudflare_id: null } : c
+      ));
+      fetchSettings();
+    } catch (error) {
+      console.error('Failed to delete city cover:', error);
+    }
+  };
+
+  const handleCityCoverPositionChange = async (cityId: number, position: string) => {
+    setCityCovers(prev => prev.map(c =>
+      c.city_id === cityId ? { ...c, image_position: position } : c
+    ));
+
+    if (editItem) {
+      try {
+        await domesticTourSettingsApi.updateCityCoverPosition(editItem.id, cityId, position);
+      } catch (error) {
+        console.error('Failed to update position:', error);
+      }
     }
   };
 
@@ -387,9 +548,6 @@ export default function DomesticToursSettingsPage() {
     return new Intl.NumberFormat('th-TH').format(price);
   };
 
-  // Cover image: use first setting with cover, or first active, or first setting
-  const coverSetting = settings.find(s => s.cover_image_url) || settings.find(s => s.is_active) || settings[0] || null;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -406,145 +564,6 @@ export default function DomesticToursSettingsPage() {
           เพิ่มการตั้งค่า
         </Button>
       </div>
-
-      {/* Cover Image Management */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <ImageIcon className="w-5 h-5 text-green-600" />
-            ภาพ Cover หน้าทัวร์ในประเทศ
-          </h2>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">ภาพ Cover จะแสดงเป็นพื้นหลังส่วนหัวของหน้ารายการทัวร์ในประเทศ (แนะนำขนาด 1920×400 px)</p>
-
-        {!coverSetting ? (
-          <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
-            <ImageIcon className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-400 mb-3">กรุณาสร้างการตั้งค่าก่อน จึงจะสามารถอัปโหลดภาพ Cover ได้</p>
-            <Button variant="outline" onClick={() => { resetForm(); setShowModal(true); }}>
-              <Plus className="w-4 h-4 mr-2" />
-              สร้างการตั้งค่า
-            </Button>
-          </div>
-        ) : coverSetting.cover_image_url ? (
-          <div className="space-y-4">
-            <div className="relative rounded-xl overflow-hidden border border-gray-200">
-              <div
-                className="w-full h-56 bg-gray-100"
-                style={{
-                  backgroundImage: `url(${coverSetting.cover_image_url})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: coverSetting.cover_image_position || 'center',
-                  backgroundRepeat: 'no-repeat',
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-              <div className="absolute bottom-4 left-4 text-white">
-                <p className="text-sm font-medium drop-shadow">ภาพ Cover ปัจจุบัน</p>
-              </div>
-              <div className="absolute bottom-4 right-4 flex gap-2">
-                <button
-                  onClick={() => coverInputRef.current?.click()}
-                  disabled={uploadingCover}
-                  className="px-4 py-2 bg-white/90 hover:bg-white text-gray-700 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                >
-                  {uploadingCover ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  เปลี่ยนภาพ
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!confirm('ต้องการลบภาพ Cover นี้?')) return;
-                    setDeletingCover(true);
-                    try {
-                      await domesticTourSettingsApi.deleteCoverImage(coverSetting.id);
-                      fetchSettings();
-                    } catch (e) { console.error(e); }
-                    finally { setDeletingCover(false); }
-                  }}
-                  disabled={deletingCover}
-                  className="px-4 py-2 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                >
-                  {deletingCover ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  ลบ
-                </button>
-              </div>
-            </div>
-
-            {/* Position Selector */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">ตำแหน่งการแสดงภาพ</label>
-              <div className="grid grid-cols-3 sm:grid-cols-9 gap-2">
-                {[
-                  { value: 'left top', label: 'ซ้ายบน' },
-                  { value: 'top', label: 'บน' },
-                  { value: 'right top', label: 'ขวาบน' },
-                  { value: 'left center', label: 'ซ้ายกลาง' },
-                  { value: 'center', label: 'กลาง' },
-                  { value: 'right center', label: 'ขวากลาง' },
-                  { value: 'left bottom', label: 'ซ้ายล่าง' },
-                  { value: 'bottom', label: 'ล่าง' },
-                  { value: 'right bottom', label: 'ขวาล่าง' },
-                ].map(pos => (
-                  <button
-                    key={pos.value}
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await domesticTourSettingsApi.update(coverSetting.id, { cover_image_position: pos.value });
-                        fetchSettings();
-                      } catch (e) { console.error(e); }
-                    }}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      (coverSetting.cover_image_position || 'center') === pos.value
-                        ? 'bg-green-500 text-white border-green-500'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-green-300 hover:bg-green-50'
-                    }`}
-                  >
-                    {pos.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 mt-1.5">ปรับตำแหน่งการครอปภาพในส่วน Hero ของหน้าเว็บ</p>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => coverInputRef.current?.click()}
-            disabled={uploadingCover}
-            className="w-full border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:border-green-400 hover:bg-green-50/50 transition-colors"
-          >
-            {uploadingCover ? (
-              <div className="flex flex-col items-center">
-                <Loader2 className="w-10 h-10 text-green-500 animate-spin mb-3" />
-                <span className="text-sm text-gray-500">กำลังอัปโหลด...</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                <Upload className="w-10 h-10 text-gray-300 mb-3" />
-                <span className="text-sm font-medium text-gray-600">คลิกเพื่ออัปโหลดภาพ Cover</span>
-                <span className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP (สูงสุด 10MB)</span>
-              </div>
-            )}
-          </button>
-        )}
-
-        <input
-          ref={coverInputRef}
-          type="file"
-          accept="image/jpeg,image/jpg,image/png,image/webp"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file || !coverSetting) return;
-            setUploadingCover(true);
-            try {
-              await domesticTourSettingsApi.uploadCoverImage(coverSetting.id, file);
-              fetchSettings();
-            } catch (err) { console.error(err); alert('อัปโหลดไม่สำเร็จ'); }
-            finally { setUploadingCover(false); if (coverInputRef.current) coverInputRef.current.value = ''; }
-          }}
-        />
-      </Card>
 
       {/* Settings List */}
       {loading ? (
@@ -696,6 +715,370 @@ export default function DomesticToursSettingsPage() {
                   placeholder="รายละเอียดเพิ่มเติม"
                 />
               </div>
+
+              {/* Cover Image */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4" /> ภาพ Cover พื้นหลัง
+                </h3>
+                <p className="text-xs text-gray-500 mb-3">ภาพ Cover จะแสดงเป็นพื้นหลังส่วนหัวของหน้ารายการทัวร์ (แนะนำขนาด 1920×400 px)</p>
+
+                {/* Show image if exists (either from database or pending upload) */}
+                {(editItem?.cover_image_url || coverPreviewUrl) ? (
+                  <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                    <div
+                      className="w-full h-48"
+                      style={{
+                        backgroundImage: `url(${coverPreviewUrl || editItem?.cover_image_url})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: formData.cover_image_position || editItem?.cover_image_position || 'center',
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    {coverPreviewUrl && !editItem && (
+                      <div className="absolute top-3 left-3 px-2 py-1 bg-amber-500 text-white text-xs font-medium rounded">
+                        รอบันทึก
+                      </div>
+                    )}
+                    <div className="absolute bottom-3 right-3 flex gap-2">
+                      <button
+                        onClick={() => coverInputRef.current?.click()}
+                        disabled={uploadingCover}
+                        className="px-3 py-1.5 bg-white/90 hover:bg-white text-gray-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        {uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        เปลี่ยนภาพ
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('ลบภาพ Cover?')) return;
+                          if (editItem) {
+                            setDeletingCover(true);
+                            try {
+                              await domesticTourSettingsApi.deleteCoverImage(editItem.id);
+                              setEditItem({ ...editItem, cover_image_url: null, cover_image_cf_id: null });
+                              fetchSettings();
+                            } catch (e) { console.error(e); }
+                            finally { setDeletingCover(false); }
+                          } else {
+                            // For new items, just clear the preview
+                            setPendingCoverFile(null);
+                            setCoverPreviewUrl(null);
+                          }
+                        }}
+                        disabled={deletingCover}
+                        className="px-3 py-1.5 bg-red-500/90 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        {deletingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                        ลบ
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={uploadingCover}
+                    className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-green-400 hover:bg-green-50/50 transition-colors"
+                  >
+                    {uploadingCover ? (
+                      <div className="flex flex-col items-center">
+                        <Loader2 className="w-8 h-8 text-green-500 animate-spin mb-2" />
+                        <span className="text-sm text-gray-500">กำลังอัปโหลด...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <ImageIcon className="w-8 h-8 text-gray-300 mb-2" />
+                        <span className="text-sm text-gray-500">คลิกเพื่ออัปโหลดภาพ Cover</span>
+                        <span className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP (สูงสุด 10MB)</span>
+                      </div>
+                    )}
+                  </button>
+                )}
+
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    if (editItem) {
+                      // For existing items, upload directly
+                      setUploadingCover(true);
+                      try {
+                        const res = await domesticTourSettingsApi.uploadCoverImage(editItem.id, file) as any;
+                        if (res?.data) {
+                          const updated = res.data?.data || res.data;
+                          setEditItem({ ...editItem, cover_image_url: updated.cover_image_url, cover_image_cf_id: updated.cover_image_cf_id });
+                          fetchSettings();
+                        }
+                      } catch (err) { console.error(err); alert('อัปโหลดไม่สำเร็จ'); }
+                      finally { setUploadingCover(false); if (coverInputRef.current) coverInputRef.current.value = ''; }
+                    } else {
+                      // For new items, store temporarily and show preview
+                      setPendingCoverFile(file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        setCoverPreviewUrl(ev.target?.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                      if (coverInputRef.current) coverInputRef.current.value = '';
+                    }
+                  }}
+                />
+
+                {/* Position selector - show when there's an image */}
+                {(editItem?.cover_image_url || coverPreviewUrl) && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">ตำแหน่งภาพ (object-position)</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: 'top', label: 'บน' },
+                        { value: 'center', label: 'กลาง' },
+                        { value: 'bottom', label: 'ล่าง' },
+                        { value: 'left top', label: 'ซ้ายบน' },
+                        { value: 'left center', label: 'ซ้ายกลาง' },
+                        { value: 'left bottom', label: 'ซ้ายล่าง' },
+                        { value: 'right top', label: 'ขวาบน' },
+                        { value: 'right center', label: 'ขวากลาง' },
+                        { value: 'right bottom', label: 'ขวาล่าง' },
+                      ].map(pos => (
+                        <button
+                          key={pos.value}
+                          type="button"
+                          onClick={async () => {
+                            setFormData({ ...formData, cover_image_position: pos.value });
+                            if (editItem) {
+                              try {
+                                await domesticTourSettingsApi.update(editItem.id, { cover_image_position: pos.value });
+                                setEditItem({ ...editItem, cover_image_position: pos.value });
+                              } catch (e) { console.error(e); }
+                            }
+                          }}
+                          className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                            (formData.cover_image_position || editItem?.cover_image_position || 'center') === pos.value
+                              ? 'bg-green-500 text-white border-green-500'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-green-300 hover:bg-green-50'
+                          }`}
+                        >
+                          {pos.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1.5">ปรับตำแหน่งการครอปภาพในส่วน Hero</p>
+                  </div>
+                )}
+              </div>
+
+              {/* City Covers Section */}
+              {editItem && (
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <MapPin className="w-4 h-4" /> ภาพ Cover แต่ละจังหวัด/เมือง
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    กำหนดภาพ Cover สำหรับแต่ละจังหวัด/เมือง เพื่อแสดงเป็นพื้นหลังเมื่อผู้ใช้กรองดูทัวร์ของจังหวัดนั้นๆ
+                  </p>
+
+                  {/* Add City - Searchable */}
+                  <div className="flex gap-2 mb-4">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                        placeholder="ค้นหาจังหวัด/เมือง..."
+                        value={citySearch}
+                        onChange={(e) => {
+                          setCitySearch(e.target.value);
+                          setShowCityDropdown(true);
+                        }}
+                        onFocus={() => setShowCityDropdown(true)}
+                      />
+                      {showCityDropdown && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setShowCityDropdown(false)}
+                          />
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {conditionOptions?.cities
+                              ?.filter(c => !cityCovers.some(cc => cc.city_id === c.id))
+                              .filter(c => {
+                                if (!citySearch) return true;
+                                const search = citySearch.toLowerCase();
+                                return (
+                                  (c.name_th?.toLowerCase() || '').includes(search) ||
+                                  (c.name_en?.toLowerCase() || '').includes(search)
+                                );
+                              })
+                              .slice(0, 20)
+                              .map(c => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2"
+                                  onClick={() => {
+                                    addCityCover(c.id);
+                                    setCitySearch('');
+                                    setShowCityDropdown(false);
+                                  }}
+                                >
+                                  <span>{c.name_th || c.name_en}</span>
+                                </button>
+                              ))
+                            }
+                            {conditionOptions?.cities
+                              ?.filter(c => !cityCovers.some(cc => cc.city_id === c.id))
+                              .filter(c => {
+                                if (!citySearch) return true;
+                                const search = citySearch.toLowerCase();
+                                return (
+                                  (c.name_th?.toLowerCase() || '').includes(search) ||
+                                  (c.name_en?.toLowerCase() || '').includes(search)
+                                );
+                              }).length === 0 && (
+                              <div className="px-3 py-2 text-sm text-gray-400 text-center">
+                                ไม่พบจังหวัด/เมือง
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* City Covers List */}
+                  {cityCovers.length > 0 && (
+                    <div className="space-y-4">
+                      {cityCovers.map((cover) => {
+                        const city = getCityInfo(cover.city_id);
+                        if (!city) return null;
+                        return (
+                          <div
+                            key={cover.city_id}
+                            className="border border-gray-200 rounded-xl p-4 bg-gray-50"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{city.name_th || city.name_en}</span>
+                              </div>
+                              <button
+                                onClick={() => removeCityCover(cover.city_id)}
+                                className="text-red-500 hover:text-red-700 p-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Image Upload/Preview */}
+                            <div className="flex gap-4">
+                              <div className="w-48 shrink-0">
+                                {cover.image_url ? (
+                                  <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={getImageUrl(cover.image_url, cover.imageVersion) || ''}
+                                      alt={cover.alt_text || city.name_en}
+                                      className="w-full h-28 object-cover"
+                                      style={{ objectPosition: cover.image_position }}
+                                    />
+                                    <div className="absolute bottom-1 right-1 flex gap-1">
+                                      <button
+                                        onClick={() => cityCoverInputRefs.current[cover.city_id]?.click()}
+                                        disabled={cover.isUploading}
+                                        className="p-1 bg-white/90 rounded text-gray-700 hover:bg-white"
+                                      >
+                                        {cover.isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                                      </button>
+                                      <button
+                                        onClick={() => handleCityCoverDelete(cover.city_id)}
+                                        className="p-1 bg-red-500/90 rounded text-white hover:bg-red-600"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => cityCoverInputRefs.current[cover.city_id]?.click()}
+                                    disabled={cover.isUploading}
+                                    className="w-full h-28 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 hover:border-green-400 hover:text-green-500 transition-colors"
+                                  >
+                                    {cover.isUploading ? (
+                                      <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                      <div className="flex flex-col items-center">
+                                        <Upload className="w-5 h-5 mb-1" />
+                                        <span className="text-xs">อัปโหลด</span>
+                                      </div>
+                                    )}
+                                  </button>
+                                )}
+                                <input
+                                  ref={(el) => { cityCoverInputRefs.current[cover.city_id] = el; }}
+                                  type="file"
+                                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleCityCoverUpload(cover.city_id, file);
+                                    if (e.target) e.target.value = '';
+                                  }}
+                                />
+                              </div>
+
+                              {/* Position Selector */}
+                              {cover.image_url && (
+                                <div className="flex-1">
+                                  <label className="block text-xs text-gray-600 mb-1.5">ตำแหน่งภาพ</label>
+                                  <div className="grid grid-cols-3 gap-1">
+                                    {[
+                                      { value: 'top', label: 'บน' },
+                                      { value: 'center', label: 'กลาง' },
+                                      { value: 'bottom', label: 'ล่าง' },
+                                    ].map(pos => (
+                                      <button
+                                        key={pos.value}
+                                        type="button"
+                                        onClick={() => handleCityCoverPositionChange(cover.city_id, pos.value)}
+                                        className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                          cover.image_position === pos.value
+                                            ? 'bg-green-500 text-white border-green-500'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:border-green-300'
+                                        }`}
+                                      >
+                                        {pos.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {cityCovers.length === 0 && (
+                    <div className="text-center py-6 text-gray-400 text-sm">
+                      ยังไม่มีภาพ Cover จังหวัด/เมือง
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!editItem && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs text-green-700 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" />
+                    สามารถกำหนดภาพ Cover แต่ละจังหวัด/เมืองได้หลังจากสร้างการตั้งค่าแล้ว
+                  </p>
+                </div>
+              )}
 
               {/* Display Settings */}
               <div>

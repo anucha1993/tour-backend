@@ -29,16 +29,19 @@ import {
   X,
   Filter,
   Building2,
+  Gift,
 } from 'lucide-react';
 import {
   toursApi,
   countriesApi,
   wholesalersApi,
+  promotionsApi,
   Tour,
   TourCounts,
   TourTransport,
   Country,
   Wholesaler,
+  Promotion,
   TOUR_STATUS,
   TOUR_THEMES,
   TOUR_TYPES,
@@ -134,6 +137,12 @@ export default function ToursPage() {
   const [wholesalerSearch, setWholesalerSearch] = useState('');
   const [wholesalerDropdownOpen, setWholesalerDropdownOpen] = useState(false);
   
+  // Promotions from database
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [promotionFilters, setPromotionFilters] = useState<string[]>([]);
+  const [promotionSearch, setPromotionSearch] = useState('');
+  const [promotionDropdownOpen, setPromotionDropdownOpen] = useState(false);
+  
   // Generate month options for the next 12 months
   const generateMonthOptions = () => {
     const months = [];
@@ -210,6 +219,19 @@ export default function ToursPage() {
     fetchWholesalers();
   }, []);
 
+  // ─── Fetch promotions (once on mount) ──────────────────────────
+  useEffect(() => {
+    const fetchPromotions = async () => {
+      try {
+        const res = await promotionsApi.list({ is_active: 'true' });
+        if (res.success && res.data) {
+          setPromotions(res.data);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchPromotions();
+  }, []);
+
   // ─── Fetch tours ───────────────────────────────────────────────
   const fetchTours = useCallback(async () => {
     // Cancel any in-flight request
@@ -232,6 +254,7 @@ export default function ToursPage() {
       if (themeFilter) params.theme = themeFilter;
       if (countryFilter) params.country_id = countryFilter;
       if (wholesalerFilter) params.wholesaler_id = wholesalerFilter;
+      if (promotionFilters.length > 0) params.promotion_ids = promotionFilters.join(',');
       if (minPriceFilter) params.min_price = minPriceFilter;
       if (maxPriceFilter) params.max_price = maxPriceFilter;
       if (sortBy) {
@@ -288,7 +311,7 @@ export default function ToursPage() {
         setLoading(false);
       }
     }
-  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
+  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, promotionFilters, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
 
   useEffect(() => { fetchTours(); }, [fetchTours]);
 
@@ -308,6 +331,8 @@ export default function ToursPage() {
     setCountrySearch('');
     setWholesalerFilter('');
     setWholesalerSearch('');
+    setPromotionFilters([]);
+    setPromotionSearch('');
     setMinPriceFilter('');
     setMaxPriceFilter('');
     setDateSearchMode('range');
@@ -438,7 +463,7 @@ export default function ToursPage() {
   };
 
   // Check if any additional filter is active (beyond tab preset)
-  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
   
   // Clear additional filters only
   const clearAdditionalFilters = () => {
@@ -449,6 +474,8 @@ export default function ToursPage() {
     setCountrySearch('');
     setWholesalerFilter('');
     setWholesalerSearch('');
+    setPromotionFilters([]);
+    setPromotionSearch('');
     setMinPriceFilter('');
     setMaxPriceFilter('');
     setDateSearchMode('range');
@@ -633,6 +660,19 @@ export default function ToursPage() {
               ))}
             </select>
 
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="created_at">ล่าสุด</option>
+              <option value="-created_at">เก่าสุด</option>
+              <option value="display_price">ราคาต่ำ→สูง</option>
+              <option value="-display_price">ราคาสูง→ต่ำ</option>
+              <option value="next_departure_date">เดินทางใกล้</option>
+              <option value="title">ชื่อ A-Z</option>
+            </select>
+
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-1 ${
@@ -673,7 +713,7 @@ export default function ToursPage() {
         {showAdvancedFilters && (
           <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
             {/* Date Search Mode Selection */}
-            <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+            <div className="bg-gray-50 rounded-lg p-1 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Calendar className="inline w-4 h-4 mr-1" />
@@ -972,7 +1012,7 @@ export default function ToursPage() {
                 )}
               </div>
 
-              {/* Wholesaler - Searchable Dropdown */}
+              {/* Wholesaler - Searchable Dropdown (in Advanced Filters) */}
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <Building2 className="inline w-4 h-4 mr-1" />
@@ -1070,6 +1110,123 @@ export default function ToursPage() {
                 )}
               </div>
 
+              {/* Promotion Filter - Multi-Select Dropdown */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Gift className="inline w-4 h-4 mr-1" />
+                  โปรโมชั่น {promotionFilters.length > 0 && <span className="text-blue-600">({promotionFilters.length})</span>}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ค้นหาโปรโมชั่น..."
+                    value={promotionSearch || (promotionFilters.length > 0 ? `เลือก ${promotionFilters.length} รายการ` : '')}
+                    onChange={(e) => {
+                      setPromotionSearch(e.target.value);
+                      setPromotionDropdownOpen(true);
+                    }}
+                    onFocus={() => setPromotionDropdownOpen(true)}
+                    className="w-full pl-3 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {promotionFilters.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setPromotionFilters([]);
+                        setPromotionSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Dropdown List */}
+                {promotionDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {/* Clear all option */}
+                    <button
+                      onClick={() => {
+                        setPromotionFilters([]);
+                        setPromotionSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between ${
+                        promotionFilters.length === 0 ? 'bg-blue-50 text-blue-700' : ''
+                      }`}
+                    >
+                      <span>ทั้งหมด</span>
+                      {promotionFilters.length === 0 && <span className="text-blue-600">✓</span>}
+                    </button>
+                    {/* Dynamic promotions from API */}
+                    {promotions
+                      .filter(promotion => {
+                        if (!promotionSearch) return true;
+                        const search = promotionSearch.toLowerCase();
+                        return (
+                          promotion.name.toLowerCase().includes(search) ||
+                          (promotion.description?.toLowerCase().includes(search))
+                        );
+                      })
+                      .map((promotion) => {
+                        const isSelected = promotionFilters.includes(String(promotion.id));
+                        return (
+                          <button
+                            key={promotion.id}
+                            onClick={() => {
+                              if (isSelected) {
+                                setPromotionFilters(promotionFilters.filter(id => id !== String(promotion.id)));
+                              } else {
+                                setPromotionFilters([...promotionFilters, String(promotion.id)]);
+                              }
+                              setCurrentPage(1);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center gap-2 ${
+                              isSelected ? 'bg-blue-50 text-blue-700' : ''
+                            }`}
+                          >
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="flex-1">
+                              {promotion.name}
+                              {promotion.type && (
+                                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+                                  promotion.type === 'installment' ? 'bg-purple-100 text-purple-700' :
+                                  promotion.type === 'special' ? 'bg-pink-100 text-pink-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {promotion.type === 'installment' ? 'ผ่อน/รูดบัตร' : 
+                                   promotion.type === 'special' ? 'พิเศษ' :
+                                   promotion.type === 'discount_amount' ? 'ลดราคา' :
+                                   promotion.type === 'discount_percent' ? 'ลด %' :
+                                   promotion.type === 'free_gift' ? 'ของแถม' : promotion.type}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })
+                    }
+                  </div>
+                )}
+                
+                {/* Click outside to close */}
+                {promotionDropdownOpen && (
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => {
+                      setPromotionDropdownOpen(false);
+                      setPromotionSearch('');
+                    }}
+                  />
+                )}
+              </div>
+
               {/* Price Range */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">💰 ราคา (บาท)</label>
@@ -1091,23 +1248,6 @@ export default function ToursPage() {
                   />
                 </div>
               </div>
-
-              {/* Sort */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">📊 เรียงตาม</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="created_at">วันที่สร้าง (ล่าสุด)</option>
-                  <option value="-created_at">วันที่สร้าง (เก่าสุด)</option>
-                  <option value="display_price">ราคาต่ำ → สูง</option>
-                  <option value="-display_price">ราคาสูง → ต่ำ</option>
-                  <option value="next_departure_date">วันเดินทางใกล้</option>
-                  <option value="title">ชื่อ A-Z</option>
-                </select>
-              </div>
             </div>
           </div>
         )}
@@ -1125,16 +1265,12 @@ export default function ToursPage() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รูป</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รหัส / ชื่อทัวร์</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">Wholesaler</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ประเทศ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สายการบิน</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">กลุ่ม</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">โรงแรม</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">Wholesaler<br/><span className="text-gray-400 font-normal">ประเทศ</span></th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สายการบิน<br/><span className="text-gray-400 font-normal">กลุ่ม</span></th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน<br/><span className="text-gray-400 font-normal">โรงแรม</span></th>
                   <th className="text-right px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ราคา</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รอบ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">อัปเดต</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ<br/><span className="text-gray-400 font-normal">อัปเดต</span></th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">จัดการ</th>
                 </tr>
               </thead>
@@ -1160,54 +1296,43 @@ export default function ToursPage() {
                         </div>
                       </div>
                     </td>
-                    {/* Wholesaler */}
+                    {/* Wholesaler + Countries */}
                     <td className="px-4 py-3 text-center">
-                      <div className="h-6 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
-                    </td>
-                    {/* Countries */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex justify-center gap-1">
-                        <div className="h-5 bg-gray-200 rounded animate-pulse w-10"></div>
-                        <div className="h-5 bg-gray-200 rounded animate-pulse w-10"></div>
+                      <div className="space-y-1">
+                        <div className="h-5 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-12 mx-auto"></div>
                       </div>
                     </td>
-                    {/* Airlines */}
+                    {/* Airlines + Tour Type */}
                     <td className="px-4 py-3 text-center">
-                      <div className="h-5 bg-gray-200 rounded animate-pulse w-12 mx-auto"></div>
+                      <div className="space-y-1">
+                        <div className="h-5 bg-gray-200 rounded animate-pulse w-12 mx-auto"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
+                      </div>
                     </td>
-                    {/* Tour Type */}
+                    {/* Days/Nights + Hotel */}
                     <td className="px-4 py-3 text-center">
-                      <div className="h-5 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
-                    </td>
-                    {/* Days/Nights */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="h-4 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
-                    </td>
-                    {/* Hotel */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex justify-center gap-0.5">
-                        {[...Array(4)].map((_, i) => (
-                          <div key={i} className="w-3 h-3 bg-gray-200 rounded animate-pulse"></div>
-                        ))}
+                      <div className="space-y-1">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-10 mx-auto"></div>
                       </div>
                     </td>
                     {/* Price */}
                     <td className="px-4 py-3 text-right">
-                      <div className="h-5 bg-gray-200 rounded animate-pulse w-20 ml-auto"></div>
+                      <div className="space-y-1">
+                        <div className="h-5 bg-gray-200 rounded animate-pulse w-20 ml-auto"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-14 ml-auto"></div>
+                      </div>
                     </td>
                     {/* Periods */}
                     <td className="px-4 py-3 text-center">
                       <div className="h-6 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
                     </td>
-                    {/* Status */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="h-5 bg-gray-200 rounded-full animate-pulse w-16 mx-auto"></div>
-                    </td>
-                    {/* Updated */}
+                    {/* Status + Updated */}
                     <td className="px-4 py-3 text-center">
                       <div className="space-y-1">
-                        <div className="h-3 bg-gray-200 rounded animate-pulse w-16 mx-auto"></div>
-                        <div className="h-3 bg-gray-200 rounded animate-pulse w-10 mx-auto"></div>
+                        <div className="h-5 bg-gray-200 rounded-full animate-pulse w-16 mx-auto"></div>
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-14 mx-auto"></div>
                       </div>
                     </td>
                     {/* Actions */}
@@ -1245,16 +1370,12 @@ export default function ToursPage() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รูป</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รหัส / ชื่อทัวร์</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">Wholesaler</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ประเทศ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สายการบิน</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">กลุ่ม</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">โรงแรม</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">Wholesaler<br/><span className="text-gray-400 font-normal">ประเทศ</span></th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สายการบิน<br/><span className="text-gray-400 font-normal">กลุ่ม</span></th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน<br/><span className="text-gray-400 font-normal">โรงแรม</span></th>
                   <th className="text-right px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ราคา</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รอบ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">อัปเดต</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ<br/><span className="text-gray-400 font-normal">อัปเดต</span></th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">จัดการ</th>
                 </tr>
               </thead>
@@ -1321,118 +1442,137 @@ export default function ToursPage() {
                       </div>
                     </td>
 
-                    {/* Wholesaler */}
+                    {/* Wholesaler + Countries */}
                     <td className="px-4 py-3 text-center">
-                      {tour.wholesaler ? (
-                        <Link 
-                          href={`/dashboard/integrations/${tour.wholesaler_id}`}
-                          className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded hover:bg-purple-100 transition-colors inline-block max-w-[100px] truncate"
-                          title={tour.wholesaler.name}
-                        >
-                          {tour.wholesaler.name}
-                        </Link>
-                      ) : tour.data_source === 'manual' ? (
-                        <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded">
-                          สร้างเอง
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-
-                    {/* Countries */}
-                    <td className="px-4 py-3 text-center">
-                      {tour.countries && tour.countries.length > 0 ? (
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {tour.countries.slice(0, 3).map((country) => (
-                            <span
-                              key={country.id}
-                              className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded"
-                              title={country.name_en}
-                            >
-                              {country.name_th || country.name_en}
-                            </span>
-                          ))}
-                          {tour.countries.length > 3 && (
-                            <span className="text-xs text-gray-400">+{tour.countries.length - 3}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-
-                    {/* Transports (สายการบิน) */}
-                    <td className="px-4 py-3 text-center">
-                      {tour.transports && tour.transports.length > 0 ? (() => {
-                        const seen = new Set<string | number>();
-                        const uniqueTransports: TourTransport[] = [];
-                        for (const t of tour.transports!) {
-                          const key = t.transport?.id || t.transport_code;
-                          if (!seen.has(key)) {
-                            seen.add(key);
-                            uniqueTransports.push(t);
-                          }
-                        }
-                        return (
-                          <div className="flex flex-wrap justify-center gap-1">
-                            {uniqueTransports.slice(0, 3).map((t, idx) => (
-                              <span 
-                                key={idx} 
-                                className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono"
-                                title={t.transport?.name || t.transport_name}
+                      <div className="space-y-1">
+                        {tour.wholesaler ? (
+                          <Link 
+                            href={`/dashboard/integrations/${tour.wholesaler_id}`}
+                            className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-100 transition-colors inline-block max-w-[100px] truncate"
+                            title={tour.wholesaler.name}
+                          >
+                            {tour.wholesaler.name}
+                          </Link>
+                        ) : tour.data_source === 'manual' ? (
+                          <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded">
+                            สร้างเอง
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                        {tour.countries && tour.countries.length > 0 ? (
+                          <div className="flex flex-wrap justify-center gap-0.5">
+                            {tour.countries.slice(0, 2).map((country) => (
+                              <span
+                                key={country.id}
+                                className="text-[10px] text-blue-600"
+                                title={country.name_en}
                               >
-                                {t.transport?.name || t.transport_name}
+                                {country.name_th || country.name_en}
                               </span>
                             ))}
-                            {uniqueTransports.length > 3 && (
-                              <span className="text-xs text-gray-400">+{uniqueTransports.length - 3}</span>
+                            {tour.countries.length > 2 && (
+                              <span className="text-[10px] text-gray-400">+{tour.countries.length - 2}</span>
                             )}
                           </div>
-                        );
-                      })() : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                        ) : null}
+                      </div>
                     </td>
 
-                    {/* Tour Type */}
+                    {/* Transports (สายการบิน) + Tour Type */}
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getTourTypeColor(tour.tour_type)}`}>
-                        {TOUR_TYPES[tour.tour_type] || tour.tour_type}
-                      </span>
-                    </td>
-
-                    {/* Duration */}
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-gray-700">
-                        {tour.duration_days} วัน {tour.duration_nights} คืน
-                      </span>
-                    </td>
-
-                    {/* Hotel Star */}
-                    <td className="px-4 py-3 text-center">
-                      {tour.hotel_star ? (
-                        <span className="flex items-center justify-center gap-0.5 text-yellow-500">
-                          <Star className="w-3.5 h-3.5 fill-current" />
-                          <span className="text-gray-700 text-xs">
-                            {tour.hotel_star}
-                          </span>
+                      <div className="space-y-1">
+                        {tour.transports && tour.transports.length > 0 ? (() => {
+                          const seen = new Set<string | number>();
+                          const uniqueTransports: TourTransport[] = [];
+                          for (const t of tour.transports!) {
+                            const key = t.transport?.id || t.transport_code;
+                            if (!seen.has(key)) {
+                              seen.add(key);
+                              uniqueTransports.push(t);
+                            }
+                          }
+                          return (
+                            <div className="flex flex-wrap justify-center gap-0.5">
+                              {uniqueTransports.slice(0, 2).map((t, idx) => (
+                                <span 
+                                  key={idx} 
+                                  className="text-xs bg-gray-100 text-gray-700 px-1 py-0.5 rounded font-mono"
+                                  title={t.transport?.name || t.transport_name}
+                                >
+                                  {t.transport?.name || t.transport_name}
+                                </span>
+                              ))}
+                              {uniqueTransports.length > 2 && (
+                                <span className="text-[10px] text-gray-400">+{uniqueTransports.length - 2}</span>
+                              )}
+                            </div>
+                          );
+                        })() : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTourTypeColor(tour.tour_type)}`}>
+                          {TOUR_TYPES[tour.tour_type] || tour.tour_type}
                         </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                      </div>
                     </td>
 
-                    {/* Price */}
+                    {/* Duration + Hotel Star */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="space-y-0.5">
+                        <span className="text-gray-700 text-xs block">
+                          {tour.duration_days}D{tour.duration_nights}N
+                        </span>
+                        {tour.hotel_star ? (
+                          <span className="flex items-center justify-center gap-0.5 text-yellow-500">
+                            <Star className="w-3 h-3 fill-current" />
+                            <span className="text-gray-700 text-[10px]">
+                              {tour.hotel_star}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-[10px]">-</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Price + Promotion Badge */}
                     <td className="px-4 py-3 text-right">
-                      {tour.discount_amount && parseFloat(tour.discount_amount) > 0 ? (
-                        <div>
-                          <div className="text-red-400 line-through text-xs">฿{formatPrice(tour.min_price)}</div>
-                          <div className="font-bold text-green-600">฿{formatPrice(tour.display_price)}</div>
-                        </div>
-                      ) : (
-                        <span className="font-semibold text-gray-800">฿{formatPrice(tour.display_price || tour.min_price)}</span>
-                      )}
+                      <div className="space-y-0.5">
+                        {tour.discount_amount && parseFloat(tour.discount_amount) > 0 ? (
+                          <>
+                            <div className="text-red-400 line-through text-xs">฿{formatPrice(tour.min_price)}</div>
+                            <div className="font-bold text-green-600">฿{formatPrice(tour.display_price)}</div>
+                          </>
+                        ) : (
+                          <span className="font-semibold text-gray-800">฿{formatPrice(tour.display_price || tour.min_price)}</span>
+                        )}
+                        {/* Show promotion names from periods */}
+                        {(() => {
+                          const promoNames = new Set<string>();
+                          tour.periods?.forEach(period => {
+                            if (period.offer?.promotion?.name) {
+                              promoNames.add(period.offer.promotion.name);
+                            }
+                            period.offer?.promotions?.forEach(p => {
+                              if (p.name && p.is_active) promoNames.add(p.name);
+                            });
+                          });
+                          const names = Array.from(promoNames).slice(0, 2);
+                          if (names.length === 0 && tour.has_promotion) {
+                            return (
+                              <span className="block px-1.5 py-0.5 rounded text-[10px] font-medium bg-pink-100 text-pink-700 text-center">
+                                โปรโมชั่น
+                              </span>
+                            );
+                          }
+                          return names.map((name, idx) => (
+                            <span key={idx} className="block px-1.5 py-0.5 rounded text-[10px] font-medium bg-pink-100 text-pink-700 text-center truncate max-w-[100px]" title={name}>
+                              {name}
+                            </span>
+                          ));
+                        })()}
+                      </div>
                     </td>
 
                     {/* Departures */}
@@ -1446,42 +1586,25 @@ export default function ToursPage() {
                       </button>
                     </td>
 
-                    {/* Status */}
+                    {/* Status + Update */}
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(tour.status)}`}>
-                        {TOUR_STATUS[tour.status]}
-                      </span>
-                      {tour.has_promotion && (
-                        <span className="block mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-pink-100 text-pink-700">
-                          โปรโมชั่น
+                      <div className="space-y-1">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(tour.status)}`}>
+                          {TOUR_STATUS[tour.status]}
                         </span>
-                      )}
-                    </td>
-
-                    {/* Last Update / Sync */}
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        {tour.last_synced_at ? (
-                          <div className="flex items-center gap-1 text-xs text-blue-600" title={`Sync: ${tour.last_synced_at}`}>
-                            <Cloud className="w-3 h-3" />
-                            <span>{formatDateTime(tour.last_synced_at)}</span>
-                          </div>
-                        ) : tour.data_source === 'manual' ? (
-                          <div className="flex items-center gap-1 text-xs text-gray-500" title={`สร้างเมื่อ: ${tour.created_at}`}>
-                            <PenLine className="w-3 h-3" />
-                            <span>{formatDateTime(tour.updated_at || tour.created_at)}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <Clock className="w-3 h-3" />
-                            <span>{formatDateTime(tour.updated_at || tour.created_at)}</span>
-                          </div>
-                        )}
-                        {tour.data_source && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${tour.data_source === 'api' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                            {tour.data_source === 'api' ? 'API' : 'Manual'}
-                          </span>
-                        )}
+                        <div className="flex flex-col items-center">
+                          {tour.last_synced_at ? (
+                            <div className="flex items-center gap-0.5 text-[10px] text-blue-600" title={`Sync: ${tour.last_synced_at}`}>
+                              <Cloud className="w-3 h-3" />
+                              <span>{formatDateTime(tour.last_synced_at)}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-0.5 text-[10px] text-gray-400">
+                              <Clock className="w-3 h-3" />
+                              <span>{formatDateTime(tour.updated_at || tour.created_at)}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 
