@@ -132,6 +132,8 @@ interface PeriodFormData {
   discount_child_bed: string;
   price_child_nobed: string;
   discount_child_nobed: string;
+  price_infant: string;
+  discount_infant: string;
   promo_name: string;
   promo_start_date: string;
   promo_end_date: string;
@@ -156,6 +158,8 @@ const emptyPeriodForm: PeriodFormData = {
   discount_child_bed: '0',
   price_child_nobed: '',
   discount_child_nobed: '0',
+  price_infant: '',
+  discount_infant: '0',
   promo_name: '',
   promo_start_date: '',
   promo_end_date: '',
@@ -630,6 +634,8 @@ export default function EditTourPage() {
     discount_child_bed: '',
     price_child_nobed: '',
     discount_child_nobed: '',
+    price_infant: '',
+    discount_infant: '',
     promotion_id: null as number | null,
     promo_start_date: '',
     promo_end_date: '',
@@ -1334,6 +1340,8 @@ export default function EditTourPage() {
       discount_child_bed: '',
       price_child_nobed: '',
       discount_child_nobed: '',
+      price_infant: '',
+      discount_infant: '',
       promotion_id: null,
       promo_start_date: '',
       promo_end_date: '',
@@ -1362,6 +1370,8 @@ export default function EditTourPage() {
         discount_child_bed: parseFloat(newPeriodData.discount_child_bed) || 0,
         price_child_nobed: parseFloat(newPeriodData.price_child_nobed) || 0,
         discount_child_nobed: parseFloat(newPeriodData.discount_child_nobed) || 0,
+        price_infant: parseFloat(newPeriodData.price_infant) || 0,
+        discount_infant: parseFloat(newPeriodData.discount_infant) || 0,
         promotion_id: newPeriodData.promotion_id,
         promo_start_date: newPeriodData.promo_start_date || null,
         promo_end_date: newPeriodData.promo_end_date || null,
@@ -1402,6 +1412,8 @@ export default function EditTourPage() {
       discount_child_bed: period.offer?.discount_child_bed || '0',
       price_child_nobed: period.offer?.price_child_nobed || '',
       discount_child_nobed: period.offer?.discount_child_nobed || '0',
+      price_infant: period.offer?.price_infant || '',
+      discount_infant: period.offer?.discount_infant || '0',
       promo_name: period.offer?.promo_name || '',
       promo_start_date: period.offer?.promo_start_date || '',
       promo_end_date: period.offer?.promo_end_date || '',
@@ -1425,6 +1437,8 @@ export default function EditTourPage() {
         discount_child_bed: parseFloat(periodForm.discount_child_bed) || 0,
         price_child_nobed: periodForm.price_child_nobed ? parseFloat(periodForm.price_child_nobed) : null,
         discount_child_nobed: parseFloat(periodForm.discount_child_nobed) || 0,
+        price_infant: periodForm.price_infant ? parseFloat(periodForm.price_infant) : null,
+        discount_infant: parseFloat(periodForm.discount_infant) || 0,
         price_single: periodForm.price_single ? parseFloat(periodForm.price_single) : null,
         discount_single: parseFloat(periodForm.discount_single) || 0,
         deposit: periodForm.deposit ? parseFloat(periodForm.deposit) : null,
@@ -2645,7 +2659,33 @@ export default function EditTourPage() {
               </div>
             </div>
 
-            {/* Row 4: Promo */}
+            {/* Row 4: Pricing - Infant */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">ทารก</label>
+                <input
+                  type="number"
+                  value={periodForm.price_infant}
+                  onChange={(e) => setPeriodForm(prev => ({ ...prev, price_infant: e.target.value }))}
+                  placeholder="5,900"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">ลดราคา</label>
+                <input
+                  type="number"
+                  value={periodForm.discount_infant}
+                  onChange={(e) => setPeriodForm(prev => ({ ...prev, discount_infant: e.target.value }))}
+                  placeholder="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-yellow-50"
+                />
+              </div>
+              <div></div>
+              <div></div>
+            </div>
+
+            {/* Row 5: Promo */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-purple-50 p-3 rounded-lg">
               <div>
                 <label className="block text-xs font-medium text-purple-700 mb-1">
@@ -2880,6 +2920,7 @@ export default function EditTourPage() {
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">พักเดี่ยว</th>
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">เด็ก(เตียง)</th>
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">เด็ก(ไม่เตียง)</th>
+                <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">ทารก</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700 bg-purple-50 min-w-[160px]">โปรโมชั่น</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">ที่นั่ง</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">จอง</th>
@@ -2986,6 +3027,25 @@ export default function EditTourPage() {
                         type="number"
                         value={newPeriodData.discount_child_nobed}
                         onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_nobed: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                        placeholder="ส่วนลด"
+                      />
+                    </div>
+                  </td>
+                  {/* ทารก */}
+                  <td className="px-1 py-1">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="number"
+                        value={newPeriodData.price_infant}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_infant: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
+                        placeholder="ราคา"
+                      />
+                      <input
+                        type="number"
+                        value={newPeriodData.discount_infant}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_infant: e.target.value }))}
                         className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
                         placeholder="ส่วนลด"
                       />
@@ -3263,6 +3323,34 @@ export default function EditTourPage() {
                       <div className="text-right">
                         <div className="text-sm text-gray-900">{formatPrice(period.offer?.price_child_nobed)}</div>
                         <div className="text-sm text-red-500">{formatDiscount(period.offer?.discount_child_nobed)}</div>
+                      </div>
+                    )}
+                  </td>
+                  {/* ทารก */}
+                  <td className="px-1 py-1">
+                    {isEditing ? (
+                      <div className="flex flex-col gap-0.5">
+                        <input
+                          type="number"
+                          key={`infant-${period.id}-${period.offer?.price_infant}`}
+                          defaultValue={period.offer?.price_infant || ''}
+                          onBlur={(e) => handleInlineOfferUpdate(period.id, 'price_infant', e.target.value)}
+                          className="w-20 px-1 py-0.5 border border-blue-400 rounded text-xs text-right"
+                          placeholder="ราคา"
+                        />
+                        <input
+                          type="number"
+                          key={`disc-infant-${period.id}-${period.offer?.discount_infant}`}
+                          defaultValue={period.offer?.discount_infant || ''}
+                          onBlur={(e) => handleInlineOfferUpdate(period.id, 'discount_infant', e.target.value)}
+                          className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                          placeholder="ส่วนลด"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-right">
+                        <div className="text-sm text-gray-900">{formatPrice(period.offer?.price_infant)}</div>
+                        <div className="text-sm text-red-500">{formatDiscount(period.offer?.discount_infant)}</div>
                       </div>
                     )}
                   </td>
