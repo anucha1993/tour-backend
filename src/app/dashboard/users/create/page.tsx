@@ -20,6 +20,7 @@ export default function CreateUserPage() {
     password_confirmation: '',
     role: 'staff',
     is_active: true,
+    is_sales: false,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -213,6 +214,22 @@ export default function CreateUserPage() {
                     <div>
                       <span className="text-sm font-medium text-gray-700">เปิดใช้งาน</span>
                       <p className="text-xs text-gray-500">ผู้ใช้สามารถเข้าระบบได้</p>
+                    </div>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="is_sales"
+                      checked={formData.is_sales}
+                      onChange={handleChange}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Sales</span>
+                      <p className="text-xs text-gray-500">แสดงในตัวเลือกเซลส์หน้าจอง</p>
                     </div>
                   </label>
                 </div>

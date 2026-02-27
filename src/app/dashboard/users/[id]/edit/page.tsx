@@ -13,6 +13,7 @@ interface User {
   email: string;
   role: 'admin' | 'manager' | 'staff';
   is_active: boolean;
+  is_sales: boolean;
 }
 
 export default function EditUserPage() {
@@ -30,6 +31,7 @@ export default function EditUserPage() {
     password_confirmation: '',
     role: 'staff' as 'admin' | 'manager' | 'staff',
     is_active: true,
+    is_sales: false,
   });
 
   useEffect(() => {
@@ -44,6 +46,7 @@ export default function EditUserPage() {
             password_confirmation: '',
             role: response.data.role,
             is_active: response.data.is_active,
+            is_sales: response.data.is_sales ?? false,
           });
         }
       } catch (error) {
@@ -111,11 +114,13 @@ export default function EditUserPage() {
         password_confirmation?: string;
         role?: string;
         is_active?: boolean;
+        is_sales?: boolean;
       } = {
         name: formData.name,
         email: formData.email,
         role: formData.role,
         is_active: formData.is_active,
+        is_sales: formData.is_sales,
       };
       
       if (formData.password) {
@@ -277,6 +282,22 @@ export default function EditUserPage() {
                     <div>
                       <span className="text-sm font-medium text-gray-700">เปิดใช้งาน</span>
                       <p className="text-xs text-gray-500">ผู้ใช้สามารถเข้าระบบได้</p>
+                    </div>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="is_sales"
+                      checked={formData.is_sales}
+                      onChange={handleChange}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Sales</span>
+                      <p className="text-xs text-gray-500">แสดงในตัวเลือกเซลส์หน้าจอง</p>
                     </div>
                   </label>
                 </div>

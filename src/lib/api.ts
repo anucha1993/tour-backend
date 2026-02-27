@@ -778,6 +778,9 @@ export interface Offer {
   promotion_id: number | null;
   promotion?: Promotion;
   promotions?: OfferPromotion[];
+  // Computed net prices
+  net_price_adult?: number;
+  net_price_single?: number;
 }
 
 export interface OfferPromotion {
@@ -5333,7 +5336,7 @@ export const promotionNotificationsApi = {
 export interface AdminBooking {
   id: number;
   booking_code: string;
-  web_member_id: number;
+  web_member_id: number | null;
   tour_id: number;
   period_id: number;
   flash_sale_item_id: number | null;
@@ -5341,10 +5344,15 @@ export interface AdminBooking {
   qty_adult_single: number;
   qty_child_bed: number;
   qty_child_nobed: number;
+  qty_infant: number;
+  qty_triple: number;
+  qty_twin: number;
+  qty_double: number;
   price_adult: string;
   price_single: string;
   price_child_bed: string;
   price_child_nobed: string;
+  price_infant: string;
   total_amount: string;
   first_name: string;
   last_name: string;
@@ -5353,7 +5361,7 @@ export interface AdminBooking {
   sale_code: string | null;
   special_request: string | null;
   status: 'pending' | 'confirmed' | 'paid' | 'cancelled' | 'completed';
-  source: 'website' | 'flash_sale';
+  source: 'website' | 'flash_sale' | 'manual';
   admin_note: string | null;
   created_at: string;
   updated_at: string;
@@ -5418,6 +5426,67 @@ export const bookingsApi = {
 
   get: (id: number) =>
     apiRequest<AdminBooking>(`/bookings/${id}`),
+
+  create: (data: {
+    tour_id: number;
+    period_id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    qty_adult: number;
+    qty_adult_single?: number;
+    qty_child_bed?: number;
+    qty_child_nobed?: number;
+    qty_infant?: number;
+    qty_triple?: number;
+    qty_twin?: number;
+    qty_double?: number;
+    price_adult: number;
+    price_single?: number;
+    price_child_bed?: number;
+    price_child_nobed?: number;
+    price_infant?: number;
+    total_amount: number;
+    sale_code?: string;
+    special_request?: string;
+    admin_note?: string;
+    status?: string;
+  }) =>
+    apiRequest<{ success: boolean; message: string; booking: AdminBooking }>(
+      '/bookings',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  update: (id: number, data: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+    qty_adult?: number;
+    qty_adult_single?: number;
+    qty_child_bed?: number;
+    qty_child_nobed?: number;
+    qty_infant?: number;
+    qty_triple?: number;
+    qty_twin?: number;
+    qty_double?: number;
+    price_adult?: number;
+    price_single?: number;
+    price_child_bed?: number;
+    price_child_nobed?: number;
+    price_infant?: number;
+    total_amount?: number;
+    sale_code?: string;
+    special_request?: string;
+    admin_note?: string;
+    status?: string;
+    period_id?: number;
+  }) =>
+    apiRequest<{ success: boolean; message: string; booking: AdminBooking }>(
+      `/bookings/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    ),
 
   updateStatus: (id: number, data: { status: string; admin_note?: string }) =>
     apiRequest<{ success: boolean; message: string; booking: AdminBooking }>(
