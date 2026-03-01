@@ -466,6 +466,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
         icon: Mail,
       },
       {
+        title: 'Email Template',
+        href: '/dashboard/settings/email-templates',
+        icon: FileText,
+      },
+      {
         title: 'OTP',
         href: '/dashboard/settings/otp',
         icon: Smartphone,
