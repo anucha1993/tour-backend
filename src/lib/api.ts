@@ -5363,6 +5363,7 @@ export interface AdminBooking {
   status: 'pending' | 'confirmed' | 'paid' | 'cancelled' | 'completed';
   source: 'website' | 'flash_sale' | 'manual';
   admin_note: string | null;
+  cancelled_by: 'customer' | 'admin' | null;
   created_at: string;
   updated_at: string;
   member?: {

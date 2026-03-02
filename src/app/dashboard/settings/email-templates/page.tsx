@@ -24,6 +24,13 @@ import Link from 'next/link';
 
 /* ─────────────────────── Types ─────────────────────── */
 
+interface EmailTemplatesResponse {
+  success: boolean;
+  data?: Templates;
+  variables?: VariableMap;
+  message?: string;
+}
+
 interface TemplateItem {
   enabled: boolean;
   subject: string;
@@ -90,7 +97,7 @@ export default function EmailTemplatesPage() {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const res: any = await apiClient.get('/settings/email-templates');
+      const res = await apiClient.get('/settings/email-templates') as EmailTemplatesResponse;
       if (res.success && res.data) {
         setTemplates({
           booking_confirmation: res.data.booking_confirmation,
@@ -100,8 +107,7 @@ export default function EmailTemplatesPage() {
           setVariables(res.variables);
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch email templates:', error);
+    } catch {
       setMessage({ type: 'error', text: 'ไม่สามารถโหลด Email Template ได้' });
     } finally {
       setLoading(false);
@@ -119,7 +125,7 @@ export default function EmailTemplatesPage() {
       } else {
         setMessage({ type: 'error', text: res.message || 'เกิดข้อผิดพลาด' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: 'ไม่สามารถบันทึกได้' });
     } finally {
       setSaving(false);
@@ -492,7 +498,7 @@ export default function EmailTemplatesPage() {
                 </label>
                 <input
                   type="text"
-                  value={current.admin_emails}
+                  value={current.admin_emails ?? ''}
                   onChange={(e) => updateTemplate(activeTab, 'admin_emails', e.target.value)}
                   placeholder="admin@example.com, manager@example.com"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"

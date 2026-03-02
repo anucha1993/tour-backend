@@ -91,8 +91,13 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit }: {
 
         <div className="p-6 space-y-5">
           {/* Status + Source */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <StatusBadge status={booking.status} />
+            {booking.status === 'cancelled' && booking.cancelled_by === 'customer' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-orange-100 text-orange-700">
+                ยกเลิกโดยลูกค้า
+              </span>
+            )}
             <SourceBadge source={booking.source} />
             <span className="text-xs text-gray-400 ml-auto">{formatDateTime(booking.created_at)}</span>
           </div>
@@ -1338,7 +1343,12 @@ export default function BookingsPage() {
                       <SourceBadge source={b.source} />
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <StatusBadge status={b.status} />
+                      <div className="flex flex-col items-center gap-0.5">
+                        <StatusBadge status={b.status} />
+                        {b.status === 'cancelled' && b.cancelled_by === 'customer' && (
+                          <span className="text-[10px] text-orange-600 font-medium">โดยลูกค้า</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center text-xs text-gray-400 whitespace-nowrap">
                       {formatDateTime(b.created_at)}

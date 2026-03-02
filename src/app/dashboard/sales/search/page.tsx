@@ -23,6 +23,7 @@ import {
   Square,
   Download,
   AlertCircle,
+  Percent,
 } from 'lucide-react';
 
 interface Period {
@@ -80,6 +81,7 @@ interface SearchFilters {
   min_seats: string;
   integration_id: number | null; // Changed from integration_id
   _sort: string;
+  discount_only: boolean;
 }
 
 interface Integration {
@@ -162,6 +164,7 @@ export default function SalesSearchPage() {
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [searchTime, setSearchTime] = useState<number | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [tourCodeMap, setTourCodeMap] = useState<Record<string, TourCodeLookup>>({});
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const progressRef = useRef<NodeJS.Timeout | null>(null);
@@ -209,6 +212,7 @@ export default function SalesSearchPage() {
     min_seats: '',
     integration_id: null,
     _sort: 'price',
+    discount_only: false,
   });
 
   // Load integrations and countries
@@ -266,32 +270,45 @@ export default function SalesSearchPage() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/tours/lookup-codes`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ wholesaler_tour_codes: lookupItems }),
-      });
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      };
 
-      // Check if response is OK and is JSON
-      if (!response.ok) {
-        console.warn('Tour codes lookup API not available');
-        return;
+      // Batch requests in chunks of 200 (backend validation limit)
+      const BATCH_SIZE = 200;
+      let mergedMap: Record<string, TourCodeLookup> = {};
+
+      for (let i = 0; i < lookupItems.length; i += BATCH_SIZE) {
+        const batch = lookupItems.slice(i, i + BATCH_SIZE);
+        const response = await fetch(`${API_BASE_URL}/tours/lookup-codes`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ wholesaler_tour_codes: batch }),
+        });
+
+        // Check if response is OK and is JSON
+        if (!response.ok) {
+          console.warn('Tour codes lookup API not available');
+          continue;
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.warn('Tour codes lookup API returned non-JSON response');
+          continue;
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          mergedMap = { ...mergedMap, ...(data.data as Record<string, TourCodeLookup>) };
+        }
       }
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.warn('Tour codes lookup API returned non-JSON response');
-        return;
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setTourCodeMap(data.data);
+      if (Object.keys(mergedMap).length > 0) {
+        setTourCodeMap(mergedMap);
       }
     } catch {
       // Silently fail - API may not be deployed yet
@@ -307,6 +324,7 @@ export default function SalesSearchPage() {
     
     setLoading(true);
     setLoadingProgress(0);
+    setSearchError(null);
     const startTime = Date.now();
     
     // Start progress timer
@@ -361,7 +379,17 @@ export default function SalesSearchPage() {
       
       const response = await fetch(`${url}?${params.toString()}`);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Try to parse error message from response
+        let errorMsg = `HTTP error! status: ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData.message) errorMsg = errData.message;
+        } catch { /* ignore parse error */ }
+        
+        if (response.status === 429 || errorMsg.toLowerCase().includes('429') || errorMsg.toLowerCase().includes('too many')) {
+          throw new Error('API ถูกจำกัดการเรียกใช้งาน (Rate Limit) กรุณารอสักครู่แล้วลองใหม่');
+        }
+        throw new Error(errorMsg);
       }
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -383,6 +411,8 @@ export default function SalesSearchPage() {
       setSearchTime(Date.now() - startTime);
     } catch (error) {
       console.error('Search failed:', error);
+      const message = error instanceof Error ? error.message : 'ค้นหาล้มเหลว กรุณาลองใหม่';
+      setSearchError(message);
     } finally {
       // Stop progress timer
       if (progressRef.current) {
@@ -426,6 +456,7 @@ export default function SalesSearchPage() {
       min_seats: '',
       integration_id: prev.integration_id, // Keep wholesaler selection
       _sort: 'price',
+      discount_only: false,
     }));
   };
 
@@ -464,6 +495,65 @@ export default function SalesSearchPage() {
     });
   };
 
+  // Check if tour has any discounted periods
+  const getTourDiscount = (tour: Tour): { hasDiscount: boolean; maxDiscountPercent: number; originalPrice: number; salePrice: number } => {
+    let maxDiscountPercent = 0;
+    let bestOriginal = 0;
+    let bestSale = 0;
+
+    if (tour.periods && tour.periods.length > 0) {
+      for (const p of tour.periods) {
+        const raw = p._raw;
+        // Method 1: unified discount_adult field
+        const discountAdult = Number((p as unknown as Record<string, unknown>).discount_adult) || 0;
+        const priceAdult = p.price_adult || 0;
+        if (discountAdult > 0 && priceAdult > 0) {
+          const pct = (discountAdult / (priceAdult + discountAdult)) * 100;
+          if (pct > maxDiscountPercent) {
+            maxDiscountPercent = pct;
+            bestOriginal = priceAdult + discountAdult;
+            bestSale = priceAdult;
+          }
+          continue;
+        }
+        // Method 2: raw salePrice vs adultPrice (GO365-style)
+        const salePrice = Number(raw?.salePrice || 0);
+        const adultPrice = Number(raw?.adultPrice || raw?.normalPrice || raw?.originalPrice || 0);
+        if (salePrice > 0 && adultPrice > 0 && salePrice < adultPrice) {
+          const pct = ((adultPrice - salePrice) / adultPrice) * 100;
+          if (pct > maxDiscountPercent) {
+            maxDiscountPercent = pct;
+            bestOriginal = adultPrice;
+            bestSale = salePrice;
+          }
+          continue;
+        }
+        // Method 3: raw discount field
+        const rawDiscount = Number(raw?.discount || raw?.Discount || raw?.discount_adult || 0);
+        const rawPrice = Number(raw?.Price || raw?.price_adult || priceAdult || 0);
+        if (rawDiscount > 0 && rawPrice > 0) {
+          const pct = (rawDiscount / (rawPrice + rawDiscount)) * 100;
+          if (pct > maxDiscountPercent) {
+            maxDiscountPercent = pct;
+            bestOriginal = rawPrice + rawDiscount;
+            bestSale = rawPrice;
+          }
+        }
+      }
+    }
+    return {
+      hasDiscount: maxDiscountPercent > 0,
+      maxDiscountPercent: Math.round(maxDiscountPercent),
+      originalPrice: bestOriginal,
+      salePrice: bestSale,
+    };
+  };
+
+  // Filtered tours (client-side discount filter)
+  const filteredTours = filters.discount_only
+    ? tours.filter(tour => getTourDiscount(tour).hasDiscount)
+    : tours;
+
   // State สำหรับ copy feedback
   const [copiedTourId, setCopiedTourId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
@@ -494,13 +584,31 @@ export default function SalesSearchPage() {
     
     const formatFullDate = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
     
-    // Check if specific date filter is applied
-    const hasDateFilter = filters.departure_from || filters.departure_to;
+    // Check if specific date filter is applied (any mode)
+    let filterFrom: Date | null = null;
+    let filterTo: Date | null = null;
+    
+    if (filters.date_search_mode === 'range') {
+      if (filters.departure_from) filterFrom = new Date(filters.departure_from);
+      if (filters.departure_to) filterTo = new Date(filters.departure_to);
+    } else if (filters.date_search_mode === 'month' && filters.departure_month_from) {
+      const [startYear, startMonth] = filters.departure_month_from.split('-');
+      filterFrom = new Date(Number(startYear), Number(startMonth) - 1, 1);
+      const endMonthValue = filters.departure_month_to || filters.departure_month_from;
+      const [endYear, endMonth] = endMonthValue.split('-');
+      const lastDay = new Date(Number(endYear), Number(endMonth), 0).getDate();
+      filterTo = new Date(Number(endYear), Number(endMonth) - 1, lastDay);
+    } else if (filters.date_search_mode === 'exact' && filters.exact_departure) {
+      filterFrom = new Date(filters.exact_departure);
+      filterTo = new Date(filters.exact_departure);
+    }
+    
+    const hasDateFilter = filterFrom || filterTo;
     
     // Get periods with parsed dates
     const periodsWithDates = (tour.periods || []).map(p => {
-      const dateStr = p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate;
-      const endDateStr = p._raw?.PeriodEndDate || p._raw?.ReturnDate;
+      const dateStr = p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate;
+      const endDateStr = p.return_date || p._raw?.PeriodEndDate || p._raw?.ReturnDate || p._raw?.returnDate;
       const price = p.price_adult || p._raw?.PriceAdult || p._raw?.Price || 0;
       const seats = p.available || p._raw?.Available || p._raw?.AvailableSeats || 0;
       
@@ -526,9 +634,6 @@ export default function SalesSearchPage() {
     
     if (hasDateFilter && periodsWithDates.length > 0) {
       // Filter periods by date range
-      const filterFrom = filters.departure_from ? new Date(filters.departure_from) : null;
-      const filterTo = filters.departure_to ? new Date(filters.departure_to) : null;
-      
       const matchingPeriods = periodsWithDates.filter(p => {
         if (!p.startDate) return false;
         if (filterFrom && p.startDate < filterFrom) return false;
@@ -537,25 +642,22 @@ export default function SalesSearchPage() {
       });
       
       if (matchingPeriods.length > 0) {
-        // Generate text for each matching period
-        const periodTexts = matchingPeriods.map(p => {
-          let text = `รหัสทัวร์ : ${code}\n`;
-          text += `${title} (${days} วัน ${nights} คืน)\n`;
-          
-          const startStr = p.startDate ? formatFullDate(p.startDate) : '';
-          const endStr = p.endDate ? formatFullDate(p.endDate) : '';
-          text += `ช่วงเดินทาง : ${startStr}${endStr ? ` - ${endStr}` : ''}\n`;
-          
-          if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
-          text += `ราคา : ${new Intl.NumberFormat('th-TH').format(p.price)}\n`;
-          text += `ที่นั่งรับได้ : ${p.seats}\n`;
-          if (pdfUrl) {
-            text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
-          }
-          return text;
-        });
+        // Use filter date range as "ช่วงเดินทาง" and show lowest price from matching periods
+        const filterFromStr = filterFrom ? formatFullDate(filterFrom) : '';
+        const filterToStr = filterTo ? formatFullDate(filterTo) : '';
+        const lowestMatchPrice = Math.min(...matchingPeriods.map(p => p.price).filter(p => p > 0));
+        const bestPeriod = matchingPeriods.find(p => p.price === lowestMatchPrice) || matchingPeriods[0];
         
-        return periodTexts.join('\n\n---\n\n');
+        let text = `รหัสทัวร์ : ${code}\n`;
+        text += `${title} (${days} วัน ${nights} คืน)\n`;
+        text += `ช่วงเดินทาง : ${filterFromStr}${filterToStr ? ` - ${filterToStr}` : ''}\n`;
+        if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
+        text += `ราคา : ${new Intl.NumberFormat('th-TH').format(lowestMatchPrice)}\n`;
+        text += `ที่นั่งรับได้ : ${bestPeriod.seats}\n`;
+        if (pdfUrl) {
+          text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
+        }
+        return text;
       }
     }
     
@@ -592,7 +694,7 @@ export default function SalesSearchPage() {
 
   // Copy all tours
   const handleCopyAll = async () => {
-    const allText = tours.map(tour => formatTourForCopy(tour)).join('\n\n---\n\n');
+    const allText = filteredTours.map(tour => formatTourForCopy(tour)).join('\n\n---\n\n');
     await navigator.clipboard.writeText(allText);
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
@@ -846,6 +948,20 @@ export default function SalesSearchPage() {
                   >
                     🎯 ค้นหาวันที่ตรงกัน
                   </button>
+                  <label className={`flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    filters.discount_only
+                      ? 'bg-orange-500 text-white shadow-md'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-orange-50 hover:border-orange-300'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={filters.discount_only}
+                      onChange={(e) => setFilters(prev => ({ ...prev, discount_only: e.target.checked }))}
+                      className="sr-only"
+                    />
+                    <Percent className="w-4 h-4" />
+                    เฉพาะทัวร์ลดราคา
+                  </label>
                 </div>
               </div>
 
@@ -1005,13 +1121,16 @@ export default function SalesSearchPage() {
                   <input
                     type="text"
                     placeholder="พิมพ์ค้นหา..."
-                    value={countrySearch || COUNTRY_OPTIONS.find(c => c.value === filters.country)?.labelTh || filters.country}
+                    value={countryDropdownOpen ? countrySearch : (COUNTRY_OPTIONS.find(c => c.value === filters.country)?.labelTh || filters.country || '')}
                     onChange={(e) => {
                       setCountrySearch(e.target.value);
                       setCountryDropdownOpen(true);
                     }}
-                    onFocus={() => setCountryDropdownOpen(true)}
-                    className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm"
+                    onFocus={() => {
+                      setCountrySearch('');
+                      setCountryDropdownOpen(true);
+                    }}
+                    className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm relative z-10"
                   />
                   {filters.country && (
                     <button
@@ -1188,6 +1307,21 @@ export default function SalesSearchPage() {
 
       {/* Results */}
       <div className="space-y-4">
+        {/* Search Error Alert */}
+        {searchError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-red-600 text-lg">⚠️</span>
+              <span className="text-red-800 text-sm">{searchError}</span>
+            </div>
+            <button
+              onClick={() => setSearchError(null)}
+              className="text-red-400 hover:text-red-600 text-lg font-bold"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {/* Mass Sync Bar (when tours selected) */}
         {selectedTours.size > 0 && !syncing && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
@@ -1247,7 +1381,11 @@ export default function SalesSearchPage() {
         {/* Results Header */}
         <div className="flex items-center justify-between">
           <p className="text-gray-600">
-            {loading ? 'กำลังค้นหา...' : `พบ ${total} ทัวร์`}
+            {loading ? 'กำลังค้นหา...' : (
+              filters.discount_only && filteredTours.length !== tours.length
+                ? `พบ ${filteredTours.length} ทัวร์ลดราคา (จาก ${total} ทัวร์)`
+                : `พบ ${total} ทัวร์`
+            )}
           </p>
           <div className="flex items-center gap-2">
             {tours.length > 0 && (
@@ -1268,7 +1406,7 @@ export default function SalesSearchPage() {
                   className={copiedAll ? 'text-green-600 border-green-600' : ''}
                 >
                   {copiedAll ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  {copiedAll ? 'คัดลอกแล้ว!' : `คัดลอกทั้งหมด (${tours.length})`}
+                  {copiedAll ? 'คัดลอกแล้ว!' : `คัดลอกทั้งหมด (${filteredTours.length})`}
                 </Button>
               </>
             )}
@@ -1400,9 +1538,10 @@ export default function SalesSearchPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tours.map((tour, index) => {
+                    {filteredTours.map((tour, index) => {
                       const raw = tour._raw;
                       const lowestPrice = getLowestPrice(tour);
+                      const discountInfo = getTourDiscount(tour);
                       const availablePeriods = getAvailablePeriods(tour);
                       const isExpanded = expandedTour === index;
                       const tourKey = getTourKey(tour, index);
@@ -1603,9 +1742,21 @@ export default function SalesSearchPage() {
                           
                           {/* ราคาเริ่มต้น */}
                           <td className="px-4 py-3 text-right">
-                            <span className="font-bold text-blue-600 whitespace-nowrap">
-                              ฿{formatPrice(lowestPrice)}
-                            </span>
+                            {discountInfo.hasDiscount ? (
+                              <div className="flex flex-col items-end">
+                                <span className="text-[10px] text-gray-400 line-through">฿{formatPrice(discountInfo.originalPrice)}</span>
+                                <span className="font-bold text-red-600 whitespace-nowrap">
+                                  ฿{formatPrice(discountInfo.salePrice || lowestPrice)}
+                                </span>
+                                <span className="text-[10px] font-medium text-white bg-red-500 px-1.5 py-0.5 rounded-full">
+                                  -{discountInfo.maxDiscountPercent}%
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-bold text-blue-600 whitespace-nowrap">
+                                ฿{formatPrice(lowestPrice)}
+                              </span>
+                            )}
                           </td>
                           
                           {/* รอบ/ว่าง */}
