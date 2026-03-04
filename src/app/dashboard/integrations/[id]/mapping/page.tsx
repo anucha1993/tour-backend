@@ -366,7 +366,7 @@ interface ValueMapItem {
 
 // String transform options
 interface StringTransform {
-  type: 'split' | 'join' | 'replace' | 'template' | 'none';
+  type: 'split' | 'join' | 'replace' | 'template' | 'formula' | 'none';
   // สำหรับ split: แปลง string เป็น array
   splitBy?: string;  // เช่น ' ' (space), ',' (comma), '\n' (newline)
   // สำหรับ join: แปลง array เป็น string หรือ rejoin หลัง split
@@ -376,6 +376,8 @@ interface StringTransform {
   replaceTo?: string;
   // สำหรับ template: รวมหลาย fields
   template?: string; // เช่น '{ProductName} - {Highlight}'
+  // สำหรับ formula: คำนวณจากหลาย fields
+  formulaExpression?: string; // เช่น '{Price} - {Price_End}'
 }
 
 // Mapping can be either API field or fixed value
@@ -877,6 +879,65 @@ export default function IntegrationMappingPage() {
       return current;
     };
 
+    // Helper: evaluate formula expression like '{Price} - {Price_End}'
+    // Takes the expression and a data source (object) to resolve field references
+    const evaluateFormula = (expression: string, dataSource: Record<string, unknown>): number | null => {
+      try {
+        // Replace {FieldName} with actual numeric values
+        let expr = expression;
+        const fieldMatches = expression.match(/\{([^}]+)\}/g);
+        if (!fieldMatches) return null;
+        
+        for (const match of fieldMatches) {
+          const fieldPath = match.slice(1, -1); // Remove { }
+          const fieldValue = getNestedValue(dataSource, fieldPath);
+          if (fieldValue === undefined || fieldValue === null) return null;
+          const numValue = Number(fieldValue);
+          if (isNaN(numValue)) return null;
+          expr = expr.replace(match, String(numValue));
+        }
+        
+        // Validate: only allow numbers, operators (+, -, *, /), parentheses, spaces, and decimal points
+        if (!/^[\d\s+\-*/().]+$/.test(expr.trim())) return null;
+        
+        // Evaluate the expression safely
+        const result = Function('"use strict"; return (' + expr + ')')();
+        if (typeof result !== 'number' || !isFinite(result)) return null;
+        return Math.round(result * 100) / 100; // Round to 2 decimal places
+      } catch {
+        return null;
+      }
+    };
+
+    // Helper: evaluate formula for array item context (e.g., inside departure loop)
+    const evaluateFormulaFromItem = (expression: string, item: Record<string, unknown>, rootData: Record<string, unknown>): number | null => {
+      try {
+        let expr = expression;
+        const fieldMatches = expression.match(/\{([^}]+)\}/g);
+        if (!fieldMatches) return null;
+        
+        for (const match of fieldMatches) {
+          const fieldPath = match.slice(1, -1);
+          // Try item-level first, then root-level
+          let fieldValue = getValueFromItem(item, fieldPath);
+          if (fieldValue === undefined || fieldValue === null) {
+            fieldValue = getNestedValue(rootData, fieldPath);
+          }
+          if (fieldValue === undefined || fieldValue === null) return null;
+          const numValue = Number(fieldValue);
+          if (isNaN(numValue)) return null;
+          expr = expr.replace(match, String(numValue));
+        }
+        
+        if (!/^[\d\s+\-*/().]+$/.test(expr.trim())) return null;
+        const result = Function('"use strict"; return (' + expr + ')')();
+        if (typeof result !== 'number' || !isFinite(result)) return null;
+        return Math.round(result * 100) / 100;
+      } catch {
+        return null;
+      }
+    };
+
     // Apply transforms to a value
     const applyTransforms = (apiValue: unknown, mapping: MappingValue, fieldDef?: FieldDefinition): unknown => {
       let value = apiValue;
@@ -900,7 +961,7 @@ export default function IntegrationMappingPage() {
         }
       }
       
-      // Apply string transform (split/join/replace)
+      // Apply string transform (split/join/replace/formula)
       if (mapping.stringTransform && value !== undefined) {
         const transform = mapping.stringTransform;
         
@@ -913,6 +974,12 @@ export default function IntegrationMappingPage() {
           }
         } else if (transform.type === 'replace' && transform.replaceFrom && typeof value === 'string') {
           value = value.split(transform.replaceFrom).join(transform.replaceTo || '');
+        } else if (transform.type === 'formula' && transform.formulaExpression) {
+          // Formula: คำนวณจากหลาย fields เช่น '{Price} - {Price_End}'
+          // ไม่ใช้ value โดยตรง แต่ดึงค่าจาก fields ใน expression
+          // sourceItem จะถูกส่งมาผ่าน context (ใช้ closure)
+          // เนื่องจาก applyTransforms ไม่มี access ถึง sourceData/sourceItem โดยตรง
+          // formula จะถูก evaluate ใน caller แทน (ดูด้านล่าง)
         }
       }
       
@@ -1010,6 +1077,19 @@ export default function IntegrationMappingPage() {
             if (mapping.type === 'fixed') {
               item[key] = mapping.value;
             } else if (mapping.type === 'api') {
+              // Check if this is a formula transform - evaluate from multiple fields
+              if (mapping.stringTransform?.type === 'formula' && mapping.stringTransform.formulaExpression) {
+                const formulaResult = evaluateFormulaFromItem(
+                  mapping.stringTransform.formulaExpression,
+                  sourceItem as Record<string, unknown>,
+                  sourceData
+                );
+                if (formulaResult !== null) {
+                  item[key] = formulaResult;
+                }
+                continue;
+              }
+
               let fieldPath = mapping.value;
               
               if (fieldPath.includes('[]')) {
@@ -1053,6 +1133,14 @@ export default function IntegrationMappingPage() {
           if (mapping.type === 'fixed') {
             item[key] = mapping.value;
           } else if (mapping.type === 'api') {
+            // Check formula transform
+            if (mapping.stringTransform?.type === 'formula' && mapping.stringTransform.formulaExpression) {
+              const formulaResult = evaluateFormula(mapping.stringTransform.formulaExpression, sourceData);
+              if (formulaResult !== null) {
+                item[key] = formulaResult;
+              }
+              continue;
+            }
             let apiValue = getNestedValue(sourceData, mapping.value);
             apiValue = applyTransforms(apiValue, mapping, field);
             if (apiValue !== undefined) {
@@ -1108,6 +1196,12 @@ export default function IntegrationMappingPage() {
               }
             }
             apiValue = template.trim();
+          } else if (mapping.stringTransform?.type === 'formula' && mapping.stringTransform.formulaExpression) {
+            // Formula: คำนวณจากหลาย fields
+            const formulaResult = evaluateFormula(mapping.stringTransform.formulaExpression, sourceData);
+            if (formulaResult !== null) {
+              apiValue = formulaResult;
+            }
           } else {
             apiValue = getNestedValue(sourceData, mapping.value);
           }
@@ -1787,8 +1881,8 @@ export default function IntegrationMappingPage() {
                                   </button>
                                 </div>
                               )}
-                              {/* String Transform for string/array fields (split, join, template) */}
-                              {mapping.type === 'api' && (field.type === 'string' || field.type.startsWith('array')) && (
+                              {/* Transform for string/array/numeric fields (split, join, template, formula) */}
+                              {mapping.type === 'api' && (field.type === 'string' || field.type.startsWith('array') || field.type === 'int' || field.type === 'float') && (
                                 <div className="mt-1 flex items-center gap-2">
                                   <button
                                     onClick={(e) => {
@@ -2315,10 +2409,11 @@ export default function IntegrationMappingPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">ประเภท Transform:</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
-                    { type: 'none', label: 'ไม่แปลง', desc: 'ใช้ค่าตรงๆ' },
-                    { type: 'split', label: 'Split & Join', desc: 'แยก/รวมข้อความ' },
-                    { type: 'replace', label: 'Replace', desc: 'แทนที่ข้อความ' },
-                    { type: 'template', label: 'Template', desc: 'รวมหลาย fields' },
+                    { type: 'none', label: 'ไม่แปลง', desc: 'ใช้ค่าตรงๆ', icon: '⊘' },
+                    { type: 'split', label: 'Split & Join', desc: 'แยก/รวมข้อความ', icon: '✂️' },
+                    { type: 'replace', label: 'Replace', desc: 'แทนที่ข้อความ', icon: '🔄' },
+                    { type: 'template', label: 'Template', desc: 'รวมหลาย fields', icon: '📝' },
+                    { type: 'formula', label: 'Formula', desc: 'คำนวณจาก fields', icon: '🔢' },
                   ].map(opt => (
                     <button
                       key={opt.type}
@@ -2454,6 +2549,63 @@ export default function IntegrationMappingPage() {
                           </button>
                         ))}
                         {apiFieldKeys.length > 10 && <span className="text-gray-500">+{apiFieldKeys.length - 10} more</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Formula Options */}
+              {transformModal.transform.type === 'formula' && (
+                <div className="space-y-3 p-3 bg-cyan-50 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">สูตรคำนวณ (Formula):</label>
+                    <textarea
+                      value={transformModal.transform.formulaExpression || ''}
+                      onChange={(e) => setTransformModal(prev => ({
+                        ...prev,
+                        transform: { ...prev.transform, formulaExpression: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                      rows={2}
+                      placeholder="{Price} - {Price_End}"
+                    />
+                  </div>
+                  <div className="text-xs text-cyan-700 p-2 bg-cyan-100 rounded space-y-2">
+                    <div>
+                      <strong>วิธีใช้:</strong> ใช้ {'{ชื่อ field}'} เพื่อดึงค่าตัวเลขจาก API แล้วคำนวณ
+                    </div>
+                    <div>
+                      <strong>ตัวดำเนินการ:</strong>{' '}
+                      <code>+</code> (บวก), <code>-</code> (ลบ), <code>*</code> (คูณ), <code>/</code> (หาร), <code>()</code> (วงเล็บ)
+                    </div>
+                    <div>
+                      <strong>ตัวอย่าง:</strong>
+                      <ul className="list-disc list-inside mt-1 space-y-0.5">
+                        <li><code>{'{Price} - {Price_End}'}</code> → ส่วนต่างราคา</li>
+                        <li><code>{'{Price} * 1.07'}</code> → ราคารวม VAT 7%</li>
+                        <li><code>{'({Adult} + {Child}) * {PricePerPax}'}</code> → ราคารวม</li>
+                      </ul>
+                    </div>
+                    <div className="mt-2 text-cyan-600">
+                      <strong>Available fields:</strong>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {apiFieldKeys.slice(0, 15).map(f => (
+                          <button
+                            key={f}
+                            onClick={() => setTransformModal(prev => ({
+                              ...prev,
+                              transform: { 
+                                ...prev.transform, 
+                                formulaExpression: (prev.transform.formulaExpression || '') + `{${f}}` 
+                              }
+                            }))}
+                            className="px-1.5 py-0.5 bg-cyan-200 rounded text-cyan-800 hover:bg-cyan-300"
+                          >
+                            {f}
+                          </button>
+                        ))}
+                        {apiFieldKeys.length > 15 && <span className="text-gray-500">+{apiFieldKeys.length - 15} more</span>}
                       </div>
                     </div>
                   </div>
