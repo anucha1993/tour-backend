@@ -378,6 +378,7 @@ interface StringTransform {
   template?: string; // เช่น '{ProductName} - {Highlight}'
   // สำหรับ formula: คำนวณจากหลาย fields
   formulaExpression?: string; // เช่น '{Price} - {Price_End}'
+  formulaSkipZero?: boolean; // ข้ามเมื่อ field ใดค่าเป็น 0 (default: true)
 }
 
 // Mapping can be either API field or fixed value
@@ -881,7 +882,7 @@ export default function IntegrationMappingPage() {
 
     // Helper: evaluate formula expression like '{Price} - {Price_End}'
     // Takes the expression and a data source (object) to resolve field references
-    const evaluateFormula = (expression: string, dataSource: Record<string, unknown>): number | null => {
+    const evaluateFormula = (expression: string, dataSource: Record<string, unknown>, skipZero = true): number | null => {
       try {
         // Replace {FieldName} with actual numeric values
         let expr = expression;
@@ -894,6 +895,8 @@ export default function IntegrationMappingPage() {
           if (fieldValue === undefined || fieldValue === null) return null;
           const numValue = Number(fieldValue);
           if (isNaN(numValue)) return null;
+          // Skip if value is 0 and skipZero is enabled
+          if (skipZero && numValue === 0) return null;
           expr = expr.replace(match, String(numValue));
         }
         
@@ -910,7 +913,7 @@ export default function IntegrationMappingPage() {
     };
 
     // Helper: evaluate formula for array item context (e.g., inside departure loop)
-    const evaluateFormulaFromItem = (expression: string, item: Record<string, unknown>, rootData: Record<string, unknown>): number | null => {
+    const evaluateFormulaFromItem = (expression: string, item: Record<string, unknown>, rootData: Record<string, unknown>, skipZero = true): number | null => {
       try {
         let expr = expression;
         const fieldMatches = expression.match(/\{([^}]+)\}/g);
@@ -926,6 +929,8 @@ export default function IntegrationMappingPage() {
           if (fieldValue === undefined || fieldValue === null) return null;
           const numValue = Number(fieldValue);
           if (isNaN(numValue)) return null;
+          // Skip if value is 0 and skipZero is enabled
+          if (skipZero && numValue === 0) return null;
           expr = expr.replace(match, String(numValue));
         }
         
@@ -1082,7 +1087,8 @@ export default function IntegrationMappingPage() {
                 const formulaResult = evaluateFormulaFromItem(
                   mapping.stringTransform.formulaExpression,
                   sourceItem as Record<string, unknown>,
-                  sourceData
+                  sourceData,
+                  mapping.stringTransform.formulaSkipZero !== false // default true
                 );
                 if (formulaResult !== null) {
                   item[key] = formulaResult;
@@ -1135,7 +1141,7 @@ export default function IntegrationMappingPage() {
           } else if (mapping.type === 'api') {
             // Check formula transform
             if (mapping.stringTransform?.type === 'formula' && mapping.stringTransform.formulaExpression) {
-              const formulaResult = evaluateFormula(mapping.stringTransform.formulaExpression, sourceData);
+              const formulaResult = evaluateFormula(mapping.stringTransform.formulaExpression, sourceData, mapping.stringTransform.formulaSkipZero !== false);
               if (formulaResult !== null) {
                 item[key] = formulaResult;
               }
@@ -1198,7 +1204,7 @@ export default function IntegrationMappingPage() {
             apiValue = template.trim();
           } else if (mapping.stringTransform?.type === 'formula' && mapping.stringTransform.formulaExpression) {
             // Formula: คำนวณจากหลาย fields
-            const formulaResult = evaluateFormula(mapping.stringTransform.formulaExpression, sourceData);
+            const formulaResult = evaluateFormula(mapping.stringTransform.formulaExpression, sourceData, mapping.stringTransform.formulaSkipZero !== false);
             if (formulaResult !== null) {
               apiValue = formulaResult;
             }
@@ -2571,6 +2577,19 @@ export default function IntegrationMappingPage() {
                       placeholder="{Price} - {Price_End}"
                     />
                   </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={transformModal.transform.formulaSkipZero !== false}
+                      onChange={(e) => setTransformModal(prev => ({
+                        ...prev,
+                        transform: { ...prev.transform, formulaSkipZero: e.target.checked }
+                      }))}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">ข้ามเมื่อ field ใดค่าเป็น 0</span>
+                    <span className="text-xs text-gray-500">(ป้องกัน 10990-0 = ส่วนลด 10990)</span>
+                  </label>
                   <div className="text-xs text-cyan-700 p-2 bg-cyan-100 rounded space-y-2">
                     <div>
                       <strong>วิธีใช้:</strong> ใช้ {'{ชื่อ field}'} เพื่อดึงค่าตัวเลขจาก API แล้วคำนวณ

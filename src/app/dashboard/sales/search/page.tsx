@@ -42,6 +42,11 @@ interface Period {
   available_seats?: number;
   available?: number;
   status?: string;
+  // Discount fields (can be computed via formula transform e.g. {Price} - {SalePrice})
+  discount_adult?: number;
+  discount_child_bed?: number;
+  discount_child_nobed?: number;
+  discount_single?: number;
 }
 
 interface Tour {
@@ -495,7 +500,48 @@ export default function SalesSearchPage() {
     });
   };
 
-  // Check if tour has any discounted periods
+  // Helper: compute discount info for a single period
+  const getPeriodDiscount = (p: Period): { hasDiscount: boolean; discountPercent: number; originalPrice: number; salePrice: number; discountAmount: number } => {
+    const raw = p._raw;
+    
+    // Method 1: unified discount_adult field (from mapping or formula transform e.g. {Price} - {SalePrice})
+    const discountAdult = Number(p.discount_adult) || 0;
+    const priceAdult = Number(p.price_adult) || 0;
+    if (discountAdult > 0 && priceAdult > 0) {
+      // Sanity check: discount should be less than the sale price (otherwise likely a formula error e.g. 10990-0=10990)
+      if (discountAdult >= priceAdult) {
+        // Discount >= sale price is suspicious, skip this as invalid
+        // This catches cases like formula {Price}-{Price_End} where Price_End=0
+      } else {
+        // discount_adult = amount of discount, price_adult = sale price (after discount)
+        const originalPrice = priceAdult + discountAdult;
+        const pct = (discountAdult / originalPrice) * 100;
+        return { hasDiscount: true, discountPercent: Math.round(pct), originalPrice, salePrice: priceAdult, discountAmount: discountAdult };
+      }
+    }
+    
+    // Method 2: raw salePrice vs adultPrice (GO365-style)
+    const salePrice = Number(raw?.salePrice || 0);
+    const adultPrice = Number(raw?.adultPrice || raw?.normalPrice || raw?.originalPrice || 0);
+    if (salePrice > 0 && adultPrice > 0 && salePrice < adultPrice) {
+      const discountAmount = adultPrice - salePrice;
+      const pct = (discountAmount / adultPrice) * 100;
+      return { hasDiscount: true, discountPercent: Math.round(pct), originalPrice: adultPrice, salePrice, discountAmount };
+    }
+    
+    // Method 3: raw discount field
+    const rawDiscount = Number(raw?.discount || raw?.Discount || raw?.discount_adult || 0);
+    const rawPrice = Number(raw?.Price || raw?.price_adult || priceAdult || 0);
+    if (rawDiscount > 0 && rawPrice > 0) {
+      const originalPrice = rawPrice + rawDiscount;
+      const pct = (rawDiscount / originalPrice) * 100;
+      return { hasDiscount: true, discountPercent: Math.round(pct), originalPrice, salePrice: rawPrice, discountAmount: rawDiscount };
+    }
+    
+    return { hasDiscount: false, discountPercent: 0, originalPrice: 0, salePrice: 0, discountAmount: 0 };
+  };
+
+  // Check if tour has any discounted periods (returns best discount info)
   const getTourDiscount = (tour: Tour): { hasDiscount: boolean; maxDiscountPercent: number; originalPrice: number; salePrice: number } => {
     let maxDiscountPercent = 0;
     let bestOriginal = 0;
@@ -503,41 +549,11 @@ export default function SalesSearchPage() {
 
     if (tour.periods && tour.periods.length > 0) {
       for (const p of tour.periods) {
-        const raw = p._raw;
-        // Method 1: unified discount_adult field
-        const discountAdult = Number((p as unknown as Record<string, unknown>).discount_adult) || 0;
-        const priceAdult = p.price_adult || 0;
-        if (discountAdult > 0 && priceAdult > 0) {
-          const pct = (discountAdult / (priceAdult + discountAdult)) * 100;
-          if (pct > maxDiscountPercent) {
-            maxDiscountPercent = pct;
-            bestOriginal = priceAdult + discountAdult;
-            bestSale = priceAdult;
-          }
-          continue;
-        }
-        // Method 2: raw salePrice vs adultPrice (GO365-style)
-        const salePrice = Number(raw?.salePrice || 0);
-        const adultPrice = Number(raw?.adultPrice || raw?.normalPrice || raw?.originalPrice || 0);
-        if (salePrice > 0 && adultPrice > 0 && salePrice < adultPrice) {
-          const pct = ((adultPrice - salePrice) / adultPrice) * 100;
-          if (pct > maxDiscountPercent) {
-            maxDiscountPercent = pct;
-            bestOriginal = adultPrice;
-            bestSale = salePrice;
-          }
-          continue;
-        }
-        // Method 3: raw discount field
-        const rawDiscount = Number(raw?.discount || raw?.Discount || raw?.discount_adult || 0);
-        const rawPrice = Number(raw?.Price || raw?.price_adult || priceAdult || 0);
-        if (rawDiscount > 0 && rawPrice > 0) {
-          const pct = (rawDiscount / (rawPrice + rawDiscount)) * 100;
-          if (pct > maxDiscountPercent) {
-            maxDiscountPercent = pct;
-            bestOriginal = rawPrice + rawDiscount;
-            bestSale = rawPrice;
-          }
+        const info = getPeriodDiscount(p);
+        if (info.hasDiscount && info.discountPercent > maxDiscountPercent) {
+          maxDiscountPercent = info.discountPercent;
+          bestOriginal = info.originalPrice;
+          bestSale = info.salePrice;
         }
       }
     }
@@ -648,11 +664,20 @@ export default function SalesSearchPage() {
         const lowestMatchPrice = Math.min(...matchingPeriods.map(p => p.price).filter(p => p > 0));
         const bestPeriod = matchingPeriods.find(p => p.price === lowestMatchPrice) || matchingPeriods[0];
         
+        // Check discount for the best matching period
+        const bestPeriodOriginal = matchingPeriods.find(p => p.price === lowestMatchPrice) || matchingPeriods[0];
+        const bestDiscountInfo = bestPeriodOriginal ? getPeriodDiscount(bestPeriodOriginal) : null;
+        
         let text = `รหัสทัวร์ : ${code}\n`;
         text += `${title} (${days} วัน ${nights} คืน)\n`;
         text += `ช่วงเดินทาง : ${filterFromStr}${filterToStr ? ` - ${filterToStr}` : ''}\n`;
         if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
-        text += `ราคา : ${new Intl.NumberFormat('th-TH').format(lowestMatchPrice)}\n`;
+        if (bestDiscountInfo?.hasDiscount) {
+          text += `ราคาปกติ : ${new Intl.NumberFormat('th-TH').format(bestDiscountInfo.originalPrice)}\n`;
+          text += `ราคาลด : ${new Intl.NumberFormat('th-TH').format(lowestMatchPrice)} (-${bestDiscountInfo.discountPercent}%)\n`;
+        } else {
+          text += `ราคา : ${new Intl.NumberFormat('th-TH').format(lowestMatchPrice)}\n`;
+        }
         text += `ที่นั่งรับได้ : ${bestPeriod.seats}\n`;
         if (pdfUrl) {
           text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
@@ -671,12 +696,18 @@ export default function SalesSearchPage() {
     }
     
     const lowestPrice = getLowestPrice(tour);
+    const discountInfo = getTourDiscount(tour);
     
     let text = `รหัสทัวร์ : ${code}\n`;
     text += `${title} (${days} วัน ${nights} คืน)\n`;
     if (dateRange) text += `ช่วงเดินทาง : ${dateRange}\n`;
     if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
-    text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(lowestPrice)}\n`;
+    if (discountInfo.hasDiscount) {
+      text += `ราคาปกติ : ${new Intl.NumberFormat('th-TH').format(discountInfo.originalPrice)}\n`;
+      text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(discountInfo.salePrice || lowestPrice)} (-${discountInfo.maxDiscountPercent}%)\n`;
+    } else {
+      text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(lowestPrice)}\n`;
+    }
     if (pdfUrl) {
       text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
     }
@@ -1845,6 +1876,7 @@ export default function SalesSearchPage() {
                             <tr className="text-left text-gray-500 border-b border-gray-200">
                               <th className="pb-2 font-medium">วันเดินทาง</th>
                               <th className="pb-2 font-medium">ราคาผู้ใหญ่</th>
+                              <th className="pb-2 font-medium">ส่วนลด</th>
                               <th className="pb-2 font-medium">ราคาเด็ก</th>
                               <th className="pb-2 font-medium">มัดจำ</th>
                               <th className="pb-2 font-medium">ที่นั่ง</th>
@@ -1862,6 +1894,7 @@ export default function SalesSearchPage() {
                               const deposit = period.deposit || pRaw?.Deposit || pRaw?.deposit || 0;
                               const available = period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0;
                               const capacity = period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0;
+                              const periodDiscount = getPeriodDiscount(period);
                               
                               return (
                                 <tr key={pIndex} className="border-b border-gray-100 hover:bg-gray-50">
@@ -1870,8 +1903,27 @@ export default function SalesSearchPage() {
                                     <span className="text-gray-400 mx-1">→</span>
                                     <span>{formatDate(returnDate)}</span>
                                   </td>
-                                  <td className="py-2 font-semibold text-blue-600">
-                                    ฿{formatPrice(adultPrice)}
+                                  <td className="py-2">
+                                    {periodDiscount.hasDiscount ? (
+                                      <div className="flex flex-col">
+                                        <span className="text-[10px] text-gray-400 line-through">฿{formatPrice(periodDiscount.originalPrice)}</span>
+                                        <span className="font-semibold text-red-600">฿{formatPrice(periodDiscount.salePrice)}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="font-semibold text-blue-600">฿{formatPrice(adultPrice)}</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2">
+                                    {periodDiscount.hasDiscount ? (
+                                      <div className="flex flex-col items-start gap-0.5">
+                                        <span className="text-xs font-medium text-white bg-red-500 px-1.5 py-0.5 rounded-full">
+                                          -{periodDiscount.discountPercent}%
+                                        </span>
+                                        <span className="text-[10px] text-gray-500">-฿{formatPrice(periodDiscount.discountAmount)}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">-</span>
+                                    )}
                                   </td>
                                   <td className="py-2">
                                     ฿{formatPrice(childPrice)}
