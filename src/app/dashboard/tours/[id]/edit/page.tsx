@@ -698,6 +698,64 @@ export default function EditTourPage() {
   // Debounce ref for pending API updates
   const pendingUpdates = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
+  // Manual override helpers — show indicator when field was edited by hand (API tours only)
+  const overrideFields = tour?.manual_override_fields ?? {};
+  const isApiTour = tour?.data_source === 'api';
+  
+  const isOverridden = (field: string): boolean => {
+    return isApiTour && !!overrideFields[field];
+  };
+
+  const getOverrideDate = (field: string): string | null => {
+    const ts = overrideFields[field];
+    if (!ts) return null;
+    try {
+      return new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return ts; }
+  };
+
+  /** Clear a single field override via API and update local state */
+  const handleClearFieldOverride = async (field: string) => {
+    if (!tour?.id) return;
+    if (!confirm(`ล้างการ mark ฟิลด์ "${field}"? Sync จะสามารถเขียนทับได้อีกครั้ง`)) return;
+    try {
+      await toursApi.clearFieldOverrides(tour.id, [field]);
+      setTour(prev => {
+        if (!prev) return prev;
+        const updated = { ...prev.manual_override_fields };
+        delete updated[field];
+        const hasFields = Object.keys(updated).length > 0;
+        return { ...prev, manual_override_fields: hasFields ? updated : null };
+      });
+    } catch (err) {
+      console.error('Failed to clear field override:', err);
+      alert('เกิดข้อผิดพลาด');
+    }
+  };
+
+  /** Label with override indicator — shows ✏️ icon when field was manually edited. Click to clear. */
+  const OverrideLabel = ({ field, children, className = '' }: { field: string; children: React.ReactNode; className?: string }) => (
+    <label className={`${className}`}>
+      {children}
+      {isOverridden(field) && (
+        <span className="inline-flex items-center ml-1 group relative">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); handleClearFieldOverride(field); }}
+            className="inline-flex items-center gap-0.5 text-amber-500 hover:text-red-500 transition-colors cursor-pointer"
+            title={`แก้ไขด้วยมือเมื่อ ${getOverrideDate(field)} — คลิกเพื่อล้าง`}
+          >
+            <Pencil className="w-3 h-3" />
+            <X className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+            แก้ไขด้วยมือ {getOverrideDate(field)} · คลิกเพื่อล้าง
+          </span>
+        </span>
+      )}
+    </label>
+  );
+
   // Load tour, countries and wholesalers
   useEffect(() => {
     const fetchData = async () => {
@@ -1685,9 +1743,9 @@ export default function EditTourPage() {
             </div>
           </div>
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="wholesaler_tour_code" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
              รหัสทัวร์ภายนอก
-            </label>
+            </OverrideLabel>
             <input
               type="text"
               name="wholesaler_tour_code"
@@ -1717,9 +1775,9 @@ export default function EditTourPage() {
             </select>
           </div>
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="title" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               ชื่อทัวร์ <span className="text-red-500">*</span>
-            </label>
+            </OverrideLabel>
             <input
               type="text"
               name="title"
@@ -1733,9 +1791,9 @@ export default function EditTourPage() {
 
           {/* Row 3 */}
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="tour_type" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               กลุ่มทัวร์
-            </label>
+            </OverrideLabel>
             <select
               name="tour_type"
               value={formData.tour_type}
@@ -1748,9 +1806,9 @@ export default function EditTourPage() {
             </select>
           </div>
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="hotel_star" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
                ระดับโรงแรม
-            </label>
+            </OverrideLabel>
             <select
               name="hotel_star"
               value={formData.hotel_star ?? ''}
@@ -1768,9 +1826,9 @@ export default function EditTourPage() {
 
           {/* Row 4 */}
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="duration_days" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               จำนวนวัน
-            </label>
+            </OverrideLabel>
             <input
               type="number"
               name="duration_days"
@@ -1782,9 +1840,9 @@ export default function EditTourPage() {
             />
           </div>
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="duration_nights" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               จำนวนคืน
-            </label>
+            </OverrideLabel>
             <input
               type="number"
               name="duration_nights"
@@ -1798,9 +1856,9 @@ export default function EditTourPage() {
 
           {/* Row 5 */}
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="status" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               สถานะ
-            </label>
+            </OverrideLabel>
             <select
               name="status"
               value={formData.status}
@@ -1838,9 +1896,9 @@ export default function EditTourPage() {
 
           {/* Row 6 */}
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="price_adult" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               ราคาผู้ใหญ่
-            </label>
+            </OverrideLabel>
             <input
               type="number"
               name="price_adult"
@@ -1851,9 +1909,9 @@ export default function EditTourPage() {
             />
           </div>
           <div className="flex items-center">
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
+            <OverrideLabel field="discount_adult" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0">
               ส่วนลด
-            </label>
+            </OverrideLabel>
             <input
               type="number"
               name="discount_adult"
@@ -1866,9 +1924,9 @@ export default function EditTourPage() {
 
           {/* Row 7 - Transport with Search */}
           <div className="flex items-start md:col-span-1" data-transport-dropdown>
-            <label className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0 pt-2">
+            <OverrideLabel field="transport_id" className="w-40 text-sm font-medium text-gray-700 text-right pr-4 shrink-0 pt-2">
               ผู้ให้บริการขนส่ง
-            </label>
+            </OverrideLabel>
             <div className="flex-1 relative">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1961,6 +2019,22 @@ export default function EditTourPage() {
         <h3 className="text-lg font-medium text-gray-900 mb-4">
           <FileText className="w-5 h-5 inline mr-2 text-blue-500" />
           รายละเอียดทัวร์
+          {isOverridden('description') && (
+            <span className="inline-flex items-center ml-2 group relative">
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleClearFieldOverride('description'); }}
+                className="inline-flex items-center gap-0.5 text-amber-500 hover:text-red-500 transition-colors cursor-pointer"
+                title={`แก้ไขด้วยมือเมื่อ ${getOverrideDate('description')} — คลิกเพื่อล้าง`}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <X className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                แก้ไขด้วยมือ {getOverrideDate('description')} · คลิกเพื่อล้าง
+              </span>
+            </span>
+          )}
         </h3>
         <textarea
           value={formData.description}
@@ -1982,9 +2056,9 @@ export default function EditTourPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* ไฮไลท์ทัวร์ */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="highlights" className="block text-sm font-medium text-gray-700 mb-2">
               <Sparkles className="w-4 h-4 inline text-yellow-500" /> ไฮไลท์ทัวร์
-            </label>
+            </OverrideLabel>
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -2024,9 +2098,9 @@ export default function EditTourPage() {
 
           {/* ไฮไลท์ช้อปปิ้ง */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="shopping_highlights" className="block text-sm font-medium text-gray-700 mb-2">
               <ShoppingBag className="w-4 h-4 inline text-pink-500" /> ไฮไลท์ช้อปปิ้ง
-            </label>
+            </OverrideLabel>
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -2066,9 +2140,9 @@ export default function EditTourPage() {
 
           {/* ไฮไลท์อาหาร */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="food_highlights" className="block text-sm font-medium text-gray-700 mb-2">
               <Utensils className="w-4 h-4 inline text-orange-500" /> ไฮไลท์อาหาร
-            </label>
+            </OverrideLabel>
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -2108,9 +2182,9 @@ export default function EditTourPage() {
 
           {/* ไฮไลท์พิเศษ */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="special_highlights" className="block text-sm font-medium text-gray-700 mb-2">
               <Star className="w-4 h-4 inline text-purple-500" /> ไฮไลท์พิเศษ
-            </label>
+            </OverrideLabel>
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -2160,9 +2234,9 @@ export default function EditTourPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* หมวดหมู่ */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="themes" className="block text-sm font-medium text-gray-700 mb-2">
               หมวดหมู่ทัวร์
-            </label>
+            </OverrideLabel>
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -2203,9 +2277,9 @@ export default function EditTourPage() {
 
           {/* Hashtags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="hashtags" className="block text-sm font-medium text-gray-700 mb-2">
               <Hash className="w-4 h-4 inline text-blue-500" /> Hashtags
-            </label>
+            </OverrideLabel>
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -2244,9 +2318,9 @@ export default function EditTourPage() {
         <div className="space-y-6">
           {/* Inclusions */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="inclusions" className="block text-sm font-medium text-gray-700 mb-2">
               <Check className="w-4 h-4 inline text-green-500" /> รวมในแพ็คเกจ (Inclusions)
-            </label>
+            </OverrideLabel>
             <textarea
               value={formData.inclusions}
               onChange={(e) => setFormData(prev => ({ ...prev, inclusions: e.target.value }))}
@@ -2258,9 +2332,9 @@ export default function EditTourPage() {
 
           {/* Exclusions */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="exclusions" className="block text-sm font-medium text-gray-700 mb-2">
               <X className="w-4 h-4 inline text-red-500" /> ไม่รวมในแพ็คเกจ (Exclusions)
-            </label>
+            </OverrideLabel>
             <textarea
               value={formData.exclusions}
               onChange={(e) => setFormData(prev => ({ ...prev, exclusions: e.target.value }))}
@@ -2272,9 +2346,9 @@ export default function EditTourPage() {
 
           {/* Conditions */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <OverrideLabel field="conditions" className="block text-sm font-medium text-gray-700 mb-2">
               <Info className="w-4 h-4 inline text-blue-500" /> เงื่อนไขทัวร์ (Conditions)
-            </label>
+            </OverrideLabel>
             <textarea
               value={formData.conditions}
               onChange={(e) => setFormData(prev => ({ ...prev, conditions: e.target.value }))}
@@ -4663,6 +4737,22 @@ export default function EditTourPage() {
           <div className="flex items-center gap-2">
             <Link2 className="w-5 h-5 text-blue-500" />
             <h3 className="text-base font-semibold text-gray-900">Slug (URL)</h3>
+            {isOverridden('slug') && (
+              <span className="inline-flex items-center group relative">
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleClearFieldOverride('slug'); }}
+                  className="inline-flex items-center gap-0.5 text-amber-500 hover:text-red-500 transition-colors cursor-pointer"
+                  title={`แก้ไขด้วยมือเมื่อ ${getOverrideDate('slug')} — คลิกเพื่อล้าง`}
+                >
+                  <Pencil className="w-3 h-3" />
+                  <X className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  แก้ไขด้วยมือ {getOverrideDate('slug')} · คลิกเพื่อล้าง
+                </span>
+              </span>
+            )}
           </div>
           {formData.slug && (
             <button
@@ -4822,7 +4912,7 @@ export default function EditTourPage() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Meta Title</label>
+        <OverrideLabel field="meta_title" className="block text-sm font-medium text-gray-700 mb-2">Meta Title</OverrideLabel>
         <input
           type="text"
           name="meta_title"
@@ -4837,7 +4927,7 @@ export default function EditTourPage() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Meta Description</label>
+        <OverrideLabel field="meta_description" className="block text-sm font-medium text-gray-700 mb-2">Meta Description</OverrideLabel>
         <textarea
           name="meta_description"
           value={formData.meta_description}
@@ -4853,7 +4943,7 @@ export default function EditTourPage() {
 
       {/* Keywords */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Keywords</label>
+        <OverrideLabel field="keywords" className="block text-sm font-medium text-gray-700 mb-2">Keywords</OverrideLabel>
         <div className="flex flex-wrap gap-2 mb-2">
           {(Array.isArray(formData.keywords) ? formData.keywords : []).map((keyword, idx) => (
             <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
@@ -4958,6 +5048,55 @@ export default function EditTourPage() {
       {errors.general && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {errors.general[0]}
+        </div>
+      )}
+
+      {/* Manual Override Banner — only for API tours */}
+      {isApiTour && Object.keys(overrideFields).length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <Pencil className="w-4 h-4 text-amber-500" />
+            <span>
+              <strong>{Object.keys(overrideFields).length}</strong> ฟิลด์ถูกแก้ไขด้วยมือ — 
+              Sync จะไม่เขียนทับข้อมูลเหล่านี้
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const fieldNames = Object.entries(overrideFields)
+                  .map(([field, ts]) => {
+                    let dateStr = '';
+                    try { dateStr = new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { dateStr = ts; }
+                    return `• ${field} (${dateStr})`;
+                  })
+                  .join('\n');
+                alert(`ฟิลด์ที่แก้ไขด้วยมือ:\n\n${fieldNames}`);
+              }}
+              className="text-xs text-amber-700 hover:text-amber-900 underline"
+            >
+              ดูรายการ
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!tour?.id) return;
+                if (!confirm('ล้างการ mark ทั้งหมด? Sync จะสามารถเขียนทับข้อมูลทุกฟิลด์ได้อีกครั้ง')) return;
+                try {
+                  await toursApi.clearAllOverrides(tour.id);
+                  setTour(prev => prev ? { ...prev, manual_override_fields: null } : prev);
+                  alert('ล้างเรียบร้อย');
+                } catch (err) {
+                  console.error('Failed to clear overrides:', err);
+                  alert('เกิดข้อผิดพลาด');
+                }
+              }}
+              className="text-xs text-red-600 hover:text-red-800 underline"
+            >
+              ล้างทั้งหมด
+            </button>
+          </div>
         </div>
       )}
 

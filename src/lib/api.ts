@@ -845,6 +845,7 @@ export interface Tour {
   last_synced_at: string | null;
   sync_status: string | null;
   sync_locked: boolean;
+  manual_override_fields: Record<string, string> | null; // field → ISO timestamp
   max_discount_percent: string | null;
   created_at: string;
   updated_at: string;
@@ -1132,6 +1133,16 @@ export const toursApi = {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   debug: (id: number) => apiRequest<any>(`/tours/${id}/debug`),
+
+  // Manual Override APIs
+  clearAllOverrides: (id: number) =>
+    apiRequest<{ manual_override_fields: null }>(`/tours/${id}/manual-overrides/clear-all`, { method: 'POST' }),
+
+  clearFieldOverrides: (id: number, fields: string[]) =>
+    apiRequest<{ manual_override_fields: Record<string, string> | null }>(`/tours/${id}/manual-overrides/clear`, {
+      method: 'POST',
+      body: JSON.stringify({ fields }),
+    }),
 };
 
 // Periods API (Tour sub-resource)
