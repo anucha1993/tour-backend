@@ -1851,8 +1851,8 @@ export default function SalesSearchPage() {
             </Card>
 
             {/* Periods Modal - Separate from table */}
-            {expandedTour !== null && tours[expandedTour] && (() => {
-              const tour = tours[expandedTour];
+            {expandedTour !== null && filteredTours[expandedTour] && (() => {
+              const tour = filteredTours[expandedTour];
               const raw = tour._raw;
               const getTourCode = () => tour.wholesaler_tour_code || raw?.ProductCode || raw?.code || '';
               const getTourTitle = () => tour.title || raw?.ProductName || raw?.name || '';
