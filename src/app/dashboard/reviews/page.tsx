@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Star, StarHalf, Search, Filter, Check, X, MessageSquare,
-  Sparkles, Trash2, Eye, ChevronDown, AlertCircle,
+  Sparkles, Trash2, Eye, ChevronDown, AlertCircle, Settings,
   ThumbsUp, ThumbsDown, Users, Clock, Plus, Upload, Image as ImageIcon, Pencil, Hash,
 } from 'lucide-react';
 import { tourReviewApi, reviewTagApi, toursApi, TourReviewAdmin, ReviewStats, ReviewTagAdmin, Tour, API_BASE_URL, ReviewImageItem } from '@/lib/api';
@@ -439,13 +440,22 @@ export default function ReviewsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">ตรวจสอบ อนุมัติ และตอบกลับรีวิวจากลูกค้า</p>
         </div>
-        <button
-          onClick={() => { resetCreateForm(); setShowCreateModal(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          เขียนรีวิว
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/reviews/settings"
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            ตั้งค่าหน้ารีวิว
+          </Link>
+          <button
+            onClick={() => { resetCreateForm(); setShowCreateModal(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            เขียนรีวิว
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}

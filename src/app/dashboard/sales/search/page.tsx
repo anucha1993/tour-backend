@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, Button } from '@/components/ui';
 import { API_BASE_URL } from '@/lib/api';
 import { 
@@ -481,9 +481,14 @@ export default function SalesSearchPage() {
     if (tour.periods && tour.periods.length > 0) {
       const prices = tour.periods.map(p => {
         // ลอง unified fields ก่อน แล้ว fallback ไป raw
-        const unified = p.price_adult || 0;
+        const priceAdult = Number(p.price_adult) || 0;
+        const discountAdult = Number(p.discount_adult) || 0;
+        // price_adult = ราคาเต็ม, discount_adult = ส่วนลด → ราคาขาย = price_adult - discount_adult
+        const effectivePrice = (priceAdult > 0 && discountAdult > 0 && discountAdult < priceAdult)
+          ? priceAdult - discountAdult
+          : priceAdult;
         const rawPrice = p._raw?.Price || p._raw?.salePrice || p._raw?.adultPrice || 0;
-        return unified || rawPrice;
+        return effectivePrice || rawPrice;
       });
       const validPrices = prices.filter(p => p > 0);
       return validPrices.length > 0 ? Math.min(...validPrices) : 0;
@@ -504,19 +509,21 @@ export default function SalesSearchPage() {
   const getPeriodDiscount = (p: Period): { hasDiscount: boolean; discountPercent: number; originalPrice: number; salePrice: number; discountAmount: number } => {
     const raw = p._raw;
     
-    // Method 1: unified discount_adult field (from mapping or formula transform e.g. {Price} - {SalePrice})
+    // Method 1: unified discount_adult field (from mapping or formula transform e.g. {Price} - {Price_End})
     const discountAdult = Number(p.discount_adult) || 0;
     const priceAdult = Number(p.price_adult) || 0;
     if (discountAdult > 0 && priceAdult > 0) {
-      // Sanity check: discount should be less than the sale price (otherwise likely a formula error e.g. 10990-0=10990)
+      // Sanity check: discount should be less than the original price
       if (discountAdult >= priceAdult) {
-        // Discount >= sale price is suspicious, skip this as invalid
+        // Discount >= original price is suspicious, skip this as invalid
         // This catches cases like formula {Price}-{Price_End} where Price_End=0
       } else {
-        // discount_adult = amount of discount, price_adult = sale price (after discount)
-        const originalPrice = priceAdult + discountAdult;
+        // price_adult = ราคาเต็ม (original), discount_adult = ส่วนลด
+        // ราคาขาย = price_adult - discount_adult
+        const originalPrice = priceAdult;
+        const salePrice = priceAdult - discountAdult;
         const pct = (discountAdult / originalPrice) * 100;
-        return { hasDiscount: true, discountPercent: Math.round(pct), originalPrice, salePrice: priceAdult, discountAmount: discountAdult };
+        return { hasDiscount: true, discountPercent: Math.round(pct), originalPrice, salePrice, discountAmount: discountAdult };
       }
     }
     
@@ -565,16 +572,116 @@ export default function SalesSearchPage() {
     };
   };
 
-  // Filtered tours (client-side discount filter)
-  const filteredTours = filters.discount_only
-    ? tours.filter(tour => getTourDiscount(tour).hasDiscount)
-    : tours;
+  // Helper: filter periods based on active search filters
+  const getFilteredPeriods = useCallback((periods: Period[]): Period[] => {
+    if (!periods) return [];
+    
+    // Parse date filters
+    let filterFrom: Date | null = null;
+    let filterTo: Date | null = null;
+    let exactDeparture: string | null = null;
+    let exactReturn: string | null = null;
+    
+    if (filters.date_search_mode === 'range') {
+      if (filters.departure_from) filterFrom = new Date(filters.departure_from);
+      if (filters.departure_to) filterTo = new Date(filters.departure_to);
+    } else if (filters.date_search_mode === 'month' && filters.departure_month_from) {
+      const [sy, sm] = filters.departure_month_from.split('-');
+      filterFrom = new Date(Number(sy), Number(sm) - 1, 1);
+      const emv = filters.departure_month_to || filters.departure_month_from;
+      const [ey, em] = emv.split('-');
+      const ld = new Date(Number(ey), Number(em), 0).getDate();
+      filterTo = new Date(Number(ey), Number(em) - 1, ld);
+    } else if (filters.date_search_mode === 'exact') {
+      if (filters.exact_departure) exactDeparture = filters.exact_departure;
+      if (filters.exact_return) exactReturn = filters.exact_return;
+    }
+
+    const minPrice = filters.min_price ? Number(filters.min_price) : null;
+    const maxPrice = filters.max_price ? Number(filters.max_price) : null;
+    const minSeats = filters.min_seats ? Number(filters.min_seats) : null;
+    const hasAnyFilter = filterFrom || filterTo || exactDeparture || exactReturn || minPrice || maxPrice || minSeats || filters.discount_only;
+    if (!hasAnyFilter) return periods;
+
+    // Helper: extract YYYY-MM-DD from date string
+    const toDateStr = (s: string): string => {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    return periods.filter(p => {
+      // Exact date matching (departure + return must match exactly)
+      if (exactDeparture || exactReturn) {
+        const depStr = p.start_date || p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate;
+        const retStr = p.return_date || p._raw?.PeriodEndDate || p._raw?.ReturnDate || p._raw?.returnDate;
+        
+        if (exactDeparture && depStr) {
+          if (toDateStr(depStr) !== exactDeparture) return false;
+        } else if (exactDeparture && !depStr) {
+          return false;
+        }
+        
+        if (exactReturn && retStr) {
+          if (toDateStr(retStr) !== exactReturn) return false;
+        } else if (exactReturn && !retStr) {
+          return false;
+        }
+      }
+      
+      // Range date filter
+      if (filterFrom || filterTo) {
+        const dateStr = p.start_date || p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate;
+        if (dateStr) {
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+            if (filterFrom && d < filterFrom) return false;
+            if (filterTo && d > filterTo) return false;
+          }
+        }
+      }
+      // Price filter
+      const price = Number(p.price_adult) || Number(p._raw?.Price) || Number(p._raw?.salePrice) || 0;
+      if (minPrice && price < minPrice) return false;
+      if (maxPrice && price > maxPrice) return false;
+      // Seats filter
+      const seats = p.available_seats || p.available || p._raw?.Seat || p._raw?.available || 0;
+      if (minSeats && Number(seats) < minSeats) return false;
+      // Discount filter
+      if (filters.discount_only) {
+        const discountInfo = getPeriodDiscount(p);
+        if (!discountInfo.hasDiscount) return false;
+      }
+      return true;
+    });
+  }, [filters]);
+
+  // Filtered tours (client-side: discount filter + exclude tours with 0 matching periods)
+  const filteredTours: Tour[] = useMemo(() => {
+    let result = filters.discount_only
+      ? tours.filter(tour => getTourDiscount(tour).hasDiscount)
+      : tours;
+    
+    // Check if any period-level filter is active
+    const hasPeriodFilter = filters.departure_from || filters.departure_to || 
+      filters.departure_month_from || filters.exact_departure || filters.exact_return ||
+      filters.min_price || filters.max_price || filters.min_seats || filters.discount_only;
+    
+    if (hasPeriodFilter) {
+      result = result.filter(tour => {
+        const filtered = getFilteredPeriods(tour.periods || []);
+        return filtered.length > 0;
+      });
+    }
+    
+    return result;
+  }, [tours, filters, getFilteredPeriods]);
 
   // State สำหรับ copy feedback
   const [copiedTourId, setCopiedTourId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
-  // Format tour data สำหรับ copy
+  // Format tour data สำหรับ copy — แสดงทุกรอบที่ filter ได้
   const formatTourForCopy = (tour: Tour): string => {
     const raw = tour._raw;
     
@@ -598,35 +705,17 @@ export default function SalesSearchPage() {
       ? syncInfo.pdf_url 
       : (raw?.FilePDF || raw?.pdfUrl || raw?.pdf || '');
     
-    const formatFullDate = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+    const formatShortDate = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
     
-    // Check if specific date filter is applied (any mode)
-    let filterFrom: Date | null = null;
-    let filterTo: Date | null = null;
+    // Get filtered periods using same logic as modal
+    const allPeriods = tour.periods || [];
+    const periods = getFilteredPeriods(allPeriods);
     
-    if (filters.date_search_mode === 'range') {
-      if (filters.departure_from) filterFrom = new Date(filters.departure_from);
-      if (filters.departure_to) filterTo = new Date(filters.departure_to);
-    } else if (filters.date_search_mode === 'month' && filters.departure_month_from) {
-      const [startYear, startMonth] = filters.departure_month_from.split('-');
-      filterFrom = new Date(Number(startYear), Number(startMonth) - 1, 1);
-      const endMonthValue = filters.departure_month_to || filters.departure_month_from;
-      const [endYear, endMonth] = endMonthValue.split('-');
-      const lastDay = new Date(Number(endYear), Number(endMonth), 0).getDate();
-      filterTo = new Date(Number(endYear), Number(endMonth) - 1, lastDay);
-    } else if (filters.date_search_mode === 'exact' && filters.exact_departure) {
-      filterFrom = new Date(filters.exact_departure);
-      filterTo = new Date(filters.exact_departure);
-    }
-    
-    const hasDateFilter = filterFrom || filterTo;
-    
-    // Get periods with parsed dates
-    const periodsWithDates = (tour.periods || []).map(p => {
-      const dateStr = p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate;
+    // Parse periods with dates
+    const periodsWithDates = periods.map(p => {
+      const dateStr = p.start_date || p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate;
       const endDateStr = p.return_date || p._raw?.PeriodEndDate || p._raw?.ReturnDate || p._raw?.returnDate;
-      const price = p.price_adult || p._raw?.PriceAdult || p._raw?.Price || 0;
-      const seats = p.available || p._raw?.Available || p._raw?.AvailableSeats || 0;
+      const seats = p.available_seats || p.available || p._raw?.Seat || p._raw?.Available || p._raw?.AvailableSeats || 0;
       
       let startDate: Date | null = null;
       let endDate: Date | null = null;
@@ -639,77 +728,44 @@ export default function SalesSearchPage() {
         const d = new Date(endDateStr);
         if (!isNaN(d.getTime())) endDate = d;
       }
-      // If no end date, calculate from days
       if (startDate && !endDate && days) {
         endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + Number(days) - 1);
       }
       
-      return { ...p, startDate, endDate, price: Number(price), seats: Number(seats) };
+      return { ...p, startDate, endDate, seats: Number(seats) };
     }).filter(p => p.startDate !== null);
     
-    if (hasDateFilter && periodsWithDates.length > 0) {
-      // Filter periods by date range
-      const matchingPeriods = periodsWithDates.filter(p => {
-        if (!p.startDate) return false;
-        if (filterFrom && p.startDate < filterFrom) return false;
-        if (filterTo && p.startDate > filterTo) return false;
-        return true;
-      });
-      
-      if (matchingPeriods.length > 0) {
-        // Use filter date range as "ช่วงเดินทาง" and show lowest price from matching periods
-        const filterFromStr = filterFrom ? formatFullDate(filterFrom) : '';
-        const filterToStr = filterTo ? formatFullDate(filterTo) : '';
-        const lowestMatchPrice = Math.min(...matchingPeriods.map(p => p.price).filter(p => p > 0));
-        const bestPeriod = matchingPeriods.find(p => p.price === lowestMatchPrice) || matchingPeriods[0];
+    // Build text
+    let text = `รหัสทัวร์ : ${code}\n`;
+    text += `${title} (${days} วัน ${nights} คืน)\n`;
+    if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
+    
+    if (periodsWithDates.length > 0) {
+      text += `ช่วงเดินทาง :\n`;
+      for (const p of periodsWithDates) {
+        const depStr = formatShortDate(p.startDate!);
+        const retStr = p.endDate ? formatShortDate(p.endDate) : '';
+        const discount = getPeriodDiscount(p);
         
-        // Check discount for the best matching period
-        const bestPeriodOriginal = matchingPeriods.find(p => p.price === lowestMatchPrice) || matchingPeriods[0];
-        const bestDiscountInfo = bestPeriodOriginal ? getPeriodDiscount(bestPeriodOriginal) : null;
+        let line = `${depStr}`;
+        if (retStr) line += `→${retStr}`;
         
-        let text = `รหัสทัวร์ : ${code}\n`;
-        text += `${title} (${days} วัน ${nights} คืน)\n`;
-        text += `ช่วงเดินทาง : ${filterFromStr}${filterToStr ? ` - ${filterToStr}` : ''}\n`;
-        if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
-        if (bestDiscountInfo?.hasDiscount) {
-          text += `ราคาปกติ : ${new Intl.NumberFormat('th-TH').format(bestDiscountInfo.originalPrice)}\n`;
-          text += `ราคาลด : ${new Intl.NumberFormat('th-TH').format(lowestMatchPrice)} (-${bestDiscountInfo.discountPercent}%)\n`;
+        if (discount.hasDiscount) {
+          line += ` ราคา ฿${formatPrice(discount.originalPrice)} ลดเหลือ ฿${formatPrice(discount.salePrice)}`;
         } else {
-          text += `ราคา : ${new Intl.NumberFormat('th-TH').format(lowestMatchPrice)}\n`;
+          const price = Number(p.price_adult) || Number(p._raw?.Price) || Number(p._raw?.salePrice) || 0;
+          if (price > 0) line += ` ฿${formatPrice(price)}`;
         }
-        text += `ที่นั่งรับได้ : ${bestPeriod.seats}\n`;
-        if (pdfUrl) {
-          text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
-        }
-        return text;
+        
+        line += ` เหลือ ${p.seats} ที่นั่ง`;
+        
+        text += `${line}\n`;
       }
     }
     
-    // Default: show date range and lowest price
-    let dateRange = '';
-    if (periodsWithDates.length > 0) {
-      const dates = periodsWithDates.map(p => p.startDate!);
-      const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-      dateRange = `${formatFullDate(minDate)} - ${formatFullDate(maxDate)}`;
-    }
-    
-    const lowestPrice = getLowestPrice(tour);
-    const discountInfo = getTourDiscount(tour);
-    
-    let text = `รหัสทัวร์ : ${code}\n`;
-    text += `${title} (${days} วัน ${nights} คืน)\n`;
-    if (dateRange) text += `ช่วงเดินทาง : ${dateRange}\n`;
-    if (airline) text += `สายการบิน : ${airline}${airlineCode ? ` (${airlineCode})` : ''}\n`;
-    if (discountInfo.hasDiscount) {
-      text += `ราคาปกติ : ${new Intl.NumberFormat('th-TH').format(discountInfo.originalPrice)}\n`;
-      text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(discountInfo.salePrice || lowestPrice)} (-${discountInfo.maxDiscountPercent}%)\n`;
-    } else {
-      text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(lowestPrice)}\n`;
-    }
     if (pdfUrl) {
-      text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
+      text += `\nรายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
     }
     
     return text;
@@ -1856,6 +1912,9 @@ export default function SalesSearchPage() {
               const raw = tour._raw;
               const getTourCode = () => tour.wholesaler_tour_code || raw?.ProductCode || raw?.code || '';
               const getTourTitle = () => tour.title || raw?.ProductName || raw?.name || '';
+              const allPeriods = tour.periods || [];
+              const modalPeriods = getFilteredPeriods(allPeriods);
+              const isFiltered = modalPeriods.length !== allPeriods.length;
               
               return (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setExpandedTour(null)}>
@@ -1865,12 +1924,19 @@ export default function SalesSearchPage() {
                         <h3 className="font-semibold text-gray-900">{getTourCode()}</h3>
                         <p className="text-sm text-gray-600">{getTourTitle()}</p>
                       </div>
-                      <button onClick={() => setExpandedTour(null)} className="p-1 hover:bg-gray-200 rounded">
-                        <X className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        {isFiltered && (
+                          <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                            แสดง {modalPeriods.length} จาก {allPeriods.length} รอบ
+                          </span>
+                        )}
+                        <button onClick={() => setExpandedTour(null)} className="p-1 hover:bg-gray-200 rounded">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                     <div className="p-4 overflow-auto max-h-[60vh]">
-                      {tour.periods && tour.periods.length > 0 ? (
+                      {modalPeriods.length > 0 ? (
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-left text-gray-500 border-b border-gray-200">
@@ -1885,9 +1951,9 @@ export default function SalesSearchPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {tour.periods.map((period, pIndex) => {
+                            {modalPeriods.map((period, pIndex) => {
                               const pRaw = period._raw;
-                              const departureDate = period.departure_date || pRaw?.PeriodStartDate || pRaw?.DepartureDate || pRaw?.departureDate || '';
+                              const departureDate = period.start_date || period.departure_date || pRaw?.PeriodStartDate || pRaw?.DepartureDate || pRaw?.departureDate || '';
                               const returnDate = period.return_date || pRaw?.PeriodEndDate || pRaw?.ReturnDate || pRaw?.returnDate || '';
                               const adultPrice = period.price_adult || pRaw?.Price || pRaw?.adultPrice || pRaw?.salePrice || 0;
                               const childPrice = period.price_child || pRaw?.Price_Child || pRaw?.childPrice || 0;
@@ -1952,7 +2018,9 @@ export default function SalesSearchPage() {
                           </tbody>
                         </table>
                       ) : (
-                        <p className="text-gray-500 text-center py-8">ไม่มีข้อมูลรอบเดินทาง</p>
+                        <p className="text-gray-500 text-center py-8">
+                          {isFiltered ? `ไม่มีรอบที่ตรงกับเงื่อนไข (ทั้งหมด ${allPeriods.length} รอบ)` : 'ไม่มีข้อมูลรอบเดินทาง'}
+                        </p>
                       )}
                     </div>
                   </div>

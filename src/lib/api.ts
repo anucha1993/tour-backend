@@ -3987,6 +3987,52 @@ export const reviewTagApi = {
 };
 
 // =====================
+// Review Page Settings
+// =====================
+
+export interface ReviewPageSettings {
+  id: number;
+  hero_title: string;
+  hero_subtitle: string | null;
+  hero_image_url: string | null;
+  hero_image_cf_id: string | null;
+  hero_image_position: string;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const reviewPageSettingsApi = {
+  get: () =>
+    apiRequest<{ data: ReviewPageSettings }>('/review-page-settings'),
+
+  update: (data: Partial<ReviewPageSettings>) =>
+    apiRequest<{ data: ReviewPageSettings }>('/review-page-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  uploadHeroImage: async (file: File) => {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_BASE_URL}/review-page-settings/hero-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
+  },
+
+  deleteHeroImage: () =>
+    apiRequest<{ data: ReviewPageSettings }>('/review-page-settings/hero-image', { method: 'DELETE' }),
+};
+
+// =====================
 // Festival Holidays
 // =====================
 
