@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  experimental: {
+    // Prevents forced static prerendering of special pages like _global-error
+    // All pages in this admin dashboard are dynamic anyway
+    dynamicIO: true,
+  },
   async rewrites() {
     const apiTarget = process.env.API_PROXY_TARGET || 'http://127.0.0.1:8000/api';
     return [
