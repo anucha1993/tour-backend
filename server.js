@@ -1,5 +1,4 @@
 const { createServer } = require('http');
-const { parse } = require('url');
 const next = require('next');
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -12,8 +11,9 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   createServer(async (req, res) => {
     try {
-      const parsedUrl = parse(req.url, true);
-      await handle(req, res, parsedUrl);
+      // Do NOT pass parsedUrl — let Next.js handle routing internally
+      // so that rewrites, redirects, and middleware all work correctly
+      await handle(req, res);
     } catch (err) {
       console.error('Error occurred handling', req.url, err);
       res.statusCode = 500;
