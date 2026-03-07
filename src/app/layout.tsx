@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 
-const inter = Inter({
-  subsets: ["latin"],
+// Disable static prerendering for all pages — this is an admin dashboard,
+// all pages require authentication and fetch dynamic data
+export const dynamic = 'force-dynamic';
+
+const inter = localFont({
+  src: "./fonts/Inter-VariableFont.ttf",
   variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
