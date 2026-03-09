@@ -314,9 +314,17 @@ export async function apiRequest<T = any>(
     ...options.headers,
   };
 
+  // IIS/Plesk blocks PUT/PATCH/DELETE verbs — send as POST with method override header
+  let actualMethod = (options.method || 'GET') as string;
+  if (actualMethod === 'PUT' || actualMethod === 'PATCH' || actualMethod === 'DELETE') {
+    (headers as Record<string, string>)['X-HTTP-Method-Override'] = actualMethod;
+    actualMethod = 'POST';
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
+      method: actualMethod,
       headers,
     });
 

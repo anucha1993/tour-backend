@@ -123,11 +123,12 @@ export default function RegisterPageEditor() {
       setLoading(true); // Show loading state
       const token = localStorage.getItem('access_token');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/page-content/register_page/image`, {
-        method: 'DELETE',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-HTTP-Method-Override': 'DELETE'
         }
       });
       
