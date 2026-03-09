@@ -109,11 +109,14 @@ const SCHEDULE_PRESETS = [
 ];
 
 // Helper: extract minute offset and interval from cron
-function parseCronSchedule(cron: string): { minute: number; intervalPart: string } {
+function parseCronSchedule(cron: string): { minute: number; intervalPart: string; isSimpleMinute: boolean } {
   const parts = cron.trim().split(/\s+/);
-  const minute = parseInt(parts[0]) || 0;
+  const minutePart = parts[0];
   const rest = parts.slice(1).join(' ');
-  return { minute, intervalPart: rest };
+  // Only treat as simple minute if it's a plain integer (0-59)
+  const isSimpleMinute = /^\d+$/.test(minutePart);
+  const minute = isSimpleMinute ? parseInt(minutePart) : 0;
+  return { minute, intervalPart: rest, isSimpleMinute };
 }
 
 // Helper: build cron from interval preset and minute offset
@@ -305,12 +308,20 @@ export default function IntegrationSettingsPage() {
           itineraries_path: integration.aggregation_config?.data_structure?.itineraries?.path || '',
         });
 
-        // Initialize minute offset from current cron schedule
-        const { minute } = parseCronSchedule(integration.sync_schedule || '0 */2 * * *');
+        // Initialize minute offset and customCron from current cron schedule
+        const schedule = integration.sync_schedule || '0 */2 * * *';
+        const { minute, intervalPart, isSimpleMinute } = parseCronSchedule(schedule);
         setSyncMinuteOffset(minute);
 
+        // If minute part is not a simple number (e.g. */30) or interval doesn't match any preset → custom
+        const isCustomSchedule = !isSimpleMinute || !SCHEDULE_PRESETS.some(p => p.value !== 'custom' && p.hourPart === intervalPart);
+        if (isCustomSchedule) {
+          setCustomCron(true);
+          setCustomCronValue(schedule);
+        }
+
         // Check initial schedule conflict
-        checkConflict(integration.sync_schedule || '0 */2 * * *', integration.id);
+        checkConflict(schedule, integration.id);
 
         // Load Smart Sync Settings
         try {
@@ -1182,8 +1193,9 @@ export default function IntegrationSettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">ความถี่ในการ Sync</label>
                   <select
                     value={(() => {
-                      const { intervalPart } = parseCronSchedule(formData.sync_schedule);
                       if (customCron) return 'custom';
+                      const { intervalPart, isSimpleMinute } = parseCronSchedule(formData.sync_schedule);
+                      if (!isSimpleMinute) return 'custom';
                       const matched = SCHEDULE_PRESETS.find(p => p.hourPart === intervalPart);
                       return matched ? matched.value : 'custom';
                     })()}
@@ -1306,8 +1318,8 @@ export default function IntegrationSettingsPage() {
                   
                   {/* Custom Cron Input */}
                   {(customCron || (() => {
-                    const { intervalPart } = parseCronSchedule(formData.sync_schedule);
-                    return !SCHEDULE_PRESETS.some(p => p.hourPart === intervalPart);
+                    const { intervalPart, isSimpleMinute } = parseCronSchedule(formData.sync_schedule);
+                    return !isSimpleMinute || !SCHEDULE_PRESETS.some(p => p.hourPart === intervalPart);
                   })()) && (
                     <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
