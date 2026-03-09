@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { subscriberApi, Subscriber, SubscriberStats, NewsletterItem, SubscriberSmtpConfig } from '@/lib/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.asia/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.world/api';
 
 type TabType = 'subscribers' | 'newsletters' | 'create-newsletter' | 'smtp';
 
