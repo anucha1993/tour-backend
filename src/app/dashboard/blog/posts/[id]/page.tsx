@@ -190,7 +190,7 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
         </div>
         <div className="flex items-center gap-2">
           {postId && form.status === 'published' && (
-            <a href={`${process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000'}/blog/${form.slug}`} target="_blank" rel="noopener"
+            <a href={`${process.env.NEXT_PUBLIC_WEB_URL || 'https://www.nexttrip.world'}/blog/${form.slug}`} target="_blank" rel="noopener"
               className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
               <Eye className="w-4 h-4" />ดูหน้าเว็บ
             </a>
