@@ -68,6 +68,7 @@ import RichTextEditor from '@/components/RichTextEditor';
 
 // Predefined tour categories
 const TOUR_CATEGORIES = [
+  'ทัวร์ไม่ลงร้าน',
   'ทะเล/ชายหาด',
   'ภูเขา/ธรรมชาติ',
   'วัฒนธรรม/ประวัติศาสตร์',
