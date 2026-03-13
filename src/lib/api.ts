@@ -1629,6 +1629,17 @@ export interface WholesalerApiConfig {
     };
     oauth_fields?: { key: string; value: string }[];
     response_token_field?: string;
+    pagination?: {
+      type?: string;
+      page_param?: string;
+      per_page_param?: string;
+      per_page?: number;
+      offset_param?: string;
+      limit_param?: string;
+      limit?: number;
+      param?: string;
+      body?: Record<string, unknown>;
+    };
   };
   auth_header_name: string;
   rate_limit_per_minute: number;
