@@ -91,6 +91,16 @@ const defaultFormData = {
   // Data Structure for nested arrays
   departures_path: '',
   itineraries_path: '',
+  // Pagination
+  pagination_type: 'none' as 'none' | 'page' | 'offset' | 'cursor' | 'post_bulk',
+  pagination_page_param: 'page',
+  pagination_per_page_param: 'per_page',
+  pagination_per_page: 0,
+  pagination_offset_param: 'offset',
+  pagination_limit_param: 'limit',
+  pagination_limit: 50,
+  pagination_cursor_param: 'cursor',
+  pagination_post_body: '{}',
 };
 
 // Type for form data
@@ -306,6 +316,16 @@ export default function IntegrationSettingsPage() {
           // Data Structure for nested arrays
           departures_path: integration.aggregation_config?.data_structure?.departures?.path || '',
           itineraries_path: integration.aggregation_config?.data_structure?.itineraries?.path || '',
+          // Pagination
+          pagination_type: (integration.auth_credentials?.pagination?.type || 'none') as FormData['pagination_type'],
+          pagination_page_param: integration.auth_credentials?.pagination?.page_param || 'page',
+          pagination_per_page_param: integration.auth_credentials?.pagination?.per_page_param || 'per_page',
+          pagination_per_page: integration.auth_credentials?.pagination?.per_page ?? 0,
+          pagination_offset_param: integration.auth_credentials?.pagination?.offset_param || 'offset',
+          pagination_limit_param: integration.auth_credentials?.pagination?.limit_param || 'limit',
+          pagination_limit: integration.auth_credentials?.pagination?.limit || 50,
+          pagination_cursor_param: integration.auth_credentials?.pagination?.param || 'cursor',
+          pagination_post_body: JSON.stringify(integration.auth_credentials?.pagination?.body || {}, null, 2),
         });
 
         // Initialize minute offset and customCron from current cron schedule
@@ -415,6 +435,30 @@ export default function IntegrationSettingsPage() {
           periods: formData.periods_endpoint || undefined,
           itineraries: formData.itineraries_endpoint || undefined,
         };
+      }
+
+      // Add pagination config to auth_credentials
+      if (formData.pagination_type !== 'none') {
+        const paginationConfig: Record<string, unknown> = { type: formData.pagination_type };
+        switch (formData.pagination_type) {
+          case 'page':
+            paginationConfig.page_param = formData.pagination_page_param;
+            paginationConfig.per_page_param = formData.pagination_per_page_param;
+            paginationConfig.per_page = formData.pagination_per_page;
+            break;
+          case 'offset':
+            paginationConfig.offset_param = formData.pagination_offset_param;
+            paginationConfig.limit_param = formData.pagination_limit_param;
+            paginationConfig.limit = formData.pagination_limit;
+            break;
+          case 'cursor':
+            paginationConfig.param = formData.pagination_cursor_param;
+            break;
+          case 'post_bulk':
+            try { paginationConfig.body = JSON.parse(formData.pagination_post_body); } catch { paginationConfig.body = {}; }
+            break;
+        }
+        authCredentials.pagination = paginationConfig;
       }
       
       const updateData = {
@@ -1449,6 +1493,93 @@ export default function IntegrationSettingsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">กำหนด 1-1000 เพื่อจำกัดจำนวนทัวร์ที่ sync ในแต่ละรอบ เหมาะสำหรับทดสอบหรือ API ที่มี rate limit</p>
+                </div>
+
+                {/* Pagination Config */}
+                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <h3 className="font-medium text-amber-800 mb-3">การแบ่งหน้า (Pagination)</h3>
+                  <p className="text-sm text-amber-600 mb-4">
+                    ตั้งค่าวิธีดึงข้อมูลจาก API — ถ้า API ส่งมาทีเดียวเลือก &quot;ไม่แบ่งหน้า&quot;, ถ้าแบ่งหน้าเลือกตามรูปแบบของ API
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+                    {[
+                      { value: 'none', label: 'ไม่แบ่งหน้า', desc: 'ดึงทีเดียว' },
+                      { value: 'page', label: 'Page', desc: '?page=1&per_page=50' },
+                      { value: 'offset', label: 'Offset', desc: '?offset=0&limit=50' },
+                      { value: 'cursor', label: 'Cursor', desc: '?cursor=abc' },
+                      { value: 'post_bulk', label: 'POST Bulk', desc: 'POST body params' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, pagination_type: opt.value as FormData['pagination_type'] }))}
+                        className={`p-2 rounded-lg border-2 text-left transition-colors ${
+                          formData.pagination_type === opt.value
+                            ? 'border-amber-500 bg-white'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        <p className="font-medium text-sm">{opt.label}</p>
+                        <p className="text-[10px] text-gray-500">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  {formData.pagination_type === 'page' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Page param name</label>
+                        <input type="text" value={formData.pagination_page_param} onChange={e => setFormData(prev => ({ ...prev, pagination_page_param: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="page" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Per page param name</label>
+                        <input type="text" value={formData.pagination_per_page_param} onChange={e => setFormData(prev => ({ ...prev, pagination_per_page_param: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="per_page" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">จำนวนต่อหน้า (0 = API กำหนดเอง)</label>
+                        <input type="number" value={formData.pagination_per_page} onChange={e => setFormData(prev => ({ ...prev, pagination_per_page: parseInt(e.target.value) || 0 }))} className="w-full px-2 py-1.5 border rounded text-sm" min={0} max={500} />
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.pagination_type === 'offset' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Offset param name</label>
+                        <input type="text" value={formData.pagination_offset_param} onChange={e => setFormData(prev => ({ ...prev, pagination_offset_param: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="offset" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Limit param name</label>
+                        <input type="text" value={formData.pagination_limit_param} onChange={e => setFormData(prev => ({ ...prev, pagination_limit_param: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="limit" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">จำนวนต่อครั้ง</label>
+                        <input type="number" value={formData.pagination_limit} onChange={e => setFormData(prev => ({ ...prev, pagination_limit: parseInt(e.target.value) || 50 }))} className="w-full px-2 py-1.5 border rounded text-sm" min={1} max={500} />
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.pagination_type === 'cursor' && (
+                    <div className="max-w-xs">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Cursor param name</label>
+                      <input type="text" value={formData.pagination_cursor_param} onChange={e => setFormData(prev => ({ ...prev, pagination_cursor_param: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="cursor" />
+                    </div>
+                  )}
+
+                  {formData.pagination_type === 'post_bulk' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">POST Body (JSON)</label>
+                      <textarea
+                        value={formData.pagination_post_body}
+                        onChange={e => setFormData(prev => ({ ...prev, pagination_post_body: e.target.value }))}
+                        className="w-full px-2 py-1.5 border rounded text-sm font-mono"
+                        rows={3}
+                        placeholder='{"limit_page": 300}'
+                      />
+                      <p className="text-xs text-gray-500 mt-1">ใช้ POST request ส่ง body params เพื่อดึงทีเดียว เช่น {'{"limit_page": 300}'}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Phase Mode - Two-Phase Sync */}

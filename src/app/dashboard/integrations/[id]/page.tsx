@@ -351,9 +351,12 @@ export default function IntegrationDetailPage() {
                 setSyncing(false);
                 
                 if (latestSync.status === 'completed') {
-                  setSyncMessage(`✅ Sync สำเร็จ! เพิ่ม ${latestSync.tours_created} ทัวร์, อัพเดท ${latestSync.tours_updated} ทัวร์ (ใช้เวลา ${latestSync.duration_seconds || 0}วินาที)`);
+                  const skipped = latestSync.tours_skipped ?? (latestSync.tours_received - latestSync.tours_created - latestSync.tours_updated);
+                  setSyncMessage(`✅ Sync สำเร็จ! รับ ${latestSync.tours_received} ทัวร์ → เพิ่ม ${latestSync.tours_created}, อัพเดท ${latestSync.tours_updated}, ข้าม ${skipped} (ใช้เวลา ${latestSync.duration_seconds || 0}วินาที)`);
                 } else if (latestSync.status === 'partial') {
-                  setSyncMessage(`⚠️ Sync เสร็จบางส่วน: เพิ่ม ${latestSync.tours_created}, อัพเดท ${latestSync.tours_updated}, ล้มเหลว ${latestSync.tours_failed || latestSync.error_count || 0}`);
+                  const failed = latestSync.tours_failed || latestSync.error_count || 0;
+                  const skipped = latestSync.tours_skipped ?? (latestSync.tours_received - latestSync.tours_created - latestSync.tours_updated - failed);
+                  setSyncMessage(`⚠️ Sync เสร็จบางส่วน: รับ ${latestSync.tours_received} ทัวร์ → เพิ่ม ${latestSync.tours_created}, อัพเดท ${latestSync.tours_updated}, ข้าม ${skipped}, ล้มเหลว ${failed}`);
                 } else {
                   setSyncMessage(`❌ Sync ล้มเหลว: ดูรายละเอียดใน Sync History`);
                 }
@@ -495,9 +498,12 @@ export default function IntegrationDetailPage() {
                 setSyncing(false);
                 
                 if (latestSync.status === 'completed') {
-                  setSyncMessage(`✅ Sync สำเร็จ! เพิ่ม ${latestSync.tours_created} ทัวร์, อัพเดท ${latestSync.tours_updated} ทัวร์`);
+                  const skipped = latestSync.tours_skipped ?? (latestSync.tours_received - latestSync.tours_created - latestSync.tours_updated);
+                  setSyncMessage(`✅ Sync สำเร็จ! รับ ${latestSync.tours_received} ทัวร์ → เพิ่ม ${latestSync.tours_created}, อัพเดท ${latestSync.tours_updated}, ข้าม ${skipped}`);
                 } else if (latestSync.status === 'partial') {
-                  setSyncMessage(`⚠️ Sync เสร็จบางส่วน: เพิ่ม ${latestSync.tours_created}, ล้มเหลว ${latestSync.error_count || 0}`);
+                  const failed = latestSync.tours_failed || latestSync.error_count || 0;
+                  const skipped = latestSync.tours_skipped ?? (latestSync.tours_received - latestSync.tours_created - latestSync.tours_updated - failed);
+                  setSyncMessage(`⚠️ Sync เสร็จบางส่วน: รับ ${latestSync.tours_received} ทัวร์ → เพิ่ม ${latestSync.tours_created}, อัพเดท ${latestSync.tours_updated}, ข้าม ${skipped}, ล้มเหลว ${failed}`);
                 } else {
                   setSyncMessage(`❌ Sync ล้มเหลว`);
                 }
@@ -981,7 +987,7 @@ export default function IntegrationDetailPage() {
                       {sync.status === 'running' 
                         ? `กำลัง Sync... ${sync.progress_percent ? `(${Math.round(sync.progress_percent)}%)` : ''}`
                         : sync.status === 'completed' || sync.status === 'partial'
-                          ? `+${sync.tours_created} เพิ่ม, ${sync.tours_updated} อัพเดท${(sync.tours_failed || sync.error_count || 0) > 0 ? `, ${sync.tours_failed || sync.error_count} ล้มเหลว` : ''}`
+                          ? `รับ ${sync.tours_received} → +${sync.tours_created} เพิ่ม, ${sync.tours_updated} อัพเดท, ${sync.tours_skipped ?? 0} ข้าม${(sync.tours_failed || sync.error_count || 0) > 0 ? `, ${sync.tours_failed || sync.error_count} ล้มเหลว` : ''}`
                           : sync.status === 'cancelled'
                             ? `ยกเลิก (${sync.processed_items || 0}/${sync.total_items || 0} รายการ)${sync.cancel_reason ? ` - ${sync.cancel_reason}` : ''}`
                             : sync.status === 'timeout'

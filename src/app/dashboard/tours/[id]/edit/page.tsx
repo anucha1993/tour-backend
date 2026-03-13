@@ -1382,26 +1382,66 @@ export default function EditTourPage() {
 
   // Period handlers - inline row creation
   const handleCreatePeriod = () => {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() + 14);
+    const duration = tour?.duration_days || 5;
+    // Find latest period by start_date to copy data from
+    const sorted = [...periods].sort((a, b) => b.start_date.localeCompare(a.start_date));
+    const latest = sorted[0];
+
+    let startDate: Date;
+    if (latest) {
+      // Next day after latest period ends
+      startDate = new Date(latest.end_date.split('T')[0]);
+      startDate.setDate(startDate.getDate() + 1);
+    } else {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() + 14);
+    }
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + (tour?.duration_days || 5) - 1);
+    endDate.setDate(endDate.getDate() + duration - 1);
     
     setNewPeriodData({
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
-      capacity: 30,
-      price_adult: '',
-      discount_adult: '',
-      price_single: '',
-      discount_single: '',
-      price_child: '',
-      discount_child_bed: '',
-      price_child_nobed: '',
-      discount_child_nobed: '',
-      price_infant: '',
-      discount_infant: '',
-      promotion_id: null,
+      capacity: latest?.capacity ?? 30,
+      price_adult: latest?.offer?.price_adult || '',
+      discount_adult: latest?.offer?.discount_adult || '',
+      price_single: latest?.offer?.price_single || '',
+      discount_single: latest?.offer?.discount_single || '',
+      price_child: latest?.offer?.price_child || '',
+      discount_child_bed: latest?.offer?.discount_child_bed || '',
+      price_child_nobed: latest?.offer?.price_child_nobed || '',
+      discount_child_nobed: latest?.offer?.discount_child_nobed || '',
+      price_infant: latest?.offer?.price_infant || '',
+      discount_infant: latest?.offer?.discount_infant || '',
+      promotion_id: latest?.offer?.promotion_id ?? null,
+      promo_start_date: '',
+      promo_end_date: '',
+    });
+    setShowNewPeriodRow(true);
+  };
+
+  const handleCopyPeriod = (period: Period) => {
+    const duration = tour?.duration_days || 5;
+    const startDate = new Date(period.end_date.split('T')[0]);
+    startDate.setDate(startDate.getDate() + 1);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + duration - 1);
+
+    setNewPeriodData({
+      start_date: startDate.toISOString().split('T')[0],
+      end_date: endDate.toISOString().split('T')[0],
+      capacity: period.capacity,
+      price_adult: period.offer?.price_adult || '',
+      discount_adult: period.offer?.discount_adult || '',
+      price_single: period.offer?.price_single || '',
+      discount_single: period.offer?.discount_single || '',
+      price_child: period.offer?.price_child || '',
+      discount_child_bed: period.offer?.discount_child_bed || '',
+      price_child_nobed: period.offer?.price_child_nobed || '',
+      discount_child_nobed: period.offer?.discount_child_nobed || '',
+      price_infant: period.offer?.price_infant || '',
+      discount_infant: period.offer?.discount_infant || '',
+      promotion_id: period.offer?.promotion_id ?? null,
       promo_start_date: '',
       promo_end_date: '',
     });
@@ -3003,198 +3043,6 @@ export default function EditTourPage() {
               </tr>
             </thead>
             <tbody>
-              {/* New Period Row - Insert at top */}
-              {showNewPeriodRow && (
-                <tr className="border-b-2 border-green-300 bg-green-50">
-                  <td className="px-1 py-1 text-center">
-                    <span className="text-green-600 font-bold">+</span>
-                  </td>
-                  <td className="px-2 py-1">
-                    <input
-                      type="date"
-                      value={newPeriodData.start_date}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, start_date: e.target.value }))}
-                      className="w-32 px-1 py-1 border border-green-400 rounded text-xs bg-white focus:border-green-500"
-                    />
-                  </td>
-                  <td className="px-2 py-1">
-                    <input
-                      type="date"
-                      value={newPeriodData.end_date}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, end_date: e.target.value }))}
-                      className="w-32 px-1 py-1 border border-green-400 rounded text-xs bg-white focus:border-green-500"
-                    />
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <span className="text-xs text-green-600">On</span>
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <span className="text-xs text-green-600">พร้อม</span>
-                  </td>
-                  {/* ผู้ใหญ่(2-3) */}
-                  <td className="px-1 py-1">
-                    <div className="flex flex-col gap-0.5">
-                      <input
-                        type="number"
-                        value={newPeriodData.price_adult}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_adult: e.target.value }))}
-                        className="w-24 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
-                        placeholder="ราคา"
-                      />
-                      <input
-                        type="number"
-                        value={newPeriodData.discount_adult}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_adult: e.target.value }))}
-                        className="w-24 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
-                        placeholder="ส่วนลด"
-                      />
-                    </div>
-                  </td>
-                  {/* พักเดี่ยว */}
-                  <td className="px-1 py-1">
-                    <div className="flex flex-col gap-0.5">
-                      <input
-                        type="number"
-                        value={newPeriodData.price_single}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_single: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
-                        placeholder="ราคา"
-                      />
-                      <input
-                        type="number"
-                        value={newPeriodData.discount_single}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_single: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
-                        placeholder="ส่วนลด"
-                      />
-                    </div>
-                  </td>
-                  {/* เด็ก(เตียง) */}
-                  <td className="px-1 py-1">
-                    <div className="flex flex-col gap-0.5">
-                      <input
-                        type="number"
-                        value={newPeriodData.price_child}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_child: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
-                        placeholder="ราคา"
-                      />
-                      <input
-                        type="number"
-                        value={newPeriodData.discount_child_bed}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_bed: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
-                        placeholder="ส่วนลด"
-                      />
-                    </div>
-                  </td>
-                  {/* เด็ก(ไม่เตียง) */}
-                  <td className="px-1 py-1">
-                    <div className="flex flex-col gap-0.5">
-                      <input
-                        type="number"
-                        value={newPeriodData.price_child_nobed}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_child_nobed: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
-                        placeholder="ราคา"
-                      />
-                      <input
-                        type="number"
-                        value={newPeriodData.discount_child_nobed}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_nobed: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
-                        placeholder="ส่วนลด"
-                      />
-                    </div>
-                  </td>
-                  {/* ทารก */}
-                  <td className="px-1 py-1">
-                    <div className="flex flex-col gap-0.5">
-                      <input
-                        type="number"
-                        value={newPeriodData.price_infant}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_infant: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
-                        placeholder="ราคา"
-                      />
-                      <input
-                        type="number"
-                        value={newPeriodData.discount_infant}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_infant: e.target.value }))}
-                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
-                        placeholder="ส่วนลด"
-                      />
-                    </div>
-                  </td>
-                  <td className="px-2 py-1 bg-purple-50">
-                    <select
-                      value={newPeriodData.promotion_id?.toString() || ''}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, promotion_id: e.target.value ? parseInt(e.target.value) : null, promo_start_date: e.target.value ? prev.promo_start_date : '', promo_end_date: e.target.value ? prev.promo_end_date : '' }))}
-                      className="w-full px-1 py-1 border border-purple-300 rounded text-xs bg-white"
-                    >
-                      <option value="">ไม่มี</option>
-                      {promotions.map(promo => (
-                        <option key={promo.id} value={promo.id}>{promo.name}</option>
-                      ))}
-                    </select>
-                    {newPeriodData.promotion_id && (
-                      <div className="mt-1.5 space-y-1">
-                        <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
-                          <span className="text-[10px] text-purple-500 text-right">เริ่ม</span>
-                          <input
-                            type="date"
-                            value={newPeriodData.promo_start_date}
-                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_start_date: e.target.value }))}
-                            className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
-                          />
-                        </div>
-                        <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
-                          <span className="text-[10px] text-purple-500 text-right">สิ้นสุด</span>
-                          <input
-                            type="date"
-                            value={newPeriodData.promo_end_date}
-                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_end_date: e.target.value }))}
-                            className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <input
-                      type="number"
-                      value={newPeriodData.capacity}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, capacity: parseInt(e.target.value) || 0 }))}
-                      className="w-12 px-1 py-1 border border-green-400 rounded text-xs text-center bg-white"
-                      min={0}
-                    />
-                  </td>
-                  <td className="px-2 py-1 text-center text-gray-400">0</td>
-                  <td className="px-2 py-1">
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleSaveNewPeriod}
-                        disabled={savingPeriod || !newPeriodData.start_date || !newPeriodData.price_adult}
-                        className="text-green-600 hover:bg-green-100 h-6 w-6 p-0"
-                      >
-                        {savingPeriod ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCancelNewPeriod}
-                        className="text-gray-500 hover:bg-gray-100 h-6 w-6 p-0"
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              )}
               {periods.map((period) => {
                 const isEditing = editingRowId === period.id || editingRowId === -1;
                 const formatPrice = (val: string | number | null | undefined) => {
@@ -3551,6 +3399,16 @@ export default function EditTourPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        onClick={() => handleCopyPeriod(period)}
+                        className="text-teal-600 hover:bg-teal-100 h-6 w-6 p-0"
+                        title="คัดลอกรอบนี้"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setDeleteConfirm(period.id)}
                         className="text-red-600 hover:bg-red-50 h-6 w-6 p-0"
                       >
@@ -3561,6 +3419,198 @@ export default function EditTourPage() {
                 </tr>
                 );
               })}
+              {/* New Period Row - Insert at bottom */}
+              {showNewPeriodRow && (
+                <tr className="border-t-2 border-green-300 bg-green-50">
+                  <td className="px-1 py-1 text-center">
+                    <span className="text-green-600 font-bold">+</span>
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="date"
+                      value={newPeriodData.start_date}
+                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, start_date: e.target.value }))}
+                      className="w-32 px-1 py-1 border border-green-400 rounded text-xs bg-white focus:border-green-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="date"
+                      value={newPeriodData.end_date}
+                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, end_date: e.target.value }))}
+                      className="w-32 px-1 py-1 border border-green-400 rounded text-xs bg-white focus:border-green-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <span className="text-xs text-green-600">On</span>
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <span className="text-xs text-green-600">พร้อม</span>
+                  </td>
+                  {/* ผู้ใหญ่(2-3) */}
+                  <td className="px-1 py-1">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="number"
+                        value={newPeriodData.price_adult}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_adult: e.target.value }))}
+                        className="w-24 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
+                        placeholder="ราคา"
+                      />
+                      <input
+                        type="number"
+                        value={newPeriodData.discount_adult}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_adult: e.target.value }))}
+                        className="w-24 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                        placeholder="ส่วนลด"
+                      />
+                    </div>
+                  </td>
+                  {/* พักเดี่ยว */}
+                  <td className="px-1 py-1">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="number"
+                        value={newPeriodData.price_single}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_single: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
+                        placeholder="ราคา"
+                      />
+                      <input
+                        type="number"
+                        value={newPeriodData.discount_single}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_single: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                        placeholder="ส่วนลด"
+                      />
+                    </div>
+                  </td>
+                  {/* เด็ก(เตียง) */}
+                  <td className="px-1 py-1">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="number"
+                        value={newPeriodData.price_child}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_child: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
+                        placeholder="ราคา"
+                      />
+                      <input
+                        type="number"
+                        value={newPeriodData.discount_child_bed}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_bed: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                        placeholder="ส่วนลด"
+                      />
+                    </div>
+                  </td>
+                  {/* เด็ก(ไม่เตียง) */}
+                  <td className="px-1 py-1">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="number"
+                        value={newPeriodData.price_child_nobed}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_child_nobed: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
+                        placeholder="ราคา"
+                      />
+                      <input
+                        type="number"
+                        value={newPeriodData.discount_child_nobed}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_nobed: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                        placeholder="ส่วนลด"
+                      />
+                    </div>
+                  </td>
+                  {/* ทารก */}
+                  <td className="px-1 py-1">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="number"
+                        value={newPeriodData.price_infant}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_infant: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
+                        placeholder="ราคา"
+                      />
+                      <input
+                        type="number"
+                        value={newPeriodData.discount_infant}
+                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_infant: e.target.value }))}
+                        className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
+                        placeholder="ส่วนลด"
+                      />
+                    </div>
+                  </td>
+                  <td className="px-2 py-1 bg-purple-50">
+                    <select
+                      value={newPeriodData.promotion_id?.toString() || ''}
+                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, promotion_id: e.target.value ? parseInt(e.target.value) : null, promo_start_date: e.target.value ? prev.promo_start_date : '', promo_end_date: e.target.value ? prev.promo_end_date : '' }))}
+                      className="w-full px-1 py-1 border border-purple-300 rounded text-xs bg-white"
+                    >
+                      <option value="">ไม่มี</option>
+                      {promotions.map(promo => (
+                        <option key={promo.id} value={promo.id}>{promo.name}</option>
+                      ))}
+                    </select>
+                    {newPeriodData.promotion_id && (
+                      <div className="mt-1.5 space-y-1">
+                        <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
+                          <span className="text-[10px] text-purple-500 text-right">เริ่ม</span>
+                          <input
+                            type="date"
+                            value={newPeriodData.promo_start_date}
+                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_start_date: e.target.value }))}
+                            className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
+                          <span className="text-[10px] text-purple-500 text-right">สิ้นสุด</span>
+                          <input
+                            type="date"
+                            value={newPeriodData.promo_end_date}
+                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_end_date: e.target.value }))}
+                            className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <input
+                      type="number"
+                      value={newPeriodData.capacity}
+                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, capacity: parseInt(e.target.value) || 0 }))}
+                      className="w-12 px-1 py-1 border border-green-400 rounded text-xs text-center bg-white"
+                      min={0}
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-center text-gray-400">0</td>
+                  <td className="px-2 py-1">
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSaveNewPeriod}
+                        disabled={savingPeriod || !newPeriodData.start_date || !newPeriodData.price_adult}
+                        className="text-green-600 hover:bg-green-100 h-6 w-6 p-0"
+                      >
+                        {savingPeriod ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancelNewPeriod}
+                        className="text-gray-500 hover:bg-gray-100 h-6 w-6 p-0"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
