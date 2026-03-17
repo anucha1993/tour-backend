@@ -1,7 +1,7 @@
 // API URL Configuration
 // Development: http://127.0.0.1:8000/api
-// Production:  https://api.nexttrip.world/api
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.world/api';
+// Production:  https://api.nexttrip.asia/api
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.asia/api';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
