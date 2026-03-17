@@ -10,7 +10,7 @@
 
 # ===== ตั้งค่า Server =====
 SERVER_USER="root"
-SERVER_HOST="147.50.254.113"
+SERVER_HOST="119.59.99.220"
 SERVER_PATH="/var/www/vhosts/nexttrip.asia/backend.nexttrip.asia"
 SSH_PORT="22"
 
