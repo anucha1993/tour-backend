@@ -1203,6 +1203,12 @@ export const periodsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  massUpdatePrice: (tourId: number, data: { period_ids: number[]; price_adult?: number; price_single?: number; price_child?: number; price_child_nobed?: number; price_infant?: number }) =>
+    apiRequest(`/tours/${tourId}/periods/mass-update-price`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Tour Itinerary interface

@@ -622,36 +622,43 @@ export default function EditTourPage() {
   const [savingPeriod, setSavingPeriod] = useState(false);
   const [editPeriod, setEditPeriod] = useState<Period | null>(null);
   const [isCreatingPeriod, setIsCreatingPeriod] = useState(false);
-  const [showNewPeriodRow, setShowNewPeriodRow] = useState(false);
-  const [newPeriodData, setNewPeriodData] = useState({
-    start_date: '',
-    end_date: '',
-    capacity: 30,
-    price_adult: '',
-    discount_adult: '',
-    price_single: '',
-    discount_single: '',
-    price_child: '',
-    discount_child_bed: '',
-    price_child_nobed: '',
-    discount_child_nobed: '',
-    price_infant: '',
-    discount_infant: '',
-    promotion_id: null as number | null,
-    promo_start_date: '',
-    promo_end_date: '',
-  });
+  const [newPeriodRows, setNewPeriodRows] = useState<Array<{
+    start_date: string;
+    end_date: string;
+    capacity: number;
+    price_adult: string;
+    discount_adult: string;
+    price_single: string;
+    discount_single: string;
+    price_child: string;
+    discount_child_bed: string;
+    price_child_nobed: string;
+    discount_child_nobed: string;
+    price_infant: string;
+    discount_infant: string;
+    promotion_id: number | null;
+    promo_start_date: string;
+    promo_end_date: string;
+  }>>([]);
+  const showNewPeriodRow = newPeriodRows.length > 0;
   const [periodForm, setPeriodForm] = useState<PeriodFormData>(emptyPeriodForm);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [selectedPeriodIds, setSelectedPeriodIds] = useState<number[]>([]);
   const [editingRowId, setEditingRowId] = useState<number | null>(null);
-  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'sale_status' | 'promo' | 'discount'>('visibility');
+  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'sale_status' | 'promo' | 'discount' | 'price'>('visibility');
   const [massUpdateValue, setMassUpdateValue] = useState<string>('');
   const [massDiscount, setMassDiscount] = useState({
     discount_adult: '',
     discount_single: '',
     discount_child_bed: '',
     discount_child_nobed: '',
+  });
+  const [massPrice, setMassPrice] = useState({
+    price_adult: '',
+    price_single: '',
+    price_child: '',
+    price_child_nobed: '',
+    price_infant: '',
   });
 
   // Promotions list
@@ -1399,7 +1406,7 @@ export default function EditTourPage() {
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + duration - 1);
     
-    setNewPeriodData({
+    setNewPeriodRows(prev => [...prev, {
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
       capacity: latest?.capacity ?? 30,
@@ -1416,20 +1423,13 @@ export default function EditTourPage() {
       promotion_id: latest?.offer?.promotion_id ?? null,
       promo_start_date: '',
       promo_end_date: '',
-    });
-    setShowNewPeriodRow(true);
+    }]);
   };
 
   const handleCopyPeriod = (period: Period) => {
-    const duration = tour?.duration_days || 5;
-    const startDate = new Date(period.end_date.split('T')[0]);
-    startDate.setDate(startDate.getDate() + 1);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + duration - 1);
-
-    setNewPeriodData({
-      start_date: startDate.toISOString().split('T')[0],
-      end_date: endDate.toISOString().split('T')[0],
+    setNewPeriodRows(prev => [...prev, {
+      start_date: period.start_date.split('T')[0],
+      end_date: period.end_date.split('T')[0],
       capacity: period.capacity,
       price_adult: period.offer?.price_adult || '',
       discount_adult: period.offer?.discount_adult || '',
@@ -1442,44 +1442,44 @@ export default function EditTourPage() {
       price_infant: period.offer?.price_infant || '',
       discount_infant: period.offer?.discount_infant || '',
       promotion_id: period.offer?.promotion_id ?? null,
-      promo_start_date: '',
-      promo_end_date: '',
-    });
-    setShowNewPeriodRow(true);
+      promo_start_date: period.offer?.promo_start_date?.split('T')[0] || '',
+      promo_end_date: period.offer?.promo_end_date?.split('T')[0] || '',
+    }]);
   };
 
   const handleSaveNewPeriod = async () => {
-    if (!tour) return;
+    if (!tour || newPeriodRows.length === 0) return;
     
     setSavingPeriod(true);
     try {
-      const payload = {
-        start_date: newPeriodData.start_date,
-        end_date: newPeriodData.end_date,
-        capacity: newPeriodData.capacity,
-        booked: 0,
-        status: 'open',
-        is_visible: true,
-        sale_status: 'available',
-        price_adult: parseFloat(newPeriodData.price_adult) || 0,
-        discount_adult: parseFloat(newPeriodData.discount_adult) || 0,
-        price_single: parseFloat(newPeriodData.price_single) || 0,
-        discount_single: parseFloat(newPeriodData.discount_single) || 0,
-        price_child: parseFloat(newPeriodData.price_child) || 0,
-        discount_child_bed: parseFloat(newPeriodData.discount_child_bed) || 0,
-        price_child_nobed: parseFloat(newPeriodData.price_child_nobed) || 0,
-        discount_child_nobed: parseFloat(newPeriodData.discount_child_nobed) || 0,
-        price_infant: parseFloat(newPeriodData.price_infant) || 0,
-        discount_infant: parseFloat(newPeriodData.discount_infant) || 0,
-        promotion_id: newPeriodData.promotion_id,
-        promo_start_date: newPeriodData.promo_start_date || null,
-        promo_end_date: newPeriodData.promo_end_date || null,
-        cancellation_policy: 'สามารถยกเลิกได้ภายใน 30 วันก่อนเดินทาง',
-      };
-
-      await periodsApi.create(tour.id, payload);
+      for (const row of newPeriodRows) {
+        const payload = {
+          start_date: row.start_date,
+          end_date: row.end_date,
+          capacity: row.capacity,
+          booked: 0,
+          status: 'open',
+          is_visible: true,
+          sale_status: 'available',
+          price_adult: parseFloat(row.price_adult) || 0,
+          discount_adult: parseFloat(row.discount_adult) || 0,
+          price_single: parseFloat(row.price_single) || 0,
+          discount_single: parseFloat(row.discount_single) || 0,
+          price_child: parseFloat(row.price_child) || 0,
+          discount_child_bed: parseFloat(row.discount_child_bed) || 0,
+          price_child_nobed: parseFloat(row.price_child_nobed) || 0,
+          discount_child_nobed: parseFloat(row.discount_child_nobed) || 0,
+          price_infant: parseFloat(row.price_infant) || 0,
+          discount_infant: parseFloat(row.discount_infant) || 0,
+          promotion_id: row.promotion_id,
+          promo_start_date: row.promo_start_date || null,
+          promo_end_date: row.promo_end_date || null,
+          cancellation_policy: 'สามารถยกเลิกได้ภายใน 30 วันก่อนเดินทาง',
+        };
+        await periodsApi.create(tour.id, payload);
+      }
       fetchPeriods();
-      setShowNewPeriodRow(false);
+      setNewPeriodRows([]);
     } catch (err) {
       console.error('Failed to create period:', err);
     } finally {
@@ -1488,7 +1488,15 @@ export default function EditTourPage() {
   };
 
   const handleCancelNewPeriod = () => {
-    setShowNewPeriodRow(false);
+    setNewPeriodRows([]);
+  };
+
+  const updateNewPeriodRow = (index: number, updates: Partial<typeof newPeriodRows[number]>) => {
+    setNewPeriodRows(prev => prev.map((row, i) => i === index ? { ...row, ...updates } : row));
+  };
+
+  const removeNewPeriodRow = (index: number) => {
+    setNewPeriodRows(prev => prev.filter((_, i) => i !== index));
   };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1618,6 +1626,18 @@ export default function EditTourPage() {
           discount_child_bed: parseFloat(massDiscount.discount_child_bed) || 0,
           discount_child_nobed: parseFloat(massDiscount.discount_child_nobed) || 0,
         });
+      } else if (massUpdateType === 'price') {
+        // Mass update price
+        const priceData: Record<string, number> = {};
+        if (massPrice.price_adult) priceData.price_adult = parseFloat(massPrice.price_adult);
+        if (massPrice.price_single) priceData.price_single = parseFloat(massPrice.price_single);
+        if (massPrice.price_child) priceData.price_child = parseFloat(massPrice.price_child);
+        if (massPrice.price_child_nobed) priceData.price_child_nobed = parseFloat(massPrice.price_child_nobed);
+        if (massPrice.price_infant) priceData.price_infant = parseFloat(massPrice.price_infant);
+        await periodsApi.massUpdatePrice(tour.id, {
+          period_ids: selectedPeriodIds,
+          ...priceData,
+        });
       } else {
         const updates: Record<string, unknown> = {};
         if (massUpdateType === 'visibility') {
@@ -1636,11 +1656,42 @@ export default function EditTourPage() {
       setSelectedPeriodIds([]);
       setMassUpdateValue('');
       setMassDiscount({ discount_adult: '', discount_single: '', discount_child_bed: '', discount_child_nobed: '' });
+      setMassPrice({ price_adult: '', price_single: '', price_child: '', price_child_nobed: '', price_infant: '' });
     } catch (err) {
       console.error('Failed to mass update:', err);
     } finally {
       setSavingPeriod(false);
     }
+  };
+
+  const handleMassCopy = () => {
+    if (selectedPeriodIds.length === 0) return;
+    
+    const rows = selectedPeriodIds.map(periodId => {
+      const period = periods.find(p => p.id === periodId);
+      if (!period) return null;
+      return {
+        start_date: period.start_date.split('T')[0],
+        end_date: period.end_date.split('T')[0],
+        capacity: period.capacity,
+        price_adult: period.offer?.price_adult || '',
+        discount_adult: period.offer?.discount_adult || '',
+        price_single: period.offer?.price_single || '',
+        discount_single: period.offer?.discount_single || '',
+        price_child: period.offer?.price_child || '',
+        discount_child_bed: period.offer?.discount_child_bed || '',
+        price_child_nobed: period.offer?.price_child_nobed || '',
+        discount_child_nobed: period.offer?.discount_child_nobed || '',
+        price_infant: period.offer?.price_infant || '',
+        discount_infant: period.offer?.discount_infant || '',
+        promotion_id: period.offer?.promotion_id ?? null,
+        promo_start_date: period.offer?.promo_start_date?.split('T')[0] || '',
+        promo_end_date: period.offer?.promo_end_date?.split('T')[0] || '',
+      };
+    }).filter(Boolean) as typeof newPeriodRows;
+    
+    setNewPeriodRows(prev => [...prev, ...rows]);
+    setSelectedPeriodIds([]);
   };
 
   // Inline update handlers for table editor - with debounce for better UX
@@ -2870,10 +2921,16 @@ export default function EditTourPage() {
             <span className="text-sm font-medium text-orange-800">
               ✓ เลือกแล้ว {selectedPeriodIds.length} รอบ - Mass Update
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPeriodIds([])}>
-              <X className="w-4 h-4" />
-              ยกเลิกเลือก
-            </Button>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" onClick={handleMassCopy} disabled={savingPeriod} className="bg-blue-500 hover:bg-blue-600 text-white">
+                {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                คัดลอก {selectedPeriodIds.length} รอบ
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPeriodIds([])}>
+                <X className="w-4 h-4" />
+                ยกเลิกเลือก
+              </Button>
+            </div>
           </div>
           
           <div className="flex flex-wrap items-end gap-4">
@@ -2881,11 +2938,12 @@ export default function EditTourPage() {
               <label className="block text-xs font-medium text-gray-700 mb-1">อัปเดตประเภท</label>
               <select
                 value={massUpdateType}
-                onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'sale_status' | 'promo' | 'discount')}
+                onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'sale_status' | 'promo' | 'discount' | 'price')}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
               >
                 <option value="visibility">สถานะแสดง</option>
                 <option value="sale_status">สถานะวางขาย</option>
+                <option value="price">ราคาทัวร์</option>
                 <option value="promo">โปรโมชั่น</option>
                 <option value="discount">ส่วนลดราคา</option>
               </select>
@@ -2985,12 +3043,67 @@ export default function EditTourPage() {
                 </div>
               </>
             )}
+
+            {massUpdateType === 'price' && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-green-700 mb-1">ผู้ใหญ่(พัก2-3)</label>
+                  <input
+                    type="number"
+                    value={massPrice.price_adult}
+                    onChange={(e) => setMassPrice(prev => ({ ...prev, price_adult: e.target.value }))}
+                    placeholder="29900"
+                    className="w-24 px-3 py-2 border border-green-300 rounded-lg text-sm bg-green-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-green-700 mb-1">พักเดี่ยว</label>
+                  <input
+                    type="number"
+                    value={massPrice.price_single}
+                    onChange={(e) => setMassPrice(prev => ({ ...prev, price_single: e.target.value }))}
+                    placeholder="5000"
+                    className="w-24 px-3 py-2 border border-green-300 rounded-lg text-sm bg-green-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-green-700 mb-1">เด็ก(เตียง)</label>
+                  <input
+                    type="number"
+                    value={massPrice.price_child}
+                    onChange={(e) => setMassPrice(prev => ({ ...prev, price_child: e.target.value }))}
+                    placeholder="25000"
+                    className="w-24 px-3 py-2 border border-green-300 rounded-lg text-sm bg-green-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-green-700 mb-1">เด็ก(ไม่เตียง)</label>
+                  <input
+                    type="number"
+                    value={massPrice.price_child_nobed}
+                    onChange={(e) => setMassPrice(prev => ({ ...prev, price_child_nobed: e.target.value }))}
+                    placeholder="20000"
+                    className="w-24 px-3 py-2 border border-green-300 rounded-lg text-sm bg-green-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-green-700 mb-1">ทารก</label>
+                  <input
+                    type="number"
+                    value={massPrice.price_infant}
+                    onChange={(e) => setMassPrice(prev => ({ ...prev, price_infant: e.target.value }))}
+                    placeholder="9900"
+                    className="w-24 px-3 py-2 border border-green-300 rounded-lg text-sm bg-green-50"
+                  />
+                </div>
+              </>
+            )}
             
             <Button
               type="button"
               size="sm"
               onClick={handleMassUpdate}
-              disabled={savingPeriod || (massUpdateType === 'visibility' && !massUpdateValue) || (massUpdateType === 'sale_status' && !massUpdateValue) || (massUpdateType === 'promo' && !massUpdateValue) || (massUpdateType === 'discount' && !massDiscount.discount_adult && !massDiscount.discount_single && !massDiscount.discount_child_bed && !massDiscount.discount_child_nobed)}
+              disabled={savingPeriod || (massUpdateType === 'visibility' && !massUpdateValue) || (massUpdateType === 'sale_status' && !massUpdateValue) || (massUpdateType === 'promo' && !massUpdateValue) || (massUpdateType === 'discount' && !massDiscount.discount_adult && !massDiscount.discount_single && !massDiscount.discount_child_bed && !massDiscount.discount_child_nobed) || (massUpdateType === 'price' && !massPrice.price_adult && !massPrice.price_single && !massPrice.price_child && !massPrice.price_child_nobed && !massPrice.price_infant)}
               className="bg-orange-500 hover:bg-orange-600"
             >
               {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -3082,7 +3195,16 @@ export default function EditTourPage() {
                       <input
                         type="date"
                         value={period.start_date ? period.start_date.split('T')[0] : ''}
-                        onChange={(e) => handleInlineUpdate(period.id, 'start_date', e.target.value)}
+                        onChange={(e) => {
+                          const startVal = e.target.value;
+                          const duration = tour?.duration_days || 5;
+                          const startD = new Date(startVal);
+                          const endD = new Date(startD);
+                          endD.setDate(endD.getDate() + duration - 1);
+                          const endVal = endD.toISOString().split('T')[0];
+                          handleInlineUpdate(period.id, 'start_date', startVal);
+                          handleInlineUpdate(period.id, 'end_date', endVal);
+                        }}
                         className="w-32 px-1 py-1 border border-blue-400 rounded text-xs focus:border-blue-500"
                       />
                     ) : (
@@ -3419,25 +3541,32 @@ export default function EditTourPage() {
                 </tr>
                 );
               })}
-              {/* New Period Row - Insert at bottom */}
-              {showNewPeriodRow && (
-                <tr className="border-t-2 border-green-300 bg-green-50">
+              {/* New Period Rows - Insert at bottom */}
+              {newPeriodRows.map((rowData, rowIdx) => (
+                <tr key={`new-${rowIdx}`} className="border-t-2 border-green-300 bg-green-50">
                   <td className="px-1 py-1 text-center">
                     <span className="text-green-600 font-bold">+</span>
                   </td>
                   <td className="px-2 py-1">
                     <input
                       type="date"
-                      value={newPeriodData.start_date}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, start_date: e.target.value }))}
+                      value={rowData.start_date}
+                      onChange={(e) => {
+                        const startVal = e.target.value;
+                        const duration = tour?.duration_days || 5;
+                        const startD = new Date(startVal);
+                        const endD = new Date(startD);
+                        endD.setDate(endD.getDate() + duration - 1);
+                        updateNewPeriodRow(rowIdx, { start_date: startVal, end_date: endD.toISOString().split('T')[0] });
+                      }}
                       className="w-32 px-1 py-1 border border-green-400 rounded text-xs bg-white focus:border-green-500"
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
                       type="date"
-                      value={newPeriodData.end_date}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, end_date: e.target.value }))}
+                      value={rowData.end_date}
+                      onChange={(e) => updateNewPeriodRow(rowIdx, { end_date: e.target.value })}
                       className="w-32 px-1 py-1 border border-green-400 rounded text-xs bg-white focus:border-green-500"
                     />
                   </td>
@@ -3452,15 +3581,15 @@ export default function EditTourPage() {
                     <div className="flex flex-col gap-0.5">
                       <input
                         type="number"
-                        value={newPeriodData.price_adult}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_adult: e.target.value }))}
+                        value={rowData.price_adult}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { price_adult: e.target.value })}
                         className="w-24 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
                         placeholder="ราคา"
                       />
                       <input
                         type="number"
-                        value={newPeriodData.discount_adult}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_adult: e.target.value }))}
+                        value={rowData.discount_adult}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { discount_adult: e.target.value })}
                         className="w-24 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
                         placeholder="ส่วนลด"
                       />
@@ -3471,15 +3600,15 @@ export default function EditTourPage() {
                     <div className="flex flex-col gap-0.5">
                       <input
                         type="number"
-                        value={newPeriodData.price_single}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_single: e.target.value }))}
+                        value={rowData.price_single}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { price_single: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
                         placeholder="ราคา"
                       />
                       <input
                         type="number"
-                        value={newPeriodData.discount_single}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_single: e.target.value }))}
+                        value={rowData.discount_single}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { discount_single: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
                         placeholder="ส่วนลด"
                       />
@@ -3490,15 +3619,15 @@ export default function EditTourPage() {
                     <div className="flex flex-col gap-0.5">
                       <input
                         type="number"
-                        value={newPeriodData.price_child}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_child: e.target.value }))}
+                        value={rowData.price_child}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { price_child: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
                         placeholder="ราคา"
                       />
                       <input
                         type="number"
-                        value={newPeriodData.discount_child_bed}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_bed: e.target.value }))}
+                        value={rowData.discount_child_bed}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { discount_child_bed: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
                         placeholder="ส่วนลด"
                       />
@@ -3509,15 +3638,15 @@ export default function EditTourPage() {
                     <div className="flex flex-col gap-0.5">
                       <input
                         type="number"
-                        value={newPeriodData.price_child_nobed}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_child_nobed: e.target.value }))}
+                        value={rowData.price_child_nobed}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { price_child_nobed: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
                         placeholder="ราคา"
                       />
                       <input
                         type="number"
-                        value={newPeriodData.discount_child_nobed}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_child_nobed: e.target.value }))}
+                        value={rowData.discount_child_nobed}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { discount_child_nobed: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
                         placeholder="ส่วนลด"
                       />
@@ -3528,15 +3657,15 @@ export default function EditTourPage() {
                     <div className="flex flex-col gap-0.5">
                       <input
                         type="number"
-                        value={newPeriodData.price_infant}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, price_infant: e.target.value }))}
+                        value={rowData.price_infant}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { price_infant: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-green-400 rounded text-xs text-right bg-white"
                         placeholder="ราคา"
                       />
                       <input
                         type="number"
-                        value={newPeriodData.discount_infant}
-                        onChange={(e) => setNewPeriodData(prev => ({ ...prev, discount_infant: e.target.value }))}
+                        value={rowData.discount_infant}
+                        onChange={(e) => updateNewPeriodRow(rowIdx, { discount_infant: e.target.value })}
                         className="w-20 px-1 py-0.5 border border-yellow-400 rounded text-xs text-right bg-yellow-50"
                         placeholder="ส่วนลด"
                       />
@@ -3544,8 +3673,8 @@ export default function EditTourPage() {
                   </td>
                   <td className="px-2 py-1 bg-purple-50">
                     <select
-                      value={newPeriodData.promotion_id?.toString() || ''}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, promotion_id: e.target.value ? parseInt(e.target.value) : null, promo_start_date: e.target.value ? prev.promo_start_date : '', promo_end_date: e.target.value ? prev.promo_end_date : '' }))}
+                      value={rowData.promotion_id?.toString() || ''}
+                      onChange={(e) => updateNewPeriodRow(rowIdx, { promotion_id: e.target.value ? parseInt(e.target.value) : null, promo_start_date: e.target.value ? rowData.promo_start_date : '', promo_end_date: e.target.value ? rowData.promo_end_date : '' })}
                       className="w-full px-1 py-1 border border-purple-300 rounded text-xs bg-white"
                     >
                       <option value="">ไม่มี</option>
@@ -3553,14 +3682,14 @@ export default function EditTourPage() {
                         <option key={promo.id} value={promo.id}>{promo.name}</option>
                       ))}
                     </select>
-                    {newPeriodData.promotion_id && (
+                    {rowData.promotion_id && (
                       <div className="mt-1.5 space-y-1">
                         <div className="grid grid-cols-[32px_1fr] items-center gap-0.5">
                           <span className="text-[10px] text-purple-500 text-right">เริ่ม</span>
                           <input
                             type="date"
-                            value={newPeriodData.promo_start_date}
-                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_start_date: e.target.value }))}
+                            value={rowData.promo_start_date}
+                            onChange={(e) => updateNewPeriodRow(rowIdx, { promo_start_date: e.target.value })}
                             className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
                           />
                         </div>
@@ -3568,8 +3697,8 @@ export default function EditTourPage() {
                           <span className="text-[10px] text-purple-500 text-right">สิ้นสุด</span>
                           <input
                             type="date"
-                            value={newPeriodData.promo_end_date}
-                            onChange={(e) => setNewPeriodData(prev => ({ ...prev, promo_end_date: e.target.value }))}
+                            value={rowData.promo_end_date}
+                            onChange={(e) => updateNewPeriodRow(rowIdx, { promo_end_date: e.target.value })}
                             className="w-full px-1 py-0.5 border border-purple-300 rounded text-[10px] bg-white"
                           />
                         </div>
@@ -3579,8 +3708,8 @@ export default function EditTourPage() {
                   <td className="px-2 py-1 text-center">
                     <input
                       type="number"
-                      value={newPeriodData.capacity}
-                      onChange={(e) => setNewPeriodData(prev => ({ ...prev, capacity: parseInt(e.target.value) || 0 }))}
+                      value={rowData.capacity}
+                      onChange={(e) => updateNewPeriodRow(rowIdx, { capacity: parseInt(e.target.value) || 0 })}
                       className="w-12 px-1 py-1 border border-green-400 rounded text-xs text-center bg-white"
                       min={0}
                     />
@@ -3588,31 +3717,54 @@ export default function EditTourPage() {
                   <td className="px-2 py-1 text-center text-gray-400">0</td>
                   <td className="px-2 py-1">
                     <div className="flex gap-1">
+                      {rowIdx === 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSaveNewPeriod}
+                          disabled={savingPeriod || newPeriodRows.some(r => !r.start_date || !r.price_adult)}
+                          className="text-green-600 hover:bg-green-100 h-6 w-6 p-0"
+                          title={`บันทึกทั้งหมด ${newPeriodRows.length} รอบ`}
+                        >
+                          {savingPeriod ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={handleSaveNewPeriod}
-                        disabled={savingPeriod || !newPeriodData.start_date || !newPeriodData.price_adult}
-                        className="text-green-600 hover:bg-green-100 h-6 w-6 p-0"
-                      >
-                        {savingPeriod ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCancelNewPeriod}
+                        onClick={() => removeNewPeriodRow(rowIdx)}
                         className="text-gray-500 hover:bg-gray-100 h-6 w-6 p-0"
+                        title="ลบแถวนี้"
                       >
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
                   </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* New Period Rows Actions */}
+      {newPeriodRows.length > 0 && (
+        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+          <span className="text-sm text-green-700 font-medium">
+            + {newPeriodRows.length} รอบใหม่ รอบันทึก
+          </span>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={handleSaveNewPeriod} disabled={savingPeriod || newPeriodRows.some(r => !r.start_date || !r.price_adult)} className="bg-green-500 hover:bg-green-600 text-white">
+              {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              บันทึก {newPeriodRows.length} รอบ
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCancelNewPeriod}>
+              <X className="w-4 h-4" />
+              ยกเลิกทั้งหมด
+            </Button>
+          </div>
         </div>
       )}
 
