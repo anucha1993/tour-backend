@@ -270,6 +270,7 @@ export interface GalleryImage {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  tours_count?: number;
 }
 
 export interface PaginationMeta {

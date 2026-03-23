@@ -17,6 +17,7 @@ import {
   Tag,
   MapPin,
   RefreshCw,
+  Package,
 } from 'lucide-react';
 import { galleryApi, countriesApi, citiesApi, GalleryImage, Country, City } from '@/lib/api';
 
@@ -28,7 +29,8 @@ export default function GalleryPage() {
   const [cities, setCities] = useState<City[]>([]);
   
   // Filters
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(''); // raw input (debounced)
+  const [search, setSearch] = useState('');            // debounced value used in API
   const [filterCountry, setFilterCountry] = useState('');
   const [filterCity, setFilterCity] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -106,6 +108,15 @@ export default function GalleryPage() {
   useEffect(() => {
     fetchImages();
   }, [fetchImages]);
+
+  // Debounce search input: wait 400ms after user stops typing, then update search + reset page
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -390,8 +401,8 @@ export default function GalleryPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="ค้นหาชื่อไฟล์, alt, caption..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -410,6 +421,7 @@ export default function GalleryPage() {
               onChange={(value) => {
                 setFilterCountry(value);
                 setFilterCity('');
+                setPage(1);
               }}
               placeholder="เลือกประเทศ"
               searchPlaceholder="ค้นหาประเทศ..."
@@ -417,7 +429,7 @@ export default function GalleryPage() {
           </div>
           <Select
             value={filterCity}
-            onChange={(e) => setFilterCity(e.target.value)}
+            onChange={(e) => { setFilterCity(e.target.value); setPage(1); }}
             disabled={!filterCountry}
           >
             <option value="">ทุกเมือง</option>
@@ -427,13 +439,14 @@ export default function GalleryPage() {
           </Select>
           <Select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
           >
             <option value="">ทุกสถานะ</option>
             <option value="true">เปิดใช้งาน</option>
             <option value="false">ปิดใช้งาน</option>
           </Select>
           <Button variant="outline" onClick={() => {
+            setSearchInput('');
             setSearch('');
             setFilterCountry('');
             setFilterCity('');
@@ -539,6 +552,20 @@ export default function GalleryPage() {
                       )}
                     </div>
                   )}
+                  {/* Tours count badge */}
+                  <div className="mt-1.5">
+                    {(image.tours_count ?? 0) > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded">
+                        <Package className="w-3 h-3" />
+                        {image.tours_count} โปรแกรม
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
+                        <Package className="w-3 h-3" />
+                        ไม่มีโปรแกรม
+                      </span>
+                    )}
+                  </div>
                 </div>
               </Card>
             ))}

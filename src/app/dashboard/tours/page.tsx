@@ -136,6 +136,7 @@ export default function ToursPage() {
   const [wholesalerFilter, setWholesalerFilter] = useState('');
   const [wholesalerSearch, setWholesalerSearch] = useState('');
   const [wholesalerDropdownOpen, setWholesalerDropdownOpen] = useState(false);
+  const [wholesalerTourCodeFilter, setWholesalerTourCodeFilter] = useState('');
   
   // Promotions from database
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -254,6 +255,7 @@ export default function ToursPage() {
       if (themeFilter) params.theme = themeFilter;
       if (countryFilter) params.country_id = countryFilter;
       if (wholesalerFilter) params.wholesaler_id = wholesalerFilter;
+      if (wholesalerTourCodeFilter) params.wholesaler_tour_code = wholesalerTourCodeFilter;
       if (promotionFilters.length > 0) params.promotion_ids = promotionFilters.join(',');
       if (minPriceFilter) params.min_price = minPriceFilter;
       if (maxPriceFilter) params.max_price = maxPriceFilter;
@@ -311,7 +313,7 @@ export default function ToursPage() {
         setLoading(false);
       }
     }
-  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, promotionFilters, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
+  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, wholesalerTourCodeFilter, promotionFilters, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
 
   useEffect(() => { fetchTours(); }, [fetchTours]);
 
@@ -331,6 +333,7 @@ export default function ToursPage() {
     setCountrySearch('');
     setWholesalerFilter('');
     setWholesalerSearch('');
+    setWholesalerTourCodeFilter('');
     setPromotionFilters([]);
     setPromotionSearch('');
     setMinPriceFilter('');
@@ -463,7 +466,7 @@ export default function ToursPage() {
   };
 
   // Check if any additional filter is active (beyond tab preset)
-  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || wholesalerTourCodeFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
   
   // Clear additional filters only
   const clearAdditionalFilters = () => {
@@ -474,6 +477,7 @@ export default function ToursPage() {
     setCountrySearch('');
     setWholesalerFilter('');
     setWholesalerSearch('');
+    setWholesalerTourCodeFilter('');
     setPromotionFilters([]);
     setPromotionSearch('');
     setMinPriceFilter('');
@@ -1108,6 +1112,31 @@ export default function ToursPage() {
                     }}
                   />
                 )}
+              </div>
+
+              {/* Wholesaler Tour Code Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <FileText className="inline w-4 h-4 mr-1" />
+                  รหัสทัวร์ Wholesale
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="เช่น TH-JP-001..."
+                    value={wholesalerTourCodeFilter}
+                    onChange={(e) => { setWholesalerTourCodeFilter(e.target.value); setCurrentPage(1); }}
+                    className="w-full pl-3 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {wholesalerTourCodeFilter && (
+                    <button
+                      onClick={() => { setWholesalerTourCodeFilter(''); setCurrentPage(1); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Promotion Filter - Multi-Select Dropdown */}

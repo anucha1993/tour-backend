@@ -3150,8 +3150,9 @@ export default function EditTourPage() {
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">เด็ก(ไม่เตียง)</th>
                 <th className="text-right px-2 py-2 font-medium text-gray-700 whitespace-nowrap">ทารก</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700 bg-purple-50 min-w-[160px]">โปรโมชั่น</th>
-                <th className="text-center px-2 py-2 font-medium text-gray-700">ที่นั่ง</th>
+                <th className="text-center px-2 py-2 font-medium text-gray-700">กรุ๊ป</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">จอง</th>
+                <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">คงเหลือ</th>
                 <th className="px-2 py-2"></th>
               </tr>
             </thead>
@@ -3490,8 +3491,14 @@ export default function EditTourPage() {
                         min={0}
                       />
                     ) : (
-                      <span className="text-sm">{period.booked}/{period.capacity}</span>
+                      <span className="text-sm">{period.booked}</span>
                     )}
+                  </td>
+                  {/* คงเหลือ (รับได้) */}
+                  <td className="px-2 py-1 text-center">
+                    <span className={`text-sm font-medium ${period.available <= 0 ? 'text-red-600' : period.available <= 5 ? 'text-orange-500' : 'text-green-600'}`}>
+                      {period.available}
+                    </span>
                   </td>
                   {/* Actions */}
                   <td className="px-2 py-1">
