@@ -168,6 +168,7 @@ export default function ToursPage() {
   // Copy states
   const [copiedTourId, setCopiedTourId] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedSelected, setCopiedSelected] = useState(false);
 
   // Modals
   const [previewTour, setPreviewTour] = useState<Tour | null>(null);
@@ -211,7 +212,7 @@ export default function ToursPage() {
   useEffect(() => {
     const fetchWholesalers = async () => {
       try {
-        const res = await wholesalersApi.list({ is_active: 'true' });
+        const res = await wholesalersApi.list({ is_active: 'true', per_page: '1000' });
         if (res.success && res.data) {
           setWholesalers(res.data);
         }
@@ -556,6 +557,16 @@ export default function ToursPage() {
     setTimeout(() => setCopiedAll(false), 2000);
   };
 
+  // Copy selected tours (checkbox)
+  const handleCopySelected = async () => {
+    const selected = tours.filter(t => selectedTours.has(t.id));
+    if (selected.length === 0) return;
+    const text = selected.map(tour => formatTourForCopy(tour)).join('\n\n---\n\n');
+    await navigator.clipboard.writeText(text);
+    setCopiedSelected(true);
+    setTimeout(() => setCopiedSelected(false), 2000);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -569,14 +580,26 @@ export default function ToursPage() {
         </div>
         <div className="flex gap-2">
           {selectedTours.size > 0 && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setMassDeleteConfirm(true)}
-            >
-              <Trash2 className="w-4 h-4" />
-              ลบที่เลือก ({selectedTours.size})
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopySelected}
+                disabled={copiedSelected}
+                className={copiedSelected ? '!bg-green-50 !text-green-700 !border-green-300' : ''}
+              >
+                {copiedSelected ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copiedSelected ? 'คัดลอกแล้ว!' : `คัดลอกที่เลือก (${selectedTours.size})`}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setMassDeleteConfirm(true)}
+              >
+                <Trash2 className="w-4 h-4" />
+                ลบที่เลือก ({selectedTours.size})
+              </Button>
+            </>
           )}
           <Button variant="outline" size="sm" onClick={() => { fetchTours(); fetchCounts(); }}>
             <RefreshCw className="w-4 h-4" />

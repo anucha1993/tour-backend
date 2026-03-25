@@ -680,6 +680,7 @@ export default function SalesSearchPage() {
   // State สำหรับ copy feedback
   const [copiedTourId, setCopiedTourId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedSelected, setCopiedSelected] = useState(false);
 
   // Format tour data สำหรับ copy — แสดงทุกรอบที่ filter ได้
   const formatTourForCopy = (tour: Tour): string => {
@@ -785,6 +786,16 @@ export default function SalesSearchPage() {
     await navigator.clipboard.writeText(allText);
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
+  };
+
+  // Copy selected tours (checkbox)
+  const handleCopySelected = async () => {
+    const selected = filteredTours.filter((tour, index) => selectedTours.has(getTourKey(tour, index)));
+    if (selected.length === 0) return;
+    const text = selected.map(tour => formatTourForCopy(tour)).join('\n\n---\n\n');
+    await navigator.clipboard.writeText(text);
+    setCopiedSelected(true);
+    setTimeout(() => setCopiedSelected(false), 2000);
   };
 
   // === Mass Sync Functions ===
@@ -1495,6 +1506,17 @@ export default function SalesSearchPage() {
                   {copiedAll ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   {copiedAll ? 'คัดลอกแล้ว!' : `คัดลอกทั้งหมด (${filteredTours.length})`}
                 </Button>
+                {selectedTours.size > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopySelected}
+                    className={copiedSelected ? 'text-green-600 border-green-600' : ''}
+                  >
+                    {copiedSelected ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copiedSelected ? 'คัดลอกแล้ว!' : `คัดลอกที่เลือก (${selectedTours.size})`}
+                  </Button>
+                )}
               </>
             )}
             <Button variant="outline" size="sm" onClick={handleSearch} disabled={loading}>

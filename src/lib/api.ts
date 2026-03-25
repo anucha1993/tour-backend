@@ -360,6 +360,32 @@ export async function apiRequest<T = any>(
   }
 }
 
+/**
+ * Parse a fetch Response as JSON safely.
+ * When the server returns a non-JSON body (e.g. IIS "Internal Server Error" or 413 HTML page)
+ * calling response.json() directly throws a SyntaxError.  This helper checks the content-type
+ * first and returns a structured error object instead of throwing.
+ */
+async function safeResponseJson<T>(response: Response): Promise<ApiResponse<T>> {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    // Log the actual server response text for debugging
+    const text = await response.text().catch(() => '(could not read response body)');
+    console.error(`[Upload] Non-JSON response ${response.status} from ${response.url}`);
+    console.error(`[Upload] Content-Type: ${contentType}`);
+    console.error(`[Upload] Body: ${text.slice(0, 2000)}`);
+    return {
+      success: false,
+      message: `อัปโหลดล้มเหลว (${response.status}): ${text.slice(0, 300) || 'เซิร์ฟเวอร์ไม่ตอบสนอง'}`,
+    };
+  }
+  const data = await response.json() as ApiResponse<T>;
+  if (!response.ok) {
+    console.error(`[Upload] JSON error ${response.status}:`, data);
+  }
+  return data;
+}
+
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
@@ -1038,7 +1064,7 @@ export const toursApi = {
       },
       body: formData,
     });
-    return response.json() as Promise<ApiResponse<{ cover_image_url: string; cover_image_alt?: string }>>;
+    return safeResponseJson<{ cover_image_url: string; cover_image_alt?: string }>(response);
   },
 
   uploadPdf: async (id: number, file: File) => {
@@ -1053,7 +1079,7 @@ export const toursApi = {
       },
       body: formData,
     });
-    return response.json() as Promise<ApiResponse<{ pdf_url: string }>>;
+    return safeResponseJson<{ pdf_url: string }>(response);
   },
 
   // Custom Media Override APIs
@@ -1068,13 +1094,13 @@ export const toursApi = {
       headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
     });
-    return response.json() as Promise<ApiResponse<{
+    return safeResponseJson<{
       custom_cover_image_url: string;
       custom_cover_image_alt?: string;
       cover_image_source: string;
       effective_cover_image_url: string;
       effective_cover_image_alt?: string;
-    }>>;
+    }>(response);
   },
 
   uploadCustomPdf: async (id: number, file: File) => {
@@ -1087,11 +1113,11 @@ export const toursApi = {
       headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
     });
-    return response.json() as Promise<ApiResponse<{
+    return safeResponseJson<{
       custom_pdf_url: string;
       pdf_source: string;
       effective_pdf_url: string;
-    }>>;
+    }>(response);
   },
 
   setMediaSource: (id: number, field: 'cover_image' | 'pdf', source: 'api' | 'custom' | 'generate') =>

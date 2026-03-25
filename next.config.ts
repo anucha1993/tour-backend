@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+    // Increase Next.js rewrite proxy body limit (default is 10MB)
+    middlewareClientMaxBodySize: 52428800, // 50MB in bytes
+  },
   async rewrites() {
     const apiTarget = process.env.API_PROXY_TARGET || 'http://127.0.0.1:8000/api';
     return [

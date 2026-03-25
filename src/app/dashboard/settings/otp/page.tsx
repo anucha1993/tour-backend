@@ -282,7 +282,7 @@ export default function OtpSettingsPage() {
                 placeholder="https://api-v2.thaibulksms.com"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <p className="mt-1 text-sm text-gray-500">URL ของ ThaiBulkSMS API</p>
+              <p className="mt-1 text-sm text-gray-500">URL ของ ThaiBulkSMS API (ใช้ฐาน URL เช่น https://api-v2.thaibulksms.com ไม่ต้องต่อ /sms)</p>
             </div>
 
             {/* API Key */}
@@ -361,10 +361,11 @@ export default function OtpSettingsPage() {
                 type="text"
                 value={config.sender}
                 onChange={(e) => setConfig(prev => ({ ...prev, sender: e.target.value }))}
-                placeholder="SMS."
+                placeholder="NEXTTRIP"
+                maxLength={10}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <p className="mt-1 text-sm text-gray-500">ชื่อผู้ส่งที่จะแสดงในข้อความ SMS</p>
+              <p className="mt-1 text-sm text-gray-500">ตั้งได้ 4-10 ตัวอักษร ใช้ได้เฉพาะ A-Z, a-z, 0-9 และ . - _ (ห้ามเว้นวรรค และห้ามใช้เบอร์โทร)</p>
             </div>
           </div>
 

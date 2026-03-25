@@ -714,7 +714,9 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                     <th className="text-right px-3 py-3 font-medium text-gray-700">เด็ก(เตียง)</th>
                     <th className="text-right px-3 py-3 font-medium text-gray-700">เด็ก(ไม่เตียง)</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-700">โปรโมชั่น</th>
-                    <th className="text-right px-3 py-3 font-medium text-gray-700">ที่นั่ง</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-700">กรุ๊ป</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-700">จอง</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-700 whitespace-nowrap">คงเหลือ</th>
                     <th className="px-3 py-3"></th>
                   </tr>
                 </thead>
@@ -788,8 +790,20 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-right">
-                        <span className="text-gray-700">{period.booked}/{period.capacity}</span>
+                      <td className="px-3 py-3 text-center">
+                        <span className="text-gray-700 text-sm">{period.capacity}</span>
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <span className="text-gray-700 text-sm">{period.booked}</span>
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <span className={`text-sm font-medium ${
+                          (period.capacity - period.booked) <= 0 ? 'text-red-600' : 
+                          (period.capacity - period.booked) <= 5 ? 'text-orange-500' : 
+                          'text-green-600'
+                        }`}>
+                          {period.capacity - period.booked}
+                        </span>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-1">
