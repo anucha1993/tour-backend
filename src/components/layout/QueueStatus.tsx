@@ -115,7 +115,7 @@ export default function QueueStatus() {
       }
     } catch (error) {
       // Silently fail - endpoint might not exist yet
-      console.error('Failed to fetch running syncs:', error);
+      console.debug('Failed to fetch running syncs:', error);
     }
   }, [fixing]);
 

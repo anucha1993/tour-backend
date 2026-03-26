@@ -101,6 +101,9 @@ const defaultFormData = {
   pagination_limit: 50,
   pagination_cursor_param: 'cursor',
   pagination_post_body: '{}',
+  // Integration Type
+  integration_type: 'config' as 'config' | 'headcode',
+  headcode_file: '',
 };
 
 // Type for form data
@@ -139,8 +142,15 @@ export default function IntegrationSettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Config-type test connection
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'idle' | 'success' | 'failed'>('idle');
+  const [testToursCount, setTestToursCount] = useState<number | null>(null);
+  // Headcode-type async test
+  const [headcodeTesting, setHeadcodeTesting] = useState(false);
+  const [headcodeTestStatus, setHeadcodeTestStatus] = useState<'idle' | 'pending' | 'success' | 'failed'>('idle');
+  const [headcodeToursCount, setHeadcodeToursCount] = useState<number | null>(null);
+  const [headcodeTestMessage, setHeadcodeTestMessage] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [activeTab, setActiveTab] = useState<'api' | 'sync' | 'booking' | 'notifications' | 'pdf' | 'danger'>('api');
@@ -326,6 +336,9 @@ export default function IntegrationSettingsPage() {
           pagination_limit: integration.auth_credentials?.pagination?.limit || 50,
           pagination_cursor_param: integration.auth_credentials?.pagination?.param || 'cursor',
           pagination_post_body: JSON.stringify(integration.auth_credentials?.pagination?.body || {}, null, 2),
+          // Integration Type
+          integration_type: (integration.integration_type || 'config') as 'config' | 'headcode',
+          headcode_file: integration.headcode_file || '',
         });
 
         // Initialize minute offset and customCron from current cron schedule
@@ -461,10 +474,13 @@ export default function IntegrationSettingsPage() {
         authCredentials.pagination = paginationConfig;
       }
       
+      const isHeadcode = formData.integration_type === 'headcode';
       const updateData = {
-        api_base_url: formData.api_base_url,
+        integration_type: formData.integration_type,
+        headcode_file: isHeadcode ? (formData.headcode_file || undefined) : undefined,
+        api_base_url: isHeadcode ? undefined : formData.api_base_url,
         api_version: formData.api_version,
-        auth_type: formData.auth_type,
+        auth_type: isHeadcode ? 'custom' : formData.auth_type,
         auth_credentials: authCredentials as WholesalerApiConfig['auth_credentials'],
         rate_limit_per_minute: formData.rate_limit,
         request_timeout_seconds: formData.timeout,
@@ -534,9 +550,24 @@ export default function IntegrationSettingsPage() {
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult('idle');
+    setTestToursCount(null);
     setError(null);
     
     try {
+      // For headcode integrations: use fetch-sample which runs the actual adapter
+      if (formData.integration_type === 'headcode') {
+        const result = await integrationsApi.fetchSample(formData.id);
+        setTestResult(result.success ? 'success' : 'failed');
+        if (result.success && result.data?.tours_count != null) {
+          setTestToursCount(result.data.tours_count);
+        }
+        if (!result.success && result.message) {
+          setError(result.message);
+        }
+        return;
+      }
+
+      // For config integrations: use generic test-connection endpoint
       // Build auth_credentials
       const authCredentials: Record<string, unknown> = {};
       
@@ -587,7 +618,65 @@ export default function IntegrationSettingsPage() {
       setTesting(false);
     }
   };
-  
+
+  /**
+   * Headcode async test — dispatches a queue job so the PHP web server
+   * thread is never blocked. Polls every 2s until done.
+   */
+  const handleTestHeadcode = async () => {
+    setHeadcodeTesting(true);
+    setHeadcodeTestStatus('pending');
+    setHeadcodeToursCount(null);
+    setHeadcodeTestMessage(null);
+
+    try {
+      const dispatch = await integrationsApi.testHeadcodeAsync(formData.id);
+      if (!dispatch.success || !dispatch.task_id) {
+        setHeadcodeTestStatus('failed');
+        setHeadcodeTestMessage(dispatch.message ?? 'ไม่สามารถส่งคำสั่งได้');
+        setHeadcodeTesting(false);
+        return;
+      }
+
+      const taskId = dispatch.task_id;
+
+      // Poll every 2 seconds for up to 90s
+      let attempts = 0;
+      const poll = async () => {
+        attempts++;
+        if (attempts > 45) {
+          setHeadcodeTestStatus('failed');
+          setHeadcodeTestMessage('หมดเวลา — Queue Worker อาจไม่ได้รัน');
+          setHeadcodeTesting(false);
+          return;
+        }
+        try {
+          const status = await integrationsApi.testHeadcodeStatus(formData.id, taskId);
+          if (status.status === 'pending') {
+            setTimeout(poll, 2000);
+          } else if (status.status === 'success') {
+            setHeadcodeTestStatus('success');
+            setHeadcodeToursCount(status.tours_count ?? null);
+            setHeadcodeTesting(false);
+          } else {
+            setHeadcodeTestStatus('failed');
+            setHeadcodeTestMessage(status.message ?? 'เชื่อมต่อไม่สำเร็จ');
+            setHeadcodeTesting(false);
+          }
+        } catch {
+          setTimeout(poll, 2000); // retry on network error
+        }
+      };
+      setTimeout(poll, 2000);
+    } catch (err: unknown) {
+      setHeadcodeTestStatus('failed');
+      setHeadcodeTestMessage(err && typeof err === 'object' && 'message' in err
+        ? (err as { message: string }).message
+        : 'Network error');
+      setHeadcodeTesting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm('คุณแน่ใจหรือไม่ที่จะลบ Integration นี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้')) {
       return;
@@ -748,10 +837,12 @@ export default function IntegrationSettingsPage() {
     }
   };
 
+  const isHeadcode = formData.integration_type === 'headcode';
+
   const tabs = [
     { id: 'api', label: 'ตั้งค่า API', icon: Key },
     { id: 'sync', label: 'การ Sync ข้อมูล', icon: RefreshCw },
-    { id: 'booking', label: 'Booking Flow', icon: Zap },
+    ...(!isHeadcode ? [{ id: 'booking' as const, label: 'Booking Flow', icon: Zap }] : []),
     { id: 'pdf', label: 'PDF Branding', icon: FileImage },
     { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell },
     { id: 'danger', label: 'Danger Zone', icon: AlertTriangle },
@@ -881,6 +972,122 @@ export default function IntegrationSettingsPage() {
               <p className="text-xs sm:text-sm text-gray-500 mb-6">กำหนด URL, Authentication และ Rate Limit สำหรับเชื่อมต่อกับ API ของ Wholesaler</p>
               
               <div className="space-y-6">
+                {/* Integration Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ประเภท Integration</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, integration_type: 'config' }))}
+                      className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                        formData.integration_type === 'config'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="font-medium text-sm">Config</div>
+                      <div className="text-xs text-gray-500 mt-0.5">ใช้ Field Mapping จาก Database (มาตรฐาน)</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, integration_type: 'headcode' }))}
+                      className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                        formData.integration_type === 'headcode'
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="font-medium text-sm">Headcode</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Custom PHP สำหรับ API ที่ไม่เป็นมาตรฐาน</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Headcode File (headcode type only) */}
+                {formData.integration_type === 'headcode' && (
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 space-y-3">
+                    <div className="flex items-center gap-2 text-purple-800">
+                      <Shield className="w-4 h-4" />
+                      <h4 className="font-medium text-sm">Headcode Configuration</h4>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Headcode File</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 whitespace-nowrap">storage/headcode/</span>
+                        <input
+                          type="text"
+                          value={formData.headcode_file}
+                          onChange={(e) => setFormData(prev => ({ ...prev, headcode_file: e.target.value.replace(/[^a-zA-Z0-9_-]/g, '') }))}
+                          placeholder="lookplanets"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                        />
+                        <span className="text-sm text-gray-500">.php</span>
+                      </div>
+                      {formData.headcode_file && (
+                        <p className="text-xs text-purple-600 mt-1">
+                          Class: <code className="font-mono">Headcode{formData.headcode_file.split(/[-_]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('')}Adapter</code>
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      วางไฟล์ PHP ที่ <code className="font-mono bg-white px-1 rounded">storage/headcode/{'{filename}'}.php</code> และสร้าง class <code className="font-mono bg-white px-1 rounded">Headcode{'{Filename}'}Adapter extends HeadcodeBaseAdapter</code>
+                    </p>
+
+                    {/* Custom Headers for headcode auth */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-gray-700">Custom Headers (Authentication)</label>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, auth_headers: [...prev.auth_headers, { key: '', value: '' }] }))}
+                          className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                        >
+                          + เพิ่ม Header
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {formData.auth_headers.map((header, index) => (
+                          <div key={index} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              placeholder="Header Name (e.g. itravels-secret)"
+                              value={header.key}
+                              onChange={(e) => {
+                                const updated = [...formData.auth_headers];
+                                updated[index] = { ...updated[index], key: e.target.value };
+                                setFormData(prev => ({ ...prev, auth_headers: updated }));
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 font-mono"
+                            />
+                            <input
+                              type="password"
+                              placeholder="Value"
+                              value={header.value}
+                              onChange={(e) => {
+                                const updated = [...formData.auth_headers];
+                                updated[index] = { ...updated[index], value: e.target.value };
+                                setFormData(prev => ({ ...prev, auth_headers: updated }));
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                            />
+                            {formData.auth_headers.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, auth_headers: prev.auth_headers.filter((_, i) => i !== index) }))}
+                                className="text-red-400 hover:text-red-600 text-lg leading-none px-1"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Config: Base URL, Auth, Rate Limit, etc. */}
+                {formData.integration_type === 'config' && (<>
                 {/* Base URL */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">API Base URL</label>
@@ -1148,38 +1355,106 @@ export default function IntegrationSettingsPage() {
                   </div>
                 </div>
                 
-                {/* Test Connection */}
+                {/* Test Connection — Config type only */}
                 <div className="pt-4 border-t">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                    <Button variant="outline" onClick={handleTestConnection} disabled={testing}>
-                      {testing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          กำลังทดสอบ...
-                        </>
-                      ) : (
-                        <>
-                          <TestTube className="w-4 h-4" />
-                          ทดสอบการเชื่อมต่อ
-                        </>
+                  {formData.integration_type !== 'headcode' ? (
+                    /* ── Config: quick HTTP test ── */
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                      <Button variant="outline" onClick={handleTestConnection} disabled={testing}>
+                        {testing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            กำลังทดสอบ...
+                          </>
+                        ) : (
+                          <>
+                            <TestTube className="w-4 h-4" />
+                            ทดสอบการเชื่อมต่อ
+                          </>
+                        )}
+                      </Button>
+                      {testResult === 'success' && (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="text-sm">
+                            เชื่อมต่อสำเร็จ!
+                            {testToursCount != null && (
+                              <span className="ml-1 font-medium">({testToursCount.toLocaleString()} ทัวร์)</span>
+                            )}
+                          </span>
+                        </div>
                       )}
-                    </Button>
-                    
-                    {testResult === 'success' && (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="text-sm">เชื่อมต่อสำเร็จ!</span>
+                      {testResult === 'failed' && (
+                        <div className="flex items-center gap-2 text-red-600">
+                          <XCircle className="w-5 h-5" />
+                          <span className="text-sm">เชื่อมต่อไม่สำเร็จ</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── Headcode: async queue job test ── */
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-1">ตรวจสอบจำนวนทัวร์จาก API</p>
+                        <p className="text-xs text-gray-500">
+                          รันใน Queue Worker (background) — ไม่บล็อก server ใช้เวลาประมาณ 8–15 วินาที
+                        </p>
                       </div>
-                    )}
-                    
-                    {testResult === 'failed' && (
-                      <div className="flex items-center gap-2 text-red-600">
-                        <XCircle className="w-5 h-5" />
-                        <span className="text-sm">เชื่อมต่อไม่สำเร็จ</span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={handleTestHeadcode}
+                          disabled={headcodeTesting}
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                        >
+                          {headcodeTesting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              กำลังตรวจสอบ...
+                            </>
+                          ) : (
+                            <>
+                              <TestTube className="w-4 h-4" />
+                              ตรวจสอบจำนวนทัวร์
+                            </>
+                          )}
+                        </Button>
+
+                        {headcodeTestStatus === 'pending' && (
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">รอผลจาก Queue Worker...</span>
+                          </div>
+                        )}
+                        {headcodeTestStatus === 'success' && (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="w-5 h-5" />
+                            <span className="text-sm font-medium">
+                              เชื่อมต่อสำเร็จ!
+                              {headcodeToursCount != null && (
+                                <span className="ml-1">
+                                  พบ <strong>{headcodeToursCount.toLocaleString()}</strong> ทัวร์
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {headcodeTestStatus === 'failed' && (
+                          <div className="flex items-center gap-2 text-red-600">
+                            <XCircle className="w-5 h-5" />
+                            <span className="text-sm">{headcodeTestMessage ?? 'เชื่อมต่อไม่สำเร็จ'}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                      {headcodeTestStatus === 'failed' && headcodeTestMessage?.includes('Queue Worker') && (
+                        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                          ⚠️ Queue Worker ไม่ได้รัน — รัน <code className="font-mono">start_workers.bat</code> ก่อนแล้วลองใหม่
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
+                </>)}
               </div>
             </Card>
           )}
@@ -1398,7 +1673,8 @@ export default function IntegrationSettingsPage() {
                   )}
                 </div>
                 
-                {/* Sync Method */}
+                {/* Sync Method — not relevant for headcode */}
+                {!isHeadcode && (<>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">วิธีการ Sync</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -1461,6 +1737,7 @@ export default function IntegrationSettingsPage() {
                   </select>
                   <p className="text-xs text-gray-500 mt-1">วิธีการตรวจสอบว่าทัวร์นี้เคย sync ไปแล้วหรือยัง</p>
                 </div>
+                </>)}
                 
                 {/* Conflict Resolution */}
                 <div>
@@ -1495,7 +1772,8 @@ export default function IntegrationSettingsPage() {
                   <p className="text-xs text-gray-500 mt-1">กำหนด 1-1000 เพื่อจำกัดจำนวนทัวร์ที่ sync ในแต่ละรอบ เหมาะสำหรับทดสอบหรือ API ที่มี rate limit</p>
                 </div>
 
-                {/* Pagination Config */}
+                {/* Pagination Config — not relevant for headcode */}
+                {!isHeadcode && (<>
                 <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
                   <h3 className="font-medium text-amber-800 mb-3">การแบ่งหน้า (Pagination)</h3>
                   <p className="text-sm text-amber-600 mb-4">
@@ -1716,6 +1994,7 @@ export default function IntegrationSettingsPage() {
                     </div>
                   </div>
                 </div>
+                </>)}
 
                 {/* Extract Cities from Tour Name */}
                 <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">

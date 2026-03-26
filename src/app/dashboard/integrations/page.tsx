@@ -209,7 +209,9 @@ export default function IntegrationsPage() {
   };
 
   // Check tour count from API
-  const handleCheckTourCount = async (id: number, name: string) => {
+  // For headcode: dispatches async job + polls — never blocks the web server
+  // For config: calls checkTourCount synchronously (fast HTTP test)
+  const handleCheckTourCount = async (id: number, name: string, integrationType?: string) => {
     setTourCountModal({ 
       open: true, 
       loading: true, 
@@ -218,28 +220,76 @@ export default function IntegrationsPage() {
       data: null, 
       error: null 
     });
-    
+
     try {
-      const result = await integrationsApi.checkTourCount(id);
-      
-      if (result.success && result.data) {
-        setTourCountModal({
-          open: true,
-          loading: false,
-          integrationId: id,
-          integrationName: name,
-          data: result.data,
-          error: null,
-        });
+      if (integrationType === 'headcode') {
+        // ── Headcode: async queue job ──────────────────────────────────────
+        const dispatch = await integrationsApi.testHeadcodeAsync(id);
+        if (!dispatch.success || !dispatch.task_id) {
+          throw new Error(dispatch.message ?? 'ไม่สามารถส่งคำสั่งได้');
+        }
+        const taskId = dispatch.task_id;
+
+        let attempts = 0;
+        const poll = async () => {
+          attempts++;
+          if (attempts > 45) {
+            setTourCountModal(prev => ({
+              ...prev, loading: false, error: 'หมดเวลา — Queue Worker อาจไม่ได้รัน กรุณารัน start_workers.bat ก่อน',
+            }));
+            return;
+          }
+          try {
+            const status = await integrationsApi.testHeadcodeStatus(id, taskId);
+            if (status.status === 'pending') {
+              setTimeout(poll, 2000);
+            } else if (status.status === 'success') {
+              setTourCountModal(prev => ({
+                ...prev,
+                loading: false,
+                data: {
+                  tour_count: status.tours_count ?? 0,
+                  tours_with_departures: 0,
+                  total_departures: 0,
+                  countries: [],
+                  countries_count: 0,
+                  response_time_ms: status.elapsed_ms ?? 0,
+                  wholesaler_name: name,
+                },
+              }));
+            } else {
+              setTourCountModal(prev => ({
+                ...prev, loading: false, error: status.message ?? 'เชื่อมต่อไม่สำเร็จ',
+              }));
+            }
+          } catch {
+            setTimeout(poll, 2000);
+          }
+        };
+        setTimeout(poll, 2000);
+
       } else {
-        setTourCountModal({
-          open: true,
-          loading: false,
-          integrationId: id,
-          integrationName: name,
-          data: null,
-          error: result.message || 'ไม่สามารถตรวจสอบจำนวนทัวร์ได้',
-        });
+        // ── Config: synchronous checkTourCount ────────────────────────────
+        const result = await integrationsApi.checkTourCount(id);
+        if (result.success && result.data) {
+          setTourCountModal({
+            open: true,
+            loading: false,
+            integrationId: id,
+            integrationName: name,
+            data: result.data,
+            error: null,
+          });
+        } else {
+          setTourCountModal({
+            open: true,
+            loading: false,
+            integrationId: id,
+            integrationName: name,
+            data: null,
+            error: result.message || 'ไม่สามารถตรวจสอบจำนวนทัวร์ได้',
+          });
+        }
       }
     } catch (err) {
       setTourCountModal({
@@ -456,7 +506,7 @@ export default function IntegrationsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleCheckTourCount(integration.id, integration.wholesaler_name)}
+                  onClick={() => handleCheckTourCount(integration.id, integration.wholesaler_name, integration.integration_type)}
                   disabled={!integration.is_active || tourCountModal.loading && tourCountModal.integrationId === integration.id}
                   title="ตรวจสอบจำนวนทัวร์จาก API"
                   className="bg-blue-50 hover:bg-blue-100 border-blue-200 flex-1 sm:flex-none"
@@ -492,12 +542,14 @@ export default function IntegrationsPage() {
                   </Button>
                 </Link>
                 
+                {integration.integration_type !== 'headcode' && (
                 <Link href={`/dashboard/integrations/${integration.id}/mapping`}>
                   <Button variant="outline" size="sm" title="ตั้งค่า Section Mapping">
                     <Zap className="w-4 h-4" />
                     Mapping
                   </Button>
                 </Link>
+                )}
                 
                 <Link href={`/dashboard/integrations/${integration.id}/settings`}>
                   <Button variant="outline" size="sm" title="ตั้งค่า">

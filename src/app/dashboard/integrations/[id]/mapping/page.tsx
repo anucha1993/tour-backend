@@ -405,6 +405,7 @@ export default function IntegrationMappingPage() {
   const [mappings, setMappings] = useState<MappingData>({});
   const [saving, setSaving] = useState(false);
   const [loadingMappings, setLoadingMappings] = useState(true);
+  const [isHeadcode, setIsHeadcode] = useState(false);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [filterSection, setFilterSection] = useState<string>('all');
@@ -483,6 +484,14 @@ export default function IntegrationMappingPage() {
         const response = await integrationsApi.get(Number(params.id));
         
         if (response.success && response.data) {
+          // Check if headcode — mapping not supported
+          const configData = response.data as { config?: { integration_type?: string } };
+          if (configData.config?.integration_type === 'headcode') {
+            setIsHeadcode(true);
+            setLoadingMappings(false);
+            return;
+          }
+
           // API returns data in response.data.config structure
           const apiData = response.data as { config?: { enabled_fields?: string[] }; mappings?: Record<string, Array<{ 
             section_name: string; 
@@ -558,10 +567,10 @@ export default function IntegrationMappingPage() {
       }
     };
 
-    if (params.id) {
+    if (params.id && !isHeadcode) {
       fetchSampleData();
     }
-  }, [params.id]);
+  }, [params.id, isHeadcode]);
 
   // Get field key
   const getFieldKey = (section: string, key: string) => `${section}.${key}`;
@@ -1373,6 +1382,25 @@ export default function IntegrationMappingPage() {
     setSearchValue(mapping?.type === 'api' ? mapping.value : '');
     setTimeout(() => inputRef.current?.focus(), 50);
   };
+
+  if (isHeadcode) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 max-w-md text-center">
+          <h2 className="text-lg font-semibold text-blue-800 mb-2">Headcode Integration</h2>
+          <p className="text-sm text-blue-600">
+            Integration นี้ใช้ PHP Adapter โดยตรง ไม่ต้องตั้งค่า Field Mapping
+          </p>
+          <Link href={`/dashboard/integrations/${params.id}`}>
+            <Button variant="outline" size="sm" className="mt-4">
+              <ArrowLeft className="w-4 h-4" />
+              กลับ
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

@@ -16,14 +16,16 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
+  Settings,
 } from 'lucide-react';
 import Link from 'next/link';
 import { wholesalersApi, Wholesaler, integrationsApi } from '@/lib/api';
 
-type Step = 'wholesaler' | 'api' | 'test' | 'preview';
+type Step = 'wholesaler' | 'type' | 'api' | 'test' | 'preview';
 
 const steps: { id: Step; label: string; icon: React.ElementType }[] = [
   { id: 'wholesaler', label: 'เลือก Wholesaler', icon: Server },
+  { id: 'type', label: 'ประเภท', icon: Settings },
   { id: 'api', label: 'API Configuration', icon: Key },
   { id: 'test', label: 'Test Connection', icon: TestTube },
   { id: 'preview', label: 'Preview & Save', icon: Save },
@@ -81,6 +83,9 @@ export default function NewIntegrationPage() {
     periods_endpoint: '',
     tour_id_field: 'tour_code',
     periods_field_name: 'periods',
+    // Integration Type
+    integration_type: 'config' as 'config' | 'headcode',
+    headcode_file: '',
   });
   
   // Test connection state
@@ -300,16 +305,20 @@ export default function NewIntegrationPage() {
       }
 
       // Debug: log what's being sent
+      const isHeadcode = formData.integration_type === 'headcode';
       const requestData = {
         wholesaler_id: formData.wholesaler_id,
-        api_base_url: formData.api_base_url,
+        integration_type: formData.integration_type,
+        headcode_file: isHeadcode ? (formData.headcode_file || null) : null,
+        api_base_url: isHeadcode ? null : formData.api_base_url,
         api_version: formData.api_version,
-        auth_type: (formData.auth_type === 'http_header' ? 'custom' : formData.auth_type) as 'custom' | 'bearer' | 'basic' | 'oauth2' | 'api_key',
-        auth_credentials: authCredentials,
+        auth_type: isHeadcode ? 'custom' : (formData.auth_type === 'http_header' ? 'custom' : formData.auth_type) as 'custom' | 'bearer' | 'basic' | 'oauth2' | 'api_key',
+        auth_credentials: isHeadcode ? {} : authCredentials,
         rate_limit_per_minute: formData.rate_limit,
         request_timeout_seconds: formData.timeout,
-        sync_schedule: formData.sync_schedule,
-        sync_enabled: formData.sync_enabled,
+        // Headcode: no schedule at creation (avoids conflicts, user configures later in settings)
+        sync_schedule: isHeadcode ? null : formData.sync_schedule,
+        sync_enabled: isHeadcode ? false : formData.sync_enabled,
         supports_availability_check: formData.supports_availability,
         supports_hold_booking: formData.supports_hold,
         supports_modify_booking: formData.supports_modify,
@@ -443,14 +452,136 @@ export default function NewIntegrationPage() {
           </div>
         )}
 
-        {/* Step 2: API Configuration */}
+        {/* Step 2: เลือกประเภท Integration */}
+        {currentStep === 'type' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">เลือกประเภท Integration</h2>
+              <p className="text-gray-500 text-sm">เลือกวิธีเชื่อมต่อ API ของ {selectedWholesaler?.name}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, integration_type: 'config' }))}
+                className={`p-6 rounded-xl border-2 text-left transition-all ${
+                  formData.integration_type === 'config'
+                    ? 'border-blue-500 bg-blue-50 shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl flex-shrink-0 ${
+                    formData.integration_type === 'config' ? 'bg-blue-100' : 'bg-gray-100'
+                  }`}>⚙️</div>
+                  <div>
+                    <div className="font-semibold text-base mb-1">Config</div>
+                    <div className="text-sm text-gray-600 mb-2">มาตรฐาน — ตั้งค่าผ่านหน้าต่างได้เลย ไม่ต้องเขียนโค้ด</div>
+                    <ul className="text-xs text-gray-500 space-y-1">
+                      <li>✅ กำหนด API URL + Authentication ผ่าน UI</li>
+                      <li>✅ ทำ Field Mapping ผ่านหน้า Mapping</li>
+                      <li>✅ เหมาะสำหรับ API ที่มีโครงสร้างปกติ</li>
+                    </ul>
+                  </div>
+                  {formData.integration_type === 'config' && (
+                    <Check className="w-5 h-5 text-blue-500 ml-auto flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, integration_type: 'headcode' }))}
+                className={`p-6 rounded-xl border-2 text-left transition-all ${
+                  formData.integration_type === 'headcode'
+                    ? 'border-purple-500 bg-purple-50 shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl flex-shrink-0 ${
+                    formData.integration_type === 'headcode' ? 'bg-purple-100' : 'bg-gray-100'
+                  }`}>🔧</div>
+                  <div>
+                    <div className="font-semibold text-base mb-1">Headcode</div>
+                    <div className="text-sm text-gray-600 mb-2">Custom — เขียนโค้ด PHP เอง สำหรับ API ที่ไม่เป็นมาตรฐาน</div>
+                    <ul className="text-xs text-gray-500 space-y-1">
+                      <li>🔧 เขียนไฟล์ PHP ไว้ใน <code className="font-mono bg-white px-1 rounded">storage/headcode/</code></li>
+                      <li>🔧 API logic อยู่ในโค้ด ไม่ต้องทำ Field Mapping</li>
+                      <li>🔧 เหมาะสำหรับ API พิเศษที่ไม่ยอมปรับความเข้ากับระบบ</li>
+                    </ul>
+                  </div>
+                  {formData.integration_type === 'headcode' && (
+                    <Check className="w-5 h-5 text-purple-500 ml-auto flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: API Configuration */}
         {currentStep === 'api' && (
           <div className="space-y-6">
             <div>
               <h2 className="text-lg font-semibold">ตั้งค่า API</h2>
               <p className="text-gray-500 text-sm">กรอกข้อมูลการเชื่อมต่อ API ของ {selectedWholesaler?.name}</p>
             </div>
-            
+
+            {/* Headcode: File Input */}
+            {formData.integration_type === 'headcode' && (
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 space-y-3">
+                  <p className="text-purple-800 font-medium text-sm">🔧 Headcode Configuration</p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Headcode File <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 whitespace-nowrap font-mono">storage/headcode/</span>
+                      <input
+                        type="text"
+                        value={formData.headcode_file}
+                        onChange={(e) => setFormData(prev => ({ ...prev, headcode_file: e.target.value.replace(/\.php$/i, '').replace(/[^a-zA-Z0-9_-]/g, '') }))}
+                        placeholder="lookplanets"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                      />
+                      <span className="text-sm text-gray-500 font-mono">.php</span>
+                    </div>
+                    {formData.headcode_file && (
+                      <p className="text-xs text-purple-600 mt-1">
+                        Class name: <code className="font-mono bg-white px-1 rounded border">
+                          Headcode{formData.headcode_file.split(/[-_]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('')}Adapter
+                        </code>
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    สร้างไฟล์ที่ <code className="font-mono bg-white px-1 rounded">storage/headcode/{formData.headcode_file || '{filename}'}.php</code> และ define class ตามชื่อด้านบน extends HeadcodeBaseAdapter
+                  </p>
+                </div>
+
+                {/* Rate Limit & Timeout for headcode too */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">จำกัด Request (ครั้ง/นาที)</label>
+                    <input type="number" value={formData.rate_limit}
+                      onChange={(e) => setFormData(prev => ({ ...prev, rate_limit: parseInt(e.target.value) || 60 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Timeout (วินาที)</label>
+                    <input type="number" value={formData.timeout}
+                      onChange={(e) => setFormData(prev => ({ ...prev, timeout: parseInt(e.target.value) || 30 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Config: Standard API fields */}
+            {formData.integration_type === 'config' && (
+            <>
             {/* คำอธิบาย */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
               <p className="text-blue-800 font-medium mb-2">💡 ข้อมูลที่ต้องกรอก:</p>
@@ -959,6 +1090,7 @@ export default function NewIntegrationPage() {
                 </div>
               </div>
             </div>
+            </>)}
           </div>
         )}
 
@@ -968,6 +1100,18 @@ export default function NewIntegrationPage() {
             <h2 className="text-lg font-semibold">ทดสอบการเชื่อมต่อ</h2>
             <p className="text-gray-500 text-sm">ทดสอบการเชื่อมต่อกับ API ของ {selectedWholesaler?.name}</p>
             
+            {/* Headcode: skip test, show info */}
+            {formData.integration_type === 'headcode' ? (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 text-center space-y-3">
+                <p className="text-purple-800 font-semibold">🔧 Headcode Integration</p>
+                <p className="text-sm text-purple-700">ไม่ต้องทดสอบการเชื่อมต่อ — การทำงานขึ้นอยู่กับไฟล์ PHP ที่คุณเขียน</p>
+                <p className="text-xs text-gray-500">
+                  ไฟล์: <code className="font-mono bg-white px-1 rounded border">storage/headcode/{formData.headcode_file}.php</code>
+                </p>
+                <p className="text-xs text-gray-400">คลิก "ถัดไป" เพื่อบันทึกได้เลย</p>
+              </div>
+            ) : (
+            <>
             {/* Connection Info */}
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -1025,6 +1169,7 @@ export default function NewIntegrationPage() {
                 </pre>
               </div>
             )}
+            </>)}
           </div>
         )}
 
@@ -1136,8 +1281,9 @@ export default function NewIntegrationPage() {
             onClick={handleNext}
             disabled={
               (currentStep === 'wholesaler' && !formData.wholesaler_id) ||
-              (currentStep === 'api' && !formData.api_base_url) ||
-              (currentStep === 'test' && testStatus !== 'success')
+              (currentStep === 'api' && formData.integration_type === 'config' && !formData.api_base_url) ||
+              (currentStep === 'api' && formData.integration_type === 'headcode' && !formData.headcode_file) ||
+              (currentStep === 'test' && formData.integration_type === 'config' && testStatus !== 'success')
             }
           >
             ถัดไป

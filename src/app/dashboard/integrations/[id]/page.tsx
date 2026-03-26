@@ -52,6 +52,7 @@ interface IntegrationDetail {
   };
   api_base_url: string;
   auth_type: string;
+  integration_type?: string;
   health_status: string;
   sync_enabled: boolean;
   sync_schedule: string | null;
@@ -199,6 +200,7 @@ export default function IntegrationDetailPage() {
             },
             api_base_url: config.api_base_url,
             auth_type: config.auth_type,
+            integration_type: config.integration_type || 'config',
             health_status: config.last_health_check_status ? 'healthy' : 'unknown',
             sync_enabled: config.sync_enabled,
             sync_schedule: config.sync_schedule,
@@ -683,6 +685,7 @@ export default function IntegrationDetailPage() {
               </>
             )}
           </Button>
+          {integration?.integration_type !== 'headcode' && (
           <Link href={`/dashboard/integrations/${params.id}/mapping`}>
             <Button variant="outline" size="sm">
               <Zap className="w-4 h-4" />
@@ -690,6 +693,7 @@ export default function IntegrationDetailPage() {
               <span className="sm:hidden">Mapping</span>
             </Button>
           </Link>
+          )}
           <Link href={`/dashboard/integrations/${params.id}/settings`}>
             <Button variant="outline" size="sm">
               <Settings className="w-4 h-4" />

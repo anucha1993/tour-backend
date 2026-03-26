@@ -1709,6 +1709,9 @@ export interface WholesalerApiConfig {
   // Past Period Handling
   past_period_handling?: 'skip' | 'close' | 'keep';
   past_period_threshold_days?: number;
+  // Integration Type
+  integration_type?: 'config' | 'headcode';
+  headcode_file?: string | null;
   // Data Structure Config for nested arrays
   aggregation_config?: {
     data_structure?: {
@@ -1881,10 +1884,28 @@ export const integrationsApi = {
   fetchSample: (id: number) =>
     apiRequest<{
       success: boolean;
-      data: unknown[];
+      data: unknown[] | unknown;
       tours_count: number;
       sample_tour: unknown;
+      message?: string;
     }>(`/integrations/${id}/fetch-sample`),
+
+  // Async headcode connection test (dispatches background job, returns task_id)
+  testHeadcodeAsync: (id: number) =>
+    apiRequest<{ success: boolean; task_id: string; message: string }>(
+      `/integrations/${id}/test-headcode`,
+      { method: 'POST' }
+    ),
+
+  // Poll headcode test result
+  testHeadcodeStatus: (id: number, taskId: string) =>
+    apiRequest<{
+      success: boolean;
+      status: 'pending' | 'success' | 'failed' | 'expired';
+      tours_count?: number;
+      elapsed_ms?: number;
+      message?: string;
+    }>(`/integrations/${id}/test-headcode/${taskId}/status`),
 
   // Test mapping (dry run validation)
   testMapping: (wholesalerId: number, data: {
