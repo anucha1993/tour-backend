@@ -1987,12 +1987,15 @@ export const integrationsApi = {
     if (excludeId) params.append('exclude_id', String(excludeId));
     return apiRequest<{
       conflict: boolean;
+      severity?: 'hard' | 'soft';
       message: string;
       conflicting_integration?: string;
+      conflicting_time?: string;
       conflicting_minute?: number;
       gap_minutes?: number;
       min_gap?: number;
       suggested_minutes?: number[];
+      occupied_times?: { time: string; name: string; schedule: string }[];
     }>(`/integrations/check-schedule?${params.toString()}`);
   },
 

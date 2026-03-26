@@ -129,9 +129,26 @@ export default function IntegrationsPage() {
     });
   };
 
-  const formatSchedule = (cron: string) => {
-    const parts = cron.trim().split(/\s+/);
-    if (parts.length < 5) return cron;
+  const formatSchedule = (schedule: string) => {
+    if (!schedule) return 'ยังไม่ได้กำหนด';
+    const trimmed = schedule.trim();
+
+    // Time-list format: "09:30,12:00,18:00"
+    if (/^\d{1,2}:\d{2}(\s*,\s*\d{1,2}:\d{2})*$/.test(trimmed)) {
+      const times = trimmed.split(',').map(t => {
+        const [h, m] = t.trim().split(':');
+        return `${h.padStart(2, '0')}:${m}`;
+      }).sort();
+      if (times.length === 1) return `วันละครั้ง ${times[0]} น.`;
+      if (times.length === 2) return `วันละ 2 ครั้ง (${times.join(', ')})`;
+      if (times.length <= 4) return `วันละ ${times.length} ครั้ง (${times.join(', ')})`;
+      // For many times, show summary with first & last
+      return `วันละ ${times.length} ครั้ง (${times[0]}–${times[times.length - 1]})`;
+    }
+
+    // Legacy cron format
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 5) return schedule;
     
     const [minutePart, hourPart] = parts;
     const minute = parseInt(minutePart) || 0;
@@ -159,7 +176,7 @@ export default function IntegrationsPage() {
       return `ทุกวัน ${String(hourNum).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     }
     
-    return cron;
+    return schedule;
   };
 
   const formatNextSync = (dateStr: string | null | undefined, syncEnabled: boolean) => {
