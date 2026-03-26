@@ -631,14 +631,14 @@ export default function IntegrationSettingsPage() {
 
     try {
       const dispatch = await integrationsApi.testHeadcodeAsync(formData.id);
-      if (!dispatch.success || !dispatch.task_id) {
+      if (!dispatch.success || !dispatch.data?.task_id) {
         setHeadcodeTestStatus('failed');
-        setHeadcodeTestMessage(dispatch.message ?? 'ไม่สามารถส่งคำสั่งได้');
+        setHeadcodeTestMessage(dispatch.data?.message ?? dispatch.message ?? 'ไม่สามารถส่งคำสั่งได้');
         setHeadcodeTesting(false);
         return;
       }
 
-      const taskId = dispatch.task_id;
+      const taskId = dispatch.data.task_id;
 
       // Poll every 2 seconds for up to 90s
       let attempts = 0;
@@ -652,15 +652,15 @@ export default function IntegrationSettingsPage() {
         }
         try {
           const status = await integrationsApi.testHeadcodeStatus(formData.id, taskId);
-          if (status.status === 'pending') {
+          if (status.data?.status === 'pending') {
             setTimeout(poll, 2000);
-          } else if (status.status === 'success') {
+          } else if (status.data?.status === 'success') {
             setHeadcodeTestStatus('success');
-            setHeadcodeToursCount(status.tours_count ?? null);
+            setHeadcodeToursCount(status.data?.tours_count ?? null);
             setHeadcodeTesting(false);
           } else {
             setHeadcodeTestStatus('failed');
-            setHeadcodeTestMessage(status.message ?? 'เชื่อมต่อไม่สำเร็จ');
+            setHeadcodeTestMessage(status.data?.message ?? 'เชื่อมต่อไม่สำเร็จ');
             setHeadcodeTesting(false);
           }
         } catch {
@@ -1354,8 +1354,9 @@ export default function IntegrationSettingsPage() {
                     />
                   </div>
                 </div>
+                </>)}
                 
-                {/* Test Connection — Config type only */}
+                {/* Test Connection — works for both config and headcode */}
                 <div className="pt-4 border-t">
                   {formData.integration_type !== 'headcode' ? (
                     /* ── Config: quick HTTP test ── */
@@ -1454,7 +1455,6 @@ export default function IntegrationSettingsPage() {
                     </div>
                   )}
                 </div>
-                </>)}
               </div>
             </Card>
           )}

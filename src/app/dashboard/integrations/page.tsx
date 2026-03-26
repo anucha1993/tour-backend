@@ -225,10 +225,10 @@ export default function IntegrationsPage() {
       if (integrationType === 'headcode') {
         // ── Headcode: async queue job ──────────────────────────────────────
         const dispatch = await integrationsApi.testHeadcodeAsync(id);
-        if (!dispatch.success || !dispatch.task_id) {
-          throw new Error(dispatch.message ?? 'ไม่สามารถส่งคำสั่งได้');
+        if (!dispatch.success || !dispatch.data?.task_id) {
+          throw new Error(dispatch.data?.message ?? dispatch.message ?? 'ไม่สามารถส่งคำสั่งได้');
         }
-        const taskId = dispatch.task_id;
+        const taskId = dispatch.data.task_id;
 
         let attempts = 0;
         const poll = async () => {
@@ -241,25 +241,25 @@ export default function IntegrationsPage() {
           }
           try {
             const status = await integrationsApi.testHeadcodeStatus(id, taskId);
-            if (status.status === 'pending') {
+            if (status.data?.status === 'pending') {
               setTimeout(poll, 2000);
-            } else if (status.status === 'success') {
+            } else if (status.data?.status === 'success') {
               setTourCountModal(prev => ({
                 ...prev,
                 loading: false,
                 data: {
-                  tour_count: status.tours_count ?? 0,
+                  tour_count: status.data?.tours_count ?? 0,
                   tours_with_departures: 0,
                   total_departures: 0,
                   countries: [],
                   countries_count: 0,
-                  response_time_ms: status.elapsed_ms ?? 0,
+                  response_time_ms: status.data?.elapsed_ms ?? 0,
                   wholesaler_name: name,
                 },
               }));
             } else {
               setTourCountModal(prev => ({
-                ...prev, loading: false, error: status.message ?? 'เชื่อมต่อไม่สำเร็จ',
+                ...prev, loading: false, error: status.data?.message ?? 'เชื่อมต่อไม่สำเร็จ',
               }));
             }
           } catch {

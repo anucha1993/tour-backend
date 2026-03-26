@@ -309,15 +309,15 @@ export default function NewIntegrationPage() {
       const requestData = {
         wholesaler_id: formData.wholesaler_id,
         integration_type: formData.integration_type,
-        headcode_file: isHeadcode ? (formData.headcode_file || null) : null,
-        api_base_url: isHeadcode ? null : formData.api_base_url,
+        headcode_file: isHeadcode ? (formData.headcode_file || undefined) : undefined,
+        api_base_url: isHeadcode ? undefined : formData.api_base_url,
         api_version: formData.api_version,
         auth_type: isHeadcode ? 'custom' : (formData.auth_type === 'http_header' ? 'custom' : formData.auth_type) as 'custom' | 'bearer' | 'basic' | 'oauth2' | 'api_key',
         auth_credentials: isHeadcode ? {} : authCredentials,
         rate_limit_per_minute: formData.rate_limit,
         request_timeout_seconds: formData.timeout,
         // Headcode: no schedule at creation (avoids conflicts, user configures later in settings)
-        sync_schedule: isHeadcode ? null : formData.sync_schedule,
+        sync_schedule: isHeadcode ? undefined : formData.sync_schedule,
         sync_enabled: isHeadcode ? false : formData.sync_enabled,
         supports_availability_check: formData.supports_availability,
         supports_hold_booking: formData.supports_hold,
