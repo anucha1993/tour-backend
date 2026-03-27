@@ -1673,6 +1673,8 @@ export interface WholesalerApiConfig {
       param?: string;
       body?: Record<string, unknown>;
     };
+    periods_match_key?: string;
+    periods_tour_key?: string;
   };
   auth_header_name: string;
   rate_limit_per_minute: number;
@@ -1881,14 +1883,16 @@ export const integrationsApi = {
     }),
 
   // Fetch sample data from wholesaler API
-  fetchSample: (id: number) =>
+  fetchSample: (id: number, tourIndex?: number) =>
     apiRequest<{
       success: boolean;
       data: unknown[] | unknown;
       tours_count: number;
+      tours_list?: { index: number; label: string }[];
+      tour_index?: number;
       sample_tour: unknown;
       message?: string;
-    }>(`/integrations/${id}/fetch-sample`),
+    }>(`/integrations/${id}/fetch-sample${tourIndex !== undefined ? `?tour_index=${tourIndex}` : ''}`),
 
   // Async headcode connection test (dispatches background job, returns task_id)
   testHeadcodeAsync: (id: number) =>

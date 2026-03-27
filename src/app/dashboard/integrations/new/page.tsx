@@ -98,7 +98,7 @@ export default function NewIntegrationPage() {
     const fetchWholesalers = async () => {
       try {
         setLoadingWholesalers(true);
-        const response = await wholesalersApi.list({ is_active: '1' });
+        const response = await wholesalersApi.list({ is_active: '1', per_page: '999' });
         if (response.success && response.data) {
           setWholesalers(response.data);
         }

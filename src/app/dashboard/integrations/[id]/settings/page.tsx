@@ -88,6 +88,9 @@ const defaultFormData = {
   pdf_footer_image: '' as string | null,
   pdf_header_height: null as number | null,
   pdf_footer_height: null as number | null,
+  // Bulk periods matching
+  periods_match_key: '',
+  periods_tour_key: '',
   // Data Structure for nested arrays
   departures_path: '',
   itineraries_path: '',
@@ -324,6 +327,9 @@ export default function IntegrationSettingsPage() {
           pdf_footer_image: integration.pdf_footer_image || null,
           pdf_header_height: integration.pdf_header_height || null,
           pdf_footer_height: integration.pdf_footer_height || null,
+          // Bulk periods matching
+          periods_match_key: integration.auth_credentials?.periods_match_key || '',
+          periods_tour_key: integration.auth_credentials?.periods_tour_key || '',
           // Data Structure for nested arrays
           departures_path: integration.aggregation_config?.data_structure?.departures?.path || '',
           itineraries_path: integration.aggregation_config?.data_structure?.itineraries?.path || '',
@@ -446,6 +452,14 @@ export default function IntegrationSettingsPage() {
           periods: formData.periods_endpoint || undefined,
           itineraries: formData.itineraries_endpoint || undefined,
         };
+      }
+
+      // Add bulk periods matching keys
+      if (formData.periods_match_key) {
+        authCredentials.periods_match_key = formData.periods_match_key;
+      }
+      if (formData.periods_tour_key) {
+        authCredentials.periods_tour_key = formData.periods_tour_key;
       }
 
       // Add pagination config to auth_credentials
@@ -1906,9 +1920,42 @@ export default function IntegrationSettingsPage() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Path สำหรับดึงรอบเดินทาง • ใช้ {'{id}'} หรือ {'{code}'} เป็น placeholder
+                          Path สำหรับดึงรอบเดินทาง • ใช้ {'{id}'} หรือ {'{code}'} เป็น placeholder • ถ้าไม่มี placeholder = Bulk mode
                         </p>
                       </div>
+
+                      {/* Bulk Periods Matching - show when periods endpoint has no placeholder */}
+                      {formData.periods_endpoint && !formData.periods_endpoint.includes('{') && (
+                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
+                          <p className="text-sm font-medium text-amber-800">
+                            ⚡ Bulk Periods Mode — Endpoint ไม่มี placeholder จะดึงรอบเดินทางทั้งหมดครั้งเดียว แล้วจับคู่กับทัวร์ตาม key ที่กำหนด
+                          </p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Match Key (ฟิลด์ใน periods)</label>
+                              <input
+                                type="text"
+                                placeholder="เช่น seriesCode, tour_id"
+                                value={formData.periods_match_key}
+                                onChange={(e) => setFormData(prev => ({ ...prev, periods_match_key: e.target.value }))}
+                                className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-mono text-sm bg-white"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">ฟิลด์ใน response periods ที่ระบุว่าเป็นทัวร์ไหน</p>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Tour Key (ฟิลด์ในทัวร์)</label>
+                              <input
+                                type="text"
+                                placeholder="เว้นว่าง = ใช้ค่าเดียวกับ Match Key"
+                                value={formData.periods_tour_key}
+                                onChange={(e) => setFormData(prev => ({ ...prev, periods_tour_key: e.target.value }))}
+                                className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-mono text-sm bg-white"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">ฟิลด์ในทัวร์ที่จับคู่กับ Match Key • เว้นว่าง = ใช้ชื่อเดียวกัน</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Itineraries Endpoint</label>

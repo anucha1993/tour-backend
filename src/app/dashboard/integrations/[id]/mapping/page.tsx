@@ -413,6 +413,8 @@ export default function IntegrationMappingPage() {
   const [apiSampleData, setApiSampleData] = useState<Record<string, unknown> | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [loadingApiData, setLoadingApiData] = useState(false);
+  const [toursList, setToursList] = useState<{ index: number; label: string }[]>([]);
+  const [selectedTourIndex, setSelectedTourIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   
   // Field management - เก็บ field ที่เปิดใช้งาน
@@ -547,11 +549,15 @@ export default function IntegrationMappingPage() {
       setLoadingApiData(true);
       setApiError(null);
       try {
-        // ดึงข้อมูลจาก API จริง (record แรก)
-        const response = await integrationsApi.fetchSample(Number(params.id));
+        const response = await integrationsApi.fetchSample(Number(params.id), selectedTourIndex);
         
         if (response.success && response.data) {
           setApiSampleData(response.data as Record<string, unknown>);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const resp = response as any;
+          if (resp.tours_list) {
+            setToursList(resp.tours_list as { index: number; label: string }[]);
+          }
         } else {
           // Store full error response for display
           const errorInfo = {
@@ -570,7 +576,7 @@ export default function IntegrationMappingPage() {
     if (params.id && !isHeadcode) {
       fetchSampleData();
     }
-  }, [params.id, isHeadcode]);
+  }, [params.id, isHeadcode, selectedTourIndex]);
 
   // Get field key
   const getFieldKey = (section: string, key: string) => `${section}.${key}`;
@@ -1992,7 +1998,7 @@ export default function IntegrationMappingPage() {
             <Code className="w-4 sm:w-5 h-4 sm:h-5 text-green-400" />
             <span className="font-semibold text-sm sm:text-base">Preview: ตัวอย่างข้อมูลหลัง Transform</span>
             <span className="text-xs text-gray-400 ml-2 hidden sm:inline">
-              (ดึงข้อมูล Record แรกจาก API จริง)
+              (ดึงข้อมูลจาก API จริง)
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -2017,27 +2023,48 @@ export default function IntegrationMappingPage() {
                     <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
                   )}
                 </div>
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setLoadingApiData(true);
-                    try {
-                      const response = await integrationsApi.fetchSample(Number(params.id));
-                      if (response.success && response.data) {
-                        setApiSampleData(response.data as Record<string, unknown>);
+                <div className="flex items-center gap-2">
+                  {toursList.length > 1 && (
+                    <select
+                      value={selectedTourIndex}
+                      onChange={(e) => setSelectedTourIndex(Number(e.target.value))}
+                      className="text-xs border border-gray-300 rounded px-2 py-1 bg-white max-w-[220px] truncate"
+                      disabled={loadingApiData}
+                    >
+                      {toursList.map((t) => (
+                        <option key={t.index} value={t.index}>
+                          [{t.index + 1}/{toursList.length}] {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setLoadingApiData(true);
+                      try {
+                        const response = await integrationsApi.fetchSample(Number(params.id), selectedTourIndex);
+                        if (response.success && response.data) {
+                          setApiSampleData(response.data as Record<string, unknown>);
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const resp = response as any;
+                          if (resp.tours_list) {
+                            setToursList(resp.tours_list as { index: number; label: string }[]);
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Failed to refresh:', error);
+                      } finally {
+                        setLoadingApiData(false);
                       }
-                    } catch (error) {
-                      console.error('Failed to refresh:', error);
-                    } finally {
-                      setLoadingApiData(false);
-                    }
-                  }}
-                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1"
-                  disabled={loadingApiData}
-                >
-                  <Zap className="w-3 h-3" />
-                  Refresh
-                </button>
+                    }}
+                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1"
+                    disabled={loadingApiData}
+                  >
+                    <Zap className="w-3 h-3" />
+                    Refresh
+                  </button>
+                </div>
               </div>
               <pre className="text-xs bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg overflow-auto max-h-60 sm:max-h-80 font-mono">
                 <code>
