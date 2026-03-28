@@ -78,8 +78,9 @@ const defaultFormData = {
   notifications_enabled: true,
   notification_emails: [] as string[],
   notification_types: ['sync_error', 'api_error', 'booking_error'] as string[],
-  // City Extraction
+  // City & Country Extraction
   extract_cities_from_name: false,
+  extract_countries_from_name: false,
   // Past Period Handling
   past_period_handling: 'skip' as 'skip' | 'close' | 'keep',
   past_period_threshold_days: 0,
@@ -317,8 +318,9 @@ export default function IntegrationSettingsPage() {
           notifications_enabled: integration.notifications_enabled ?? true,
           notification_emails: integration.notification_emails || [],
           notification_types: integration.notification_types || ['sync_error', 'api_error', 'booking_error'],
-          // City Extraction
+          // City & Country Extraction
           extract_cities_from_name: integration.extract_cities_from_name ?? false,
+          extract_countries_from_name: integration.extract_countries_from_name ?? false,
           // Past Period Handling
           past_period_handling: (integration.past_period_handling || 'skip') as 'skip' | 'close' | 'keep',
           past_period_threshold_days: integration.past_period_threshold_days ?? 0,
@@ -509,8 +511,9 @@ export default function IntegrationSettingsPage() {
         notifications_enabled: formData.notifications_enabled,
         notification_emails: formData.notification_emails.filter(e => e.trim()),
         notification_types: formData.notification_types,
-        // City Extraction
+        // City & Country Extraction
         extract_cities_from_name: formData.extract_cities_from_name,
+        extract_countries_from_name: formData.extract_countries_from_name,
         // Past Period Handling
         past_period_handling: formData.past_period_handling,
         past_period_threshold_days: formData.past_period_threshold_days,
@@ -2027,6 +2030,29 @@ export default function IntegrationSettingsPage() {
                 </>)}
 
                 {/* Extract Cities from Tour Name */}
+                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-amber-800">ค้นหาประเทศจากชื่อทัวร์</h3>
+                      <p className="text-sm text-amber-600 mt-1">
+                        เปิดใช้งานเมื่อ API ไม่ส่งข้อมูลประเทศมา ระบบจะวิเคราะห์ชื่อทัวร์และดึงชื่อประเทศออกมาอัตโนมัติ
+                      </p>
+                      <p className="text-xs text-amber-500 mt-2">
+                        ตัวอย่าง: &quot;มหัศจรรย์...<strong>ยุโรปตะวันออก</strong> <strong>เยอรมัน</strong> <strong>ออสเตรีย</strong> <strong>เช็ค</strong> <strong>สโลวาเกีย</strong> <strong>ฮังการี</strong>&quot; → จะดึง เยอรมนี, ออสเตรีย, สาธารณรัฐเช็ก, สโลวาเกีย, ฮังการี
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.extract_countries_from_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, extract_countries_from_name: e.target.checked }))}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+                </div>
+
                 <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
                   <div className="flex items-center justify-between">
                     <div>

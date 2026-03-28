@@ -1708,6 +1708,7 @@ export interface WholesalerApiConfig {
   notification_types?: string[];
   // City Extraction
   extract_cities_from_name?: boolean;
+  extract_countries_from_name?: boolean;
   // Past Period Handling
   past_period_handling?: 'skip' | 'close' | 'keep';
   past_period_threshold_days?: number;
