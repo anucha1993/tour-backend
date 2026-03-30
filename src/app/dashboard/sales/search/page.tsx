@@ -470,7 +470,10 @@ export default function SalesSearchPage() {
   };
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('th-TH', {
+    if (!date) return '-';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('th-TH', {
       day: 'numeric',
       month: 'short',
       year: '2-digit',
@@ -1976,12 +1979,22 @@ export default function SalesSearchPage() {
                             {modalPeriods.map((period, pIndex) => {
                               const pRaw = period._raw;
                               const departureDate = period.start_date || period.departure_date || pRaw?.PeriodStartDate || pRaw?.DepartureDate || pRaw?.departureDate || '';
-                              const returnDate = period.return_date || pRaw?.PeriodEndDate || pRaw?.ReturnDate || pRaw?.returnDate || '';
+                              let returnDate = period.return_date || pRaw?.PeriodEndDate || pRaw?.ReturnDate || pRaw?.returnDate || '';
+                              if (!returnDate && departureDate) {
+                                const days = Number(tour.duration_days || raw?.Days || raw?.days || 0);
+                                if (days > 0) {
+                                  const dep = new Date(departureDate);
+                                  if (!isNaN(dep.getTime())) {
+                                    dep.setDate(dep.getDate() + days - 1);
+                                    returnDate = dep.toISOString().split('T')[0];
+                                  }
+                                }
+                              }
                               const adultPrice = period.price_adult || pRaw?.Price || pRaw?.adultPrice || pRaw?.salePrice || 0;
                               const childPrice = period.price_child || pRaw?.Price_Child || pRaw?.childPrice || 0;
                               const deposit = period.deposit || pRaw?.Deposit || pRaw?.deposit || 0;
-                              const available = period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0;
-                              const capacity = period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0;
+                              const available = Math.floor(Number(period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0));
+                              const capacity = Math.floor(Number(period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0));
                               const periodDiscount = getPeriodDiscount(period);
                               
                               return (
