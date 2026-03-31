@@ -3574,6 +3574,8 @@ export interface InternationalTourCountryCover {
   cloudflare_id: string | null;
   image_position: string;
   alt_text: string | null;
+  hero_text: string | null;
+  pinned_tour_codes: string | null;
   sort_order: number;
   country?: {
     id: number;
@@ -3592,6 +3594,7 @@ export interface InternationalTourSetting {
   cover_image_url: string | null;
   cover_image_cf_id: string | null;
   cover_image_position: string;
+  hero_text: string | null;
   conditions: TourTabCondition[] | null;
   display_limit: number;
   per_page: number;
@@ -3608,6 +3611,12 @@ export interface InternationalTourSetting {
   filter_airline: boolean;
   filter_departure_month: boolean;
   filter_price_range: boolean;
+  filter_festival: boolean;
+  filter_promotion: boolean;
+  filter_theme: boolean;
+  filter_special_highlight: boolean;
+  filter_advanced: boolean;
+  pagination_mode: string;
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -3736,6 +3745,20 @@ export const internationalTourSettingsApi = {
       method: 'PATCH',
       body: JSON.stringify({ image_position: position }),
     }),
+
+  // Update country cover hero text
+  updateCountryCoverHeroText: (settingId: number, countryId: number, heroText: string) =>
+    apiRequest(`/international-tour-settings/${settingId}/country-cover/${countryId}/hero-text`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hero_text: heroText }),
+    }),
+
+  // Update country cover pinned tour codes
+  updateCountryCoverPinnedTours: (settingId: number, countryId: number, pinnedTourCodes: string) =>
+    apiRequest(`/international-tour-settings/${settingId}/country-cover/${countryId}/pinned-tours`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pinned_tour_codes: pinnedTourCodes }),
+    }),
 };
 
 // =====================
@@ -3766,6 +3789,7 @@ export interface DomesticTourSetting {
   cover_image_url: string | null;
   cover_image_cf_id: string | null;
   cover_image_position: string;
+  hero_text: string | null;
   conditions: TourTabCondition[] | null;
   display_limit: number;
   per_page: number;
@@ -3781,6 +3805,12 @@ export interface DomesticTourSetting {
   filter_airline: boolean;
   filter_departure_month: boolean;
   filter_price_range: boolean;
+  filter_festival: boolean;
+  filter_promotion: boolean;
+  filter_theme: boolean;
+  filter_special_highlight: boolean;
+  filter_advanced: boolean;
+  pagination_mode: string;
   is_active: boolean;
   sort_order: number;
   city_covers?: DomesticTourCityCover[];

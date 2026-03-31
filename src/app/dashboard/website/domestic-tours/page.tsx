@@ -132,6 +132,13 @@ export default function DomesticToursSettingsPage() {
     filter_airline: true,
     filter_departure_month: true,
     filter_price_range: true,
+    filter_festival: true,
+    filter_promotion: true,
+    filter_theme: true,
+    filter_special_highlight: true,
+    filter_advanced: true,
+    hero_text: '',
+    pagination_mode: 'page',
     is_active: true,
   });
 
@@ -183,6 +190,13 @@ export default function DomesticToursSettingsPage() {
       filter_airline: true,
       filter_departure_month: true,
       filter_price_range: true,
+      filter_festival: true,
+      filter_promotion: true,
+      filter_theme: true,
+      filter_special_highlight: true,
+      filter_advanced: true,
+      hero_text: '',
+      pagination_mode: 'page',
       is_active: true,
     });
     setEditItem(null);
@@ -240,6 +254,7 @@ export default function DomesticToursSettingsPage() {
       cover_image_url: item.cover_image_url,
       cover_image_cf_id: item.cover_image_cf_id,
       cover_image_position: item.cover_image_position || 'center',
+      hero_text: item.hero_text || '',
       conditions: item.conditions || [],
       display_limit: item.display_limit,
       per_page: item.per_page,
@@ -256,6 +271,12 @@ export default function DomesticToursSettingsPage() {
       filter_airline: item.filter_airline,
       filter_departure_month: item.filter_departure_month,
       filter_price_range: item.filter_price_range,
+      filter_festival: item.filter_festival ?? true,
+      filter_promotion: item.filter_promotion ?? true,
+      filter_theme: item.filter_theme ?? true,
+      filter_special_highlight: item.filter_special_highlight ?? true,
+      filter_advanced: item.filter_advanced ?? true,
+      pagination_mode: item.pagination_mode || 'page',
       is_active: item.is_active,
     });
     setPreviewTours([]);
@@ -634,6 +655,11 @@ export default function DomesticToursSettingsPage() {
                       { key: 'filter_airline', label: 'สายการบิน/รถ', active: item.filter_airline },
                       { key: 'filter_departure_month', label: 'เดือนเดินทาง', active: item.filter_departure_month },
                       { key: 'filter_price_range', label: 'ช่วงราคา', active: item.filter_price_range },
+                      { key: 'filter_festival', label: 'เทศกาล', active: item.filter_festival ?? true },
+                      { key: 'filter_promotion', label: 'โปรโมชั่น', active: item.filter_promotion ?? true },
+                      { key: 'filter_theme', label: 'หมวดหมู่', active: item.filter_theme ?? true },
+                      { key: 'filter_special_highlight', label: 'ไฮไลท์', active: item.filter_special_highlight ?? true },
+                      { key: 'filter_advanced', label: 'ตัวกรองเพิ่มเติม', active: item.filter_advanced ?? true },
                     ].map(f => (
                       <span key={f.key} className={`text-[10px] px-1.5 py-0.5 rounded ${f.active ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400 line-through'}`}>
                         {f.active ? '✓' : '✗'} {f.label}
@@ -871,6 +897,26 @@ export default function DomesticToursSettingsPage() {
                     <p className="text-xs text-gray-400 mt-1.5">ปรับตำแหน่งการครอปภาพในส่วน Hero</p>
                   </div>
                 )}
+
+                {/* Default Hero Text */}
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-600 mb-1">ข้อความ Hero (ค่าเริ่มต้น)</label>
+                  <input
+                    type="text"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    placeholder="เช่น รวมโปรแกรมทัวร์ในประเทศ ราคาพิเศษ พร้อมเดินทาง"
+                    value={(formData as any).hero_text || ''}
+                    onChange={(e) => setFormData({ ...formData, hero_text: e.target.value || null })}
+                    onBlur={async () => {
+                      if (editItem) {
+                        try {
+                          await domesticTourSettingsApi.update(editItem.id, { hero_text: (formData as any).hero_text || null });
+                        } catch (e) { console.error('Failed to save hero text:', e); }
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">ข้อความที่แสดงใต้หัวข้อในส่วน Hero (เว้นว่างเพื่อใช้ค่าเริ่มต้นของระบบ)</p>
+                </div>
               </div>
 
               {/* City Covers Section */}
@@ -1106,6 +1152,17 @@ export default function DomesticToursSettingsPage() {
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">รูปแบบ Pagination</label>
+                    <select
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      value={(formData as any).pagination_mode || 'page'}
+                      onChange={(e) => setFormData({ ...formData, pagination_mode: e.target.value } as any)}
+                    >
+                      <option value="page">แบ่งหน้า (Page)</option>
+                      <option value="load_more">โหลดเพิ่มเติม (Load More)</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">การจัดเรียง</label>
                     <select
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -1184,6 +1241,11 @@ export default function DomesticToursSettingsPage() {
                     { key: 'filter_airline', label: 'กรองตามสายการบิน/รถ', icon: '🚌' },
                     { key: 'filter_departure_month', label: 'กรองตามเดือนเดินทาง', icon: '📅' },
                     { key: 'filter_price_range', label: 'กรองตามช่วงราคา', icon: '💰' },
+                    { key: 'filter_festival', label: 'เทศกาล/วันหยุด', icon: '🎉' },
+                    { key: 'filter_promotion', label: 'โปรโมชั่น', icon: '🏷️' },
+                    { key: 'filter_theme', label: 'หมวดหมู่', icon: '📂' },
+                    { key: 'filter_special_highlight', label: 'ไฮไลท์พิเศษ', icon: '⭐' },
+                    { key: 'filter_advanced', label: 'ตัวกรองเพิ่มเติม (วันที่/ที่นั่ง/ราคา)', icon: '🔧' },
                   ].map(({ key, label, icon }) => (
                     <label key={key} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                       <input

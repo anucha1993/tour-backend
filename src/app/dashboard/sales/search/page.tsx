@@ -219,7 +219,7 @@ export default function SalesSearchPage() {
     max_price: '',
     min_seats: '',
     integration_id: null,
-    _sort: 'price',
+    _sort: 'latest',
     discount_only: false,
   });
 
@@ -449,7 +449,7 @@ export default function SalesSearchPage() {
   }, [filters.integration_id, handleSearch]);
 
   const clearFilters = () => {
-    setFilters(prev => ({
+    setFilters({
       keyword: '',
       country: '',
       departure_from: '',
@@ -462,10 +462,12 @@ export default function SalesSearchPage() {
       min_price: '',
       max_price: '',
       min_seats: '',
-      integration_id: prev.integration_id, // Keep wholesaler selection
-      _sort: 'price',
+      integration_id: null,
+      _sort: 'latest',
       discount_only: false,
-    }));
+    });
+    setCountrySearch('');
+    setCountryDropdownOpen(false);
   };
 
   const formatPrice = (price: number) => {
@@ -582,6 +584,17 @@ export default function SalesSearchPage() {
   const getFilteredPeriods = useCallback((periods: Period[]): Period[] => {
     if (!periods) return [];
     
+    // Always filter out past departure dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    periods = periods.filter(p => {
+      const dateStr = p.start_date || p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate;
+      if (!dateStr) return true; // keep if no date info
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return true;
+      return d >= today;
+    });
+    
     // Parse date filters
     let filterFrom: Date | null = null;
     let filterTo: Date | null = null;
@@ -668,17 +681,11 @@ export default function SalesSearchPage() {
       ? tours.filter(tour => getTourDiscount(tour).hasDiscount)
       : tours;
     
-    // Check if any period-level filter is active
-    const hasPeriodFilter = filters.departure_from || filters.departure_to || 
-      filters.departure_month_from || filters.exact_departure || filters.exact_return ||
-      filters.min_price || filters.max_price || filters.min_seats || filters.discount_only;
-    
-    if (hasPeriodFilter) {
-      result = result.filter(tour => {
-        const filtered = getFilteredPeriods(tour.periods || []);
-        return filtered.length > 0;
-      });
-    }
+    // Always exclude tours with no future periods
+    result = result.filter(tour => {
+      const filtered = getFilteredPeriods(tour.periods || []);
+      return filtered.length > 0;
+    });
     
     return result;
   }, [tours, filters, getFilteredPeriods]);
@@ -1362,9 +1369,11 @@ export default function SalesSearchPage() {
                   onChange={(e) => setFilters(prev => ({ ...prev, _sort: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 >
+                  <option value="latest">ล่าสุด</option>
+                  <option value="-latest">เก่าสุด</option>
                   <option value="price">ราคาต่ำ → สูง</option>
                   <option value="-price">ราคาสูง → ต่ำ</option>
-                  <option value="departure_date">วันเดินทางใกล้</option>
+                  <option value="departure_date">เดินทางใกล้</option>
                   <option value="title">ชื่อ A-Z</option>
                 </select>
               </div>
