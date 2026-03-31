@@ -915,6 +915,13 @@ export default function IntegrationMappingPage() {
           expr = expr.replace(match, String(numValue));
         }
         
+        // Process max() and min() functions
+        expr = expr.replace(/\b(max|min)\s*\(([^)]+)\)/gi, (_m, func, args) => {
+          const nums = args.split(',').map((s: string) => parseFloat(s.trim()));
+          if (nums.some((n: number) => isNaN(n))) return _m;
+          return String(func.toLowerCase() === 'max' ? Math.max(...nums) : Math.min(...nums));
+        });
+        
         // Validate: only allow numbers, operators (+, -, *, /), parentheses, spaces, and decimal points
         if (!/^[\d\s+\-*/().]+$/.test(expr.trim())) return null;
         
@@ -948,6 +955,13 @@ export default function IntegrationMappingPage() {
           if (skipZero && numValue === 0) return null;
           expr = expr.replace(match, String(numValue));
         }
+        
+        // Process max() and min() functions
+        expr = expr.replace(/\b(max|min)\s*\(([^)]+)\)/gi, (_m, func, args) => {
+          const nums = args.split(',').map((s: string) => parseFloat(s.trim()));
+          if (nums.some((n: number) => isNaN(n))) return _m;
+          return String(func.toLowerCase() === 'max' ? Math.max(...nums) : Math.min(...nums));
+        });
         
         if (!/^[\d\s+\-*/().]+$/.test(expr.trim())) return null;
         const result = Function('"use strict"; return (' + expr + ')')();
