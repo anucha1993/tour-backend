@@ -39,9 +39,12 @@ interface Period {
   price_child_nobed?: number;
   deposit?: number;
   capacity?: number;
+  booked?: number;
   available_seats?: number;
   available?: number;
   status?: string;
+  commission_agent?: number;
+  commission_sale?: number;
   // Discount fields (can be computed via formula transform e.g. {Price} - {SalePrice})
   discount_adult?: number;
   discount_child_bed?: number;
@@ -1970,7 +1973,10 @@ export default function SalesSearchPage() {
                               <th className="pb-2 font-medium">ส่วนลด</th>
                               <th className="pb-2 font-medium">ราคาเด็ก</th>
                               <th className="pb-2 font-medium">มัดจำ</th>
-                              <th className="pb-2 font-medium">ที่นั่ง</th>
+                              <th className="pb-2 font-medium text-center">ที่นั่ง</th>
+                              <th className="pb-2 font-medium text-center">จอง</th>
+                              <th className="pb-2 font-medium text-center">เหลือ</th>
+                              <th className="pb-2 font-medium text-center">คอมมิชชั่น</th>
                               <th className="pb-2 font-medium">สถานะ</th>
                               <th className="pb-2"></th>
                             </tr>
@@ -1995,6 +2001,9 @@ export default function SalesSearchPage() {
                               const deposit = period.deposit || pRaw?.Deposit || pRaw?.deposit || 0;
                               const available = Math.floor(Number(period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0));
                               const capacity = Math.floor(Number(period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0));
+                              const booked = Math.floor(Number(period.booked || pRaw?.Booked || pRaw?.booked || (capacity - available) || 0));
+                              const commAgent = Number(period.commission_agent || pRaw?.commission_agent || pRaw?.CommissionAgent || 0);
+                              const commSale = Number(period.commission_sale || pRaw?.commission_sale || pRaw?.CommissionSale || 0);
                               const periodDiscount = getPeriodDiscount(period);
                               
                               return (
@@ -2032,10 +2041,26 @@ export default function SalesSearchPage() {
                                   <td className="py-2">
                                     ฿{formatPrice(deposit)}
                                   </td>
-                                  <td className="py-2">
-                                    <span className={available > 5 ? 'text-green-600' : available > 0 ? 'text-orange-600' : 'text-red-600'}>
-                                      {available}/{capacity}
+                                  <td className="py-2 text-center">
+                                    {capacity}
+                                  </td>
+                                  <td className="py-2 text-center">
+                                    {booked}
+                                  </td>
+                                  <td className="py-2 text-center">
+                                    <span className={available > 5 ? 'text-green-600 font-medium' : available > 0 ? 'text-orange-600 font-medium' : 'text-red-600 font-medium'}>
+                                      {available}
                                     </span>
+                                  </td>
+                                  <td className="py-2 text-center">
+                                    {(commAgent > 0 || commSale > 0) ? (
+                                      <div className="flex flex-col items-center text-xs">
+                                        {commAgent > 0 && <span className="text-purple-600">AG: {formatPrice(commAgent)}</span>}
+                                        {commSale > 0 && <span className="text-indigo-600">SL: {formatPrice(commSale)}</span>}
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">-</span>
+                                    )}
                                   </td>
                                   <td className="py-2">
                                     {available > 0 ? (
