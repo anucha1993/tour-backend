@@ -16,10 +16,8 @@ import {
 import Link from 'next/link';
 import { 
   toursApi, 
-  countriesApi,
   citiesApi,
-  wholesalersApi,
-  transportsApi,
+  apiRequest,
   Country,
   City,
   Wholesaler,
