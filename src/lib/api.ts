@@ -329,7 +329,21 @@ export async function apiRequest<T = any>(
       headers,
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data: any;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // Server returned non-JSON (e.g. HTML error page from proxy)
+      if (!response.ok) {
+        throw new ApiError(
+          response.status >= 500 ? 'Server error' : 'Request failed',
+          response.status
+        );
+      }
+      // 2xx but non-JSON — return empty
+      return {} as any;
+    }
 
     if (!response.ok) {
       if (response.status === 401) {

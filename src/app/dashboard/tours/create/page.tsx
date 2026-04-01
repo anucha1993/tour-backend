@@ -33,6 +33,7 @@ export default function CreateTourPage() {
   const [wholesalers, setWholesalers] = useState<Wholesaler[]>([]);
   const [transports, setTransports] = useState<{ id: number; code: string; name: string; type: string; image?: string }[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   // Country/City search state
@@ -58,12 +59,16 @@ export default function CreateTourPage() {
 
   // Load countries, wholesalers, transports
   useEffect(() => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const fetchData = async () => {
       try {
+        setLoadError(false);
+        const signal = controller.signal;
         const [countriesRes, wholesalersRes, transportsRes] = await Promise.all([
-          countriesApi.list({ is_active: 'true', per_page: '250' }),
-          wholesalersApi.list({ is_active: 'true', per_page: '100' }),
-          transportsApi.list({ status: 'on', per_page: '100' }),
+          apiRequest<Country[]>(`/countries?is_active=true&per_page=250`, { signal }),
+          apiRequest<Wholesaler[]>(`/wholesalers?is_active=true&per_page=100`, { signal }),
+          apiRequest<{ id: number; code: string; name: string; type: string; image?: string }[]>(`/transports?status=on&per_page=100`, { signal }),
         ]);
         
         if (countriesRes.success) {
@@ -76,12 +81,16 @@ export default function CreateTourPage() {
           setTransports(transportsRes.data.map(t => ({ id: t.id, code: t.code, name: t.name, type: t.type, image: t.image ?? undefined })));
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Failed to load data:', err);
+        setLoadError(true);
       } finally {
+        clearTimeout(timeout);
         setLoadingData(false);
       }
     };
     fetchData();
+    return () => { clearTimeout(timeout); controller.abort(); };
   }, []);
 
   // Close transport dropdown when clicking outside
@@ -212,6 +221,17 @@ export default function CreateTourPage() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <p className="text-red-500">ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่</p>
+        <Button variant="outline" onClick={() => { setLoadingData(true); setLoadError(false); window.location.reload(); }}>
+          ลองใหม่
+        </Button>
       </div>
     );
   }
