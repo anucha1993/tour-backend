@@ -62,7 +62,7 @@ export default function CreateTourPage() {
       try {
         const [countriesRes, wholesalersRes, transportsRes] = await Promise.all([
           countriesApi.list({ is_active: 'true', per_page: '250' }),
-          wholesalersApi.list({ is_active: 'true' }),
+          wholesalersApi.list({ is_active: 'true', per_page: '100' }),
           transportsApi.list({ status: 'on', per_page: '100' }),
         ]);
         

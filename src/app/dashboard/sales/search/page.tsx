@@ -2008,9 +2008,9 @@ export default function SalesSearchPage() {
                               const adultPrice = period.price_adult || pRaw?.Price || pRaw?.adultPrice || pRaw?.salePrice || 0;
                               const childPrice = period.price_child || pRaw?.Price_Child || pRaw?.childPrice || 0;
                               const deposit = period.deposit || pRaw?.Deposit || pRaw?.deposit || 0;
-                              const available = Math.floor(Number(period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0));
-                              const capacity = Math.floor(Number(period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0));
-                              const booked = Math.floor(Number(period.booked || pRaw?.Booked || pRaw?.booked || (capacity - available) || 0));
+                              const available = Math.floor(Number(period.available_seats || period.available || pRaw?.Seat || pRaw?.available || 0)) || 0;
+                              const capacity = Math.floor(Number(period.capacity || pRaw?.GroupSize || pRaw?.seat || pRaw?.capacity || 0)) || 0;
+                              const booked = Math.floor(Number(period.booked || pRaw?.Booked || pRaw?.booked || (capacity - available) || 0)) || 0;
                               const commAgent = Number(period.commission_agent || pRaw?.commission_agent || pRaw?.CommissionAgent || 0);
                               const commSale = Number(period.commission_sale || pRaw?.commission_sale || pRaw?.CommissionSale || 0);
                               const periodDiscount = getPeriodDiscount(period);

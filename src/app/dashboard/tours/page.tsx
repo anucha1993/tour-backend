@@ -1634,7 +1634,7 @@ export default function ToursPage() {
                         className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                       >
                         <Calendar className="w-3.5 h-3.5" />
-                        <span className="font-medium">{tour.total_departures || 0}</span>
+                        <span className="font-medium">{tour.periods?.length || 0}</span>
                       </button>
                     </td>
 
