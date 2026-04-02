@@ -512,12 +512,36 @@ export default function IntegrationMappingPage() {
             Object.values(apiData.mappings).flat().forEach((m) => {
               const fieldKey = `${m.section_name}.${m.our_field}`;
               const hasApiField = m.their_field && m.their_field.length > 0;
+              
+              // Clean null values from string_transform to prevent null propagation
+              let stringTransform: StringTransform | undefined = undefined;
+              const rawSt = m.transform_config?.string_transform;
+              if (rawSt && rawSt.type && rawSt.type !== 'none') {
+                // Validate: split ต้องมี splitBy, replace ต้องมี replaceFrom
+                // ถ้าไม่มี ถือว่า invalid → ไม่ load
+                if (rawSt.type === 'split' && !rawSt.splitBy) {
+                  // Invalid split - skip loading this transform
+                  console.warn(`[LOAD] Skipping invalid split transform for ${fieldKey}: missing splitBy`);
+                } else if (rawSt.type === 'replace' && !rawSt.replaceFrom && rawSt.replaceFrom !== '') {
+                  console.warn(`[LOAD] Skipping invalid replace transform for ${fieldKey}: missing replaceFrom`);
+                } else {
+                  stringTransform = { type: rawSt.type };
+                  if (rawSt.splitBy) stringTransform.splitBy = rawSt.splitBy;
+                  if (rawSt.joinWith) stringTransform.joinWith = rawSt.joinWith;
+                  if (rawSt.replaceFrom !== undefined && rawSt.replaceFrom !== null) stringTransform.replaceFrom = rawSt.replaceFrom;
+                  if (rawSt.replaceTo !== undefined && rawSt.replaceTo !== null) stringTransform.replaceTo = rawSt.replaceTo;
+                  if (rawSt.template) stringTransform.template = rawSt.template;
+                  if (rawSt.formulaExpression) stringTransform.formulaExpression = rawSt.formulaExpression;
+                  if (rawSt.formulaSkipZero !== undefined) stringTransform.formulaSkipZero = rawSt.formulaSkipZero;
+                }
+              }
+              
               loadedMappings[fieldKey] = {
                 type: hasApiField ? 'api' : 'fixed',
                 value: hasApiField ? (m.their_field || '') : (m.default_value || ''),
                 lookupBy: m.transform_config?.lookup_by || undefined,
                 valueMap: m.transform_config?.value_map || undefined,
-                stringTransform: m.transform_config?.string_transform || undefined,
+                stringTransform,
               };
             });
           }
@@ -599,8 +623,10 @@ export default function IntegrationMappingPage() {
           [fieldKey]: { 
             type: 'api', 
             value: apiField,
-            // Keep existing valueMap if updating just the field
-            valueMap: keepValueMap && existing?.valueMap ? existing.valueMap : undefined
+            // Keep existing transform settings when updating the field
+            lookupBy: existing?.lookupBy,
+            valueMap: keepValueMap && existing?.valueMap ? existing.valueMap : existing?.valueMap,
+            stringTransform: existing?.stringTransform,
           } 
         };
       });
@@ -1283,6 +1309,22 @@ export default function IntegrationMappingPage() {
       // Convert mappings to API format - ใช้ format ที่ backend ต้องการ
       const mappingsArray = Object.entries(mappings).map(([fieldKey, mapping]) => {
         const [section, key] = fieldKey.split('.');
+        
+        // Validate & clean transform before sending to API
+        let cleanedTransform = mapping.stringTransform || null;
+        if (cleanedTransform) {
+          // split ต้องมี splitBy, ถ้าไม่มีให้ลบ transform ทิ้ง
+          if (cleanedTransform.type === 'split' && !cleanedTransform.splitBy) {
+            console.warn(`[SAVE] Removing invalid split transform for ${fieldKey}: missing splitBy`);
+            cleanedTransform = null;
+          }
+          // replace ต้องมี replaceFrom
+          if (cleanedTransform && cleanedTransform.type === 'replace' && !cleanedTransform.replaceFrom && cleanedTransform.replaceFrom !== '') {
+            console.warn(`[SAVE] Removing invalid replace transform for ${fieldKey}: missing replaceFrom`);
+            cleanedTransform = null;
+          }
+        }
+        
         return {
           section,
           our_field: key,
@@ -1291,7 +1333,7 @@ export default function IntegrationMappingPage() {
           fixed_value: mapping.type === 'fixed' ? mapping.value : null,
           lookup_by: mapping.lookupBy || null,
           value_map: mapping.valueMap || null,
-          string_transform: mapping.stringTransform || null,
+          string_transform: cleanedTransform,
         };
       });
 
@@ -1959,6 +2001,16 @@ export default function IntegrationMappingPage() {
                                     {mapping.stringTransform && mapping.stringTransform.type !== 'none' && (
                                       <span className="ml-1 bg-cyan-500 text-white text-xs px-1 rounded">
                                         {mapping.stringTransform.type}
+                                        {mapping.stringTransform.type === 'split' && mapping.stringTransform.splitBy && (
+                                          <span className="ml-0.5 opacity-80">
+                                            ({mapping.stringTransform.splitBy === ' ' ? 'space' : 
+                                              mapping.stringTransform.splitBy === '\n' ? '\\n' : 
+                                              `"${mapping.stringTransform.splitBy}"`})
+                                          </span>
+                                        )}
+                                        {mapping.stringTransform.type === 'split' && !mapping.stringTransform.splitBy && (
+                                          <span className="ml-0.5 text-yellow-200">⚠️</span>
+                                        )}
                                       </span>
                                     )}
                                   </button>
@@ -2515,17 +2567,17 @@ export default function IntegrationMappingPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">แยกด้วย (Split by):</label>
                     <select
-                      value={transformModal.transform.splitBy || ''}
+                      value={transformModal.transform.splitBy ?? ''}
                       onChange={(e) => setTransformModal(prev => ({
                         ...prev,
-                        transform: { ...prev.transform, splitBy: e.target.value }
+                        transform: { ...prev.transform, splitBy: e.target.value || undefined }
                       }))}
                       className="w-full px-3 py-2 border rounded-lg text-sm"
                     >
                       <option value="">-- เลือก --</option>
                       <option value=" ">Space (ช่องว่าง)</option>
                       <option value=",">Comma (,)</option>
-                      <option value="\n">Newline (บรรทัดใหม่)</option>
+                      <option value={"\n"}>Newline (บรรทัดใหม่)</option>
                       <option value="/">Slash (/)</option>
                       <option value="-">Dash (-)</option>
                       <option value="|">Pipe (|)</option>
@@ -2537,7 +2589,7 @@ export default function IntegrationMappingPage() {
                       value={transformModal.transform.joinWith ?? ''}
                       onChange={(e) => setTransformModal(prev => ({
                         ...prev,
-                        transform: { ...prev.transform, joinWith: e.target.value }
+                        transform: { ...prev.transform, joinWith: e.target.value || undefined }
                       }))}
                       className="w-full px-3 py-2 border rounded-lg text-sm"
                     >
@@ -2545,7 +2597,7 @@ export default function IntegrationMappingPage() {
                       <option value=",">Comma (,)</option>
                       <option value=", ">Comma + Space (, )</option>
                       <option value=" | ">Pipe ( | )</option>
-                      <option value="\n">Newline</option>
+                      <option value={"\n"}>Newline</option>
                     </select>
                   </div>
                   <div className="text-xs text-cyan-700 p-2 bg-cyan-100 rounded">
@@ -2723,10 +2775,33 @@ export default function IntegrationMappingPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    updateStringTransform(transformModal.fieldKey, transformModal.transform);
+                    // Validate: split type ต้องมี splitBy
+                    if (transformModal.transform.type === 'split' && !transformModal.transform.splitBy) {
+                      alert('กรุณาเลือก "แยกด้วย (Split by)" ก่อนบันทึก');
+                      return;
+                    }
+                    // Validate: replace type ต้องมี replaceFrom
+                    if (transformModal.transform.type === 'replace' && !transformModal.transform.replaceFrom) {
+                      alert('กรุณาระบุ "ค้นหา (Find)" ก่อนบันทึก');
+                      return;
+                    }
+                    // Clean: ลบ properties ที่เป็น undefined/null/empty ก่อน save
+                    const cleanTransform = { ...transformModal.transform };
+                    if (!cleanTransform.splitBy) delete cleanTransform.splitBy;
+                    if (!cleanTransform.joinWith) delete cleanTransform.joinWith;
+                    if (!cleanTransform.replaceFrom && cleanTransform.replaceFrom !== '') delete cleanTransform.replaceFrom;
+                    if (!cleanTransform.replaceTo && cleanTransform.replaceTo !== '') delete cleanTransform.replaceTo;
+                    if (!cleanTransform.template) delete cleanTransform.template;
+                    if (!cleanTransform.formulaExpression) delete cleanTransform.formulaExpression;
+                    
+                    updateStringTransform(transformModal.fieldKey, cleanTransform);
                     setTransformModal({ open: false, fieldKey: '', field: null, transform: { type: 'none' } });
                   }}
-                  className="px-4 py-2 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 flex items-center gap-1"
+                  className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${
+                    transformModal.transform.type === 'split' && !transformModal.transform.splitBy
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-cyan-600 text-white hover:bg-cyan-700'
+                  }`}
                 >
                   <Check className="w-4 h-4" />
                   บันทึก
