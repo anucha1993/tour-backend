@@ -50,6 +50,7 @@ import {
   Gift,
   Award,
   Bell,
+  Share2,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -474,6 +475,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
         title: 'OTP',
         href: '/dashboard/settings/otp',
         icon: Smartphone,
+      },
+      {
+        title: 'Social Login',
+        href: '/dashboard/settings/social-auth',
+        icon: Share2,
       },
     ],
   },

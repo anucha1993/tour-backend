@@ -132,6 +132,26 @@ function buildTimeList(times: string[]): string {
   return [...times].sort().join(',');
 }
 
+// Helper: generate time-list from interval in minutes (e.g. 30 → every 30 min)
+function generateTimesFromInterval(intervalMinutes: number): string[] {
+  if (intervalMinutes < 10 || intervalMinutes > 1440) return [];
+  const times: string[] = [];
+  for (let totalMin = 0; totalMin < 1440; totalMin += intervalMinutes) {
+    const h = Math.floor(totalMin / 60).toString().padStart(2, '0');
+    const m = (totalMin % 60).toString().padStart(2, '0');
+    times.push(`${h}:${m}`);
+  }
+  return times;
+}
+
+// Format interval label
+function formatIntervalLabel(minutes: number): string {
+  if (minutes >= 60 && minutes % 60 === 0) {
+    return `ทุก ${minutes / 60} ชม.`;
+  }
+  return `ทุก ${minutes} นาที`;
+}
+
 // Quick presets for adding common sync times
 const TIME_PRESETS = [
   { label: 'ทุก 2 ชม. (12 เวลา)', times: ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'] },
@@ -164,6 +184,8 @@ export default function IntegrationSettingsPage() {
   const [uploadingFooter, setUploadingFooter] = useState(false);
   const [syncTimes, setSyncTimes] = useState<string[]>([]); // ["09:30", "12:00", "18:00"]
   const [newTimeInput, setNewTimeInput] = useState('09:00');
+  const [showCustomInterval, setShowCustomInterval] = useState(false);
+  const [customIntervalMinutes, setCustomIntervalMinutes] = useState(30);
   const [scheduleConflict, setScheduleConflict] = useState<{
     conflict: boolean;
     severity?: 'hard' | 'soft';
@@ -561,7 +583,9 @@ export default function IntegrationSettingsPage() {
       setSaving(false);
     }
   };
+
   
+
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult('idle');
@@ -1542,13 +1566,66 @@ export default function IntegrationSettingsPage() {
                           const newSchedule = buildTimeList(newTimes);
                           setFormData(prev => ({ ...prev, sync_schedule: newSchedule }));
                           checkConflict(newSchedule, formData.id);
+                          setShowCustomInterval(false);
                         }}
                         className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors"
                       >
                         {preset.label}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomInterval(!showCustomInterval)}
+                      className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                        showCustomInterval
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                    >
+                      <Settings className="w-3 h-3 inline mr-1" />
+                      กำหนดเอง
+                    </button>
                   </div>
+
+                  {/* Custom interval input */}
+                  {showCustomInterval && (
+                    <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-700 font-medium mb-2">กำหนดช่วงเวลาเอง</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700">ทุก</span>
+                        <input
+                          type="number"
+                          min={10}
+                          max={720}
+                          step={5}
+                          value={customIntervalMinutes}
+                          onChange={(e) => setCustomIntervalMinutes(Math.max(10, Math.min(720, parseInt(e.target.value) || 30)))}
+                          className="w-20 px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center"
+                        />
+                        <span className="text-sm text-gray-700">นาที</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newTimes = generateTimesFromInterval(customIntervalMinutes);
+                            if (newTimes.length === 0) return;
+                            setSyncTimes(newTimes);
+                            const newSchedule = buildTimeList(newTimes);
+                            setFormData(prev => ({ ...prev, sync_schedule: newSchedule }));
+                            checkConflict(newSchedule, formData.id);
+                          }}
+                          className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                          สร้างตาราง
+                        </Button>
+                        <span className="text-xs text-gray-500">
+                          ({generateTimesFromInterval(customIntervalMinutes).length} เวลา — {formatIntervalLabel(customIntervalMinutes)})
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Current sync times */}
                   <div className={`p-4 rounded-lg border ${
