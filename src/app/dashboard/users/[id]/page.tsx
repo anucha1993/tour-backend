@@ -17,38 +17,37 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usersApi, ApiError } from '@/lib/api';
+import { UserRole, ROLE_OPTIONS, getRolePermissionMatrix } from '@/lib/permissions';
 
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'manager' | 'staff';
+  role: UserRole;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
-const roleBadges = {
-  admin: { 
-    bg: 'bg-purple-50', 
-    text: 'text-purple-700', 
-    icon: ShieldCheck,
+const roleBadges: Record<string, {
+  bg: string; text: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string; description: string;
+}> = {
+  admin: {
+    bg: 'bg-purple-50', text: 'text-purple-700', icon: ShieldCheck,
     label: 'ผู้ดูแลระบบ',
-    description: 'เข้าถึงทุกฟังก์ชันในระบบ'
+    description: 'เข้าถึงทุกฟังก์ชันในระบบ — สามารถดู สร้าง แก้ไข และลบข้อมูลได้ทุกเมนู',
   },
-  manager: { 
-    bg: 'bg-blue-50', 
-    text: 'text-blue-700', 
-    icon: Shield,
-    label: 'ผู้จัดการ',
-    description: 'จัดการทัวร์และตัวแทน'
+  sale: {
+    bg: 'bg-green-50', text: 'text-green-700', icon: UserIcon,
+    label: 'ฝ่ายขาย',
+    description: 'เข้าถึงได้เฉพาะเมนูที่เกี่ยวข้องกับงานขาย ได้แก่ แดชบอร์ด, ขาย, ใบจอง และทัวร์',
   },
-  staff: { 
-    bg: 'bg-gray-100', 
-    text: 'text-gray-700', 
-    icon: UserIcon,
-    label: 'พนักงาน',
-    description: 'ดูข้อมูลและบันทึกพื้นฐาน'
+  it: {
+    bg: 'bg-blue-50', text: 'text-blue-700', icon: Shield,
+    label: 'ฝ่ายไอที',
+    description: 'เข้าถึงได้เกือบทุกเมนู ยกเว้น Integrations, ผู้ใช้งาน และตั้งค่า',
   },
 };
 
@@ -116,8 +115,9 @@ export default function UserDetailPage() {
     );
   }
 
-  const roleBadge = roleBadges[user.role];
+  const roleBadge = roleBadges[user.role] || { bg: 'bg-gray-100', text: 'text-gray-700', icon: UserIcon, label: user.role, description: 'ไม่ทราบสิทธิ์' };
   const RoleIcon = roleBadge.icon;
+  const permMatrix = getRolePermissionMatrix((user.role as UserRole) || 'sale');
 
   return (
     <div className="space-y-6">
@@ -212,6 +212,59 @@ export default function UserDetailPage() {
                   {user.is_active ? 'ใช้งาน' : 'ปิดใช้งาน'}
                 </p>
               </div>
+            </div>
+          </Card>
+
+          {/* Permission Summary — detailed table */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">สิทธิ์การเข้าถึงทั้งหมด</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              ตารางแสดงสิทธิ์ของบทบาท <span className="font-medium text-gray-700">{roleBadge.label}</span> ในแต่ละเมนู
+            </p>
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 pr-4 font-medium text-gray-600">เมนู</th>
+                    <th className="text-center py-2 px-3 font-medium text-gray-600 w-16">เข้าถึง</th>
+                    <th className="text-center py-2 px-3 font-medium text-gray-600 w-16">ดู (R)</th>
+                    <th className="text-center py-2 px-3 font-medium text-gray-600 w-24">สร้าง/แก้ไข (W)</th>
+                    <th className="text-center py-2 px-3 font-medium text-gray-600 w-16">ลบ (D)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {permMatrix.map((row, i) => (
+                    <tr key={i} className={`border-b border-gray-100 ${!row.visible ? 'bg-gray-50 text-gray-400' : ''}`}>
+                      <td className="py-2.5 pr-4 font-medium">{row.menu}</td>
+                      <td className="text-center py-2.5 px-3">
+                        {row.visible
+                          ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600"><Check className="w-3.5 h-3.5" /></span>
+                          : <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-500"><X className="w-3.5 h-3.5" /></span>}
+                      </td>
+                      <td className="text-center py-2.5 px-3">
+                        {row.read
+                          ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600"><Check className="w-3.5 h-3.5" /></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="text-center py-2.5 px-3">
+                        {row.write
+                          ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600"><Check className="w-3.5 h-3.5" /></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="text-center py-2.5 px-3">
+                        {row.delete
+                          ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600"><Check className="w-3.5 h-3.5" /></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100 text-green-600"><Check className="w-3 h-3" /></span> มีสิทธิ์</span>
+              <span className="flex items-center gap-1"><span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-500"><X className="w-3 h-3" /></span> ไม่มีสิทธิ์</span>
+              <span className="flex items-center gap-1"><span className="text-gray-300">—</span> ไม่เกี่ยวข้อง</span>
             </div>
           </Card>
         </div>

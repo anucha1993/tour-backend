@@ -1,12 +1,22 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authApi } from '@/lib/api';
+import {
+  UserRole,
+  MenuKey,
+  Permission,
+  canSeeMenu,
+  hasPermission,
+  canAccessRoute,
+  getMenuKeyForPath,
+} from '@/lib/permissions';
 
 interface User {
   id: number;
   name: string;
   email: string;
+  role: UserRole;
 }
 
 interface AuthContextType {
@@ -15,6 +25,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Check if user can see a sidebar menu */
+  canSeeMenu: (menuKey: MenuKey) => boolean;
+  /** Check if user has a specific permission on a menu section */
+  hasPermission: (menuKey: MenuKey, permission: Permission) => boolean;
+  /** Check if user can access a route by pathname */
+  canAccessRoute: (pathname: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,14 +40,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in on mount
-    const token = localStorage.getItem('access_token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (token && storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    const init = async () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      // ดึงข้อมูล user ล่าสุดจาก API เพื่อให้ได้ role ที่ถูกต้อง
+      try {
+        const res = await authApi.me();
+        if (res.success && res.data) {
+          const freshUser = res.data as User;
+          localStorage.setItem('user', JSON.stringify(freshUser));
+          setUser(freshUser);
+        } else {
+          // Token หมดอายุ
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+        }
+      } catch {
+        // Fallback ไป localStorage ถ้า API ไม่ตอบ
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      }
+      setIsLoading(false);
+    };
+    init();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -56,6 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const role = (user?.role as UserRole) || 'sale'; // Default to most restrictive
+
+  const canSeeMenuFn = useCallback(
+    (menuKey: MenuKey) => canSeeMenu(role, menuKey),
+    [role]
+  );
+
+  const hasPermissionFn = useCallback(
+    (menuKey: MenuKey, permission: Permission) => hasPermission(role, menuKey, permission),
+    [role]
+  );
+
+  const canAccessRouteFn = useCallback(
+    (pathname: string) => canAccessRoute(role, pathname),
+    [role]
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -64,6 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         login,
         logout,
+        canSeeMenu: canSeeMenuFn,
+        hasPermission: hasPermissionFn,
+        canAccessRoute: canAccessRouteFn,
       }}
     >
       {children}

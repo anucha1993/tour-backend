@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
   Search,
@@ -92,6 +93,10 @@ function resolveTab(searchParams: URLSearchParams): TabKey {
 export default function ToursPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { hasPermission } = useAuth();
+
+  const canWrite = hasPermission('tours', 'write');
+  const canDelete = hasPermission('tours', 'delete');
 
   // ─── Active tab (derived from URL) ────────────────────────────
   const activeTab = resolveTab(searchParams);
@@ -126,7 +131,7 @@ export default function ToursPage() {
   const [exactReturn, setExactReturn] = useState('');
   
   // Sort
-  const [sortBy, setSortBy] = useState('created_at');
+  const [sortBy, setSortBy] = useState('-created_at');
   
   // Countries from database
   const [countries, setCountries] = useState<Country[]>([]);
@@ -346,7 +351,7 @@ export default function ToursPage() {
     setDepartureMonthTo('');
     setExactDeparture('');
     setExactReturn('');
-    setSortBy('created_at');
+    setSortBy('-created_at');
     setCurrentPage(1);
     setSelectedTours(new Set());
 
@@ -467,7 +472,7 @@ export default function ToursPage() {
   };
 
   // Check if any additional filter is active (beyond tab preset)
-  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || wholesalerTourCodeFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || wholesalerTourCodeFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== '-created_at');
   
   // Clear additional filters only
   const clearAdditionalFilters = () => {
@@ -490,7 +495,7 @@ export default function ToursPage() {
     setDepartureMonthTo('');
     setExactDeparture('');
     setExactReturn('');
-    setSortBy('created_at');
+    setSortBy('-created_at');
     setCurrentPage(1);
   };
 
@@ -579,7 +584,7 @@ export default function ToursPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {selectedTours.size > 0 && (
+          {selectedTours.size > 0 && canDelete && (
             <>
               <Button
                 variant="outline"
@@ -604,12 +609,14 @@ export default function ToursPage() {
           <Button variant="outline" size="sm" onClick={() => { fetchTours(); fetchCounts(); }}>
             <RefreshCw className="w-4 h-4" />
           </Button>
-          <Link href="/dashboard/tours/create">
-            <Button size="sm">
-              <Plus className="w-4 h-4" />
-              เพิ่มทัวร์
-            </Button>
-          </Link>
+          {canWrite && (
+            <Link href="/dashboard/tours/create">
+              <Button size="sm">
+                <Plus className="w-4 h-4" />
+                เพิ่มทัวร์
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -692,8 +699,8 @@ export default function ToursPage() {
               onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
-              <option value="created_at">ล่าสุด</option>
-              <option value="-created_at">เก่าสุด</option>
+              <option value="-created_at">สร้างล่าสุด</option>
+              <option value="created_at">สร้างเก่าสุด</option>
               <option value="display_price">ราคาต่ำ→สูง</option>
               <option value="-display_price">ราคาสูง→ต่ำ</option>
               <option value="next_departure_date">เดินทางใกล้</option>
@@ -1689,13 +1696,15 @@ export default function ToursPage() {
                             <Edit className="w-4 h-4" />
                           </button>
                         </Link>
-                        <button
-                          onClick={() => setDeleteConfirm(tour.id)}
-                          className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
-                          title="ลบ"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeleteConfirm(tour.id)}
+                            className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
+                            title="ลบ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
