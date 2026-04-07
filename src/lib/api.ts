@@ -1227,7 +1227,7 @@ export const periodsApi = {
   toggleStatus: (tourId: number, periodId: number) =>
     apiRequest<Period>(`/tours/${tourId}/periods/${periodId}/toggle-status`, { method: 'PATCH' }),
 
-  bulkUpdate: (tourId: number, data: { period_ids: number[]; updates: Partial<{ is_visible: boolean; sale_status: string; promo_name: string }> }) =>
+  bulkUpdate: (tourId: number, data: { period_ids: number[]; updates: Partial<{ is_visible: boolean; promo_name: string }> }) =>
     apiRequest(`/tours/${tourId}/periods/bulk-update`, {
       method: 'POST',
       body: JSON.stringify(data),

@@ -124,7 +124,6 @@ interface PeriodFormData {
   booked: number;
   status: string;
   is_visible: boolean;
-  sale_status: string;
   price_adult: string;
   discount_adult: string;
   price_single: string;
@@ -150,7 +149,6 @@ const emptyPeriodForm: PeriodFormData = {
   booked: 0,
   status: 'open',
   is_visible: true,
-  sale_status: 'available',
   price_adult: '',
   discount_adult: '0',
   price_single: '',
@@ -645,7 +643,7 @@ export default function EditTourPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [selectedPeriodIds, setSelectedPeriodIds] = useState<number[]>([]);
   const [editingRowId, setEditingRowId] = useState<number | null>(null);
-  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'sale_status' | 'promo' | 'discount' | 'price'>('visibility');
+  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'promo' | 'discount' | 'price'>('visibility');
   const [massUpdateValue, setMassUpdateValue] = useState<string>('');
   const [massDiscount, setMassDiscount] = useState({
     discount_adult: '',
@@ -1510,7 +1508,6 @@ export default function EditTourPage() {
       booked: period.booked,
       status: period.status,
       is_visible: period.is_visible ?? true,
-      sale_status: period.sale_status || 'available',
       price_adult: period.offer?.price_adult || '',
       discount_adult: period.offer?.discount_adult || '0',
       price_single: period.offer?.price_single || '',
@@ -1642,13 +1639,11 @@ export default function EditTourPage() {
         const updates: Record<string, unknown> = {};
         if (massUpdateType === 'visibility') {
           updates.is_visible = massUpdateValue === 'on';
-        } else if (massUpdateType === 'sale_status') {
-          updates.sale_status = massUpdateValue;
         }
         
         await periodsApi.bulkUpdate(tour.id, {
           period_ids: selectedPeriodIds,
-          updates: updates as { is_visible?: boolean; sale_status?: string; promo_name?: string },
+          updates: updates as { is_visible?: boolean; promo_name?: string },
         });
       }
       
@@ -1798,6 +1793,12 @@ export default function EditTourPage() {
       case 'sold_out': return 'bg-red-100 text-red-700';
       default: return 'bg-gray-100 text-gray-600';
     }
+  };
+
+  const computeSaleStatus = (available: number): string => {
+    if (available === 0) return 'sold_out';
+    if (available < 4) return 'available';
+    return 'booking';
   };
 
   if (loadingData) {
@@ -2722,15 +2723,15 @@ export default function EditTourPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">สถานะวางขาย</label>
-                <select
-                  value={periodForm.sale_status}
-                  onChange={(e) => setPeriodForm(prev => ({ ...prev, sale_status: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  {Object.entries(SALE_STATUS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
+                {(() => {
+                  const available = Math.max(0, periodForm.capacity - periodForm.booked);
+                  const status = computeSaleStatus(available);
+                  return (
+                    <div className={`w-full px-3 py-2 rounded-lg text-sm text-center font-medium ${getSaleStatusColor(status)}`}>
+                      {SALE_STATUS[status]} (Auto)
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2938,11 +2939,10 @@ export default function EditTourPage() {
               <label className="block text-xs font-medium text-gray-700 mb-1">อัปเดตประเภท</label>
               <select
                 value={massUpdateType}
-                onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'sale_status' | 'promo' | 'discount' | 'price')}
+                onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'promo' | 'discount' | 'price')}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
               >
                 <option value="visibility">สถานะแสดง</option>
-                <option value="sale_status">สถานะวางขาย</option>
                 <option value="price">ราคาทัวร์</option>
                 <option value="promo">โปรโมชั่น</option>
                 <option value="discount">ส่วนลดราคา</option>
@@ -2960,22 +2960,6 @@ export default function EditTourPage() {
                   <option value="">เลือก...</option>
                   <option value="on">On (แสดง)</option>
                   <option value="off">Off (ซ่อน)</option>
-                </select>
-              </div>
-            )}
-            
-            {massUpdateType === 'sale_status' && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">เปลี่ยนเป็น</label>
-                <select
-                  value={massUpdateValue}
-                  onChange={(e) => setMassUpdateValue(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="">เลือก...</option>
-                  {Object.entries(SALE_STATUS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
                 </select>
               </div>
             )}
@@ -3103,7 +3087,7 @@ export default function EditTourPage() {
               type="button"
               size="sm"
               onClick={handleMassUpdate}
-              disabled={savingPeriod || (massUpdateType === 'visibility' && !massUpdateValue) || (massUpdateType === 'sale_status' && !massUpdateValue) || (massUpdateType === 'promo' && !massUpdateValue) || (massUpdateType === 'discount' && !massDiscount.discount_adult && !massDiscount.discount_single && !massDiscount.discount_child_bed && !massDiscount.discount_child_nobed) || (massUpdateType === 'price' && !massPrice.price_adult && !massPrice.price_single && !massPrice.price_child && !massPrice.price_child_nobed && !massPrice.price_infant)}
+              disabled={savingPeriod || (massUpdateType === 'visibility' && !massUpdateValue) || (massUpdateType === 'promo' && !massUpdateValue) || (massUpdateType === 'discount' && !massDiscount.discount_adult && !massDiscount.discount_single && !massDiscount.discount_child_bed && !massDiscount.discount_child_nobed) || (massUpdateType === 'price' && !massPrice.price_adult && !massPrice.price_single && !massPrice.price_child && !massPrice.price_child_nobed && !massPrice.price_infant)}
               className="bg-orange-500 hover:bg-orange-600"
             >
               {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -3244,21 +3228,14 @@ export default function EditTourPage() {
                   </td>
                   {/* วางขาย */}
                   <td className="px-2 py-1 text-center">
-                    {isEditing ? (
-                      <select
-                        value={period.sale_status || 'available'}
-                        onChange={(e) => handleInlineUpdate(period.id, 'sale_status', e.target.value)}
-                        className={`px-1 py-1 border rounded text-xs ${getSaleStatusColor(period.sale_status)}`}
-                      >
-                        {Object.entries(SALE_STATUS).map(([key, label]) => (
-                          <option key={key} value={key}>{label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className={`text-sm px-2 py-0.5 rounded ${getSaleStatusColor(period.sale_status)}`}>
-                        {SALE_STATUS[period.sale_status as keyof typeof SALE_STATUS] || period.sale_status}
-                      </span>
-                    )}
+                    {(() => {
+                      const computed = computeSaleStatus(Math.max(0, period.capacity - period.booked));
+                      return (
+                        <span className={`text-sm px-2 py-0.5 rounded ${getSaleStatusColor(computed)}`}>
+                          {SALE_STATUS[computed]}
+                        </span>
+                      );
+                    })()}
                   </td>
                   {/* ผู้ใหญ่(2-3) */}
                   <td className="px-1 py-1">
@@ -3581,7 +3558,14 @@ export default function EditTourPage() {
                     <span className="text-xs text-green-600">On</span>
                   </td>
                   <td className="px-2 py-1 text-center">
-                    <span className="text-xs text-green-600">พร้อม</span>
+                    {(() => {
+                      const status = computeSaleStatus(rowData.capacity);
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded ${getSaleStatusColor(status)}`}>
+                          {SALE_STATUS[status]}
+                        </span>
+                      );
+                    })()}
                   </td>
                   {/* ผู้ใหญ่(2-3) */}
                   <td className="px-1 py-1">
