@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { Button, Card, Input, Select, SearchableSelect } from '@/components/ui';
 import {
   ImageIcon,
@@ -20,6 +20,96 @@ import {
   Package,
 } from 'lucide-react';
 import { galleryApi, countriesApi, citiesApi, GalleryImage, Country, City } from '@/lib/api';
+
+// ─── Memoized Image Card ──────────────────────────────────────────
+const ImageCard = memo(function ImageCard({
+  image,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+  onPreview,
+}: {
+  image: GalleryImage;
+  onEdit: (image: GalleryImage) => void;
+  onToggleStatus: (image: GalleryImage) => void;
+  onDelete: (image: GalleryImage) => void;
+  onPreview: (image: GalleryImage) => void;
+}) {
+  return (
+    <Card className="overflow-hidden group relative">
+      <div
+        className="aspect-[3/2] bg-gray-100 cursor-pointer"
+        onClick={() => onPreview(image)}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image.thumbnail_url || image.url}
+          alt={image.alt || image.filename}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+        {!image.is_active && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <span className="text-white text-sm">ปิดใช้งาน</span>
+          </div>
+        )}
+      </div>
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+        <div className="flex gap-2">
+          <button onClick={() => onEdit(image)} className="p-2 bg-white rounded-full hover:bg-gray-100">
+            <Edit className="w-4 h-4 text-gray-700" />
+          </button>
+          <button onClick={() => onToggleStatus(image)} className="p-2 bg-white rounded-full hover:bg-gray-100">
+            {image.is_active ? <EyeOff className="w-4 h-4 text-gray-700" /> : <Eye className="w-4 h-4 text-green-600" />}
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(image); }} className="p-2 bg-white rounded-full hover:bg-gray-100">
+            <Trash2 className="w-4 h-4 text-red-500" />
+          </button>
+        </div>
+      </div>
+      <div className="p-2">
+        <p className="text-xs text-gray-600 truncate">{image.filename}</p>
+        <div className="flex items-center gap-1 mt-1 flex-wrap">
+          {image.country && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+              {image.country.name_th || image.country.name_en}
+            </span>
+          )}
+          {image.city && (
+            <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+              {image.city.name_th || image.city.name_en}
+            </span>
+          )}
+        </div>
+        {image.tags && image.tags.length > 0 && (
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            {image.tags.slice(0, 2).map((tag, i) => (
+              <span key={i} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                #{tag}
+              </span>
+            ))}
+            {image.tags.length > 2 && (
+              <span className="text-xs text-gray-400">+{image.tags.length - 2}</span>
+            )}
+          </div>
+        )}
+        <div className="mt-1.5">
+          {(image.tours_count ?? 0) > 0 ? (
+            <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded">
+              <Package className="w-3 h-3" />
+              {image.tours_count} โปรแกรม
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
+              <Package className="w-3 h-3" />
+              ไม่มีโปรแกรม
+            </span>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+});
 
 export default function GalleryPage() {
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -94,7 +184,7 @@ export default function GalleryPage() {
     }
   }, [page, search, filterCountry, filterCity, filterStatus]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const response = await galleryApi.getStatistics();
       if (response.success) {
@@ -103,7 +193,7 @@ export default function GalleryPage() {
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchImages();
@@ -133,7 +223,7 @@ export default function GalleryPage() {
       }
     };
     loadData();
-  }, []);
+  }, [fetchStats]);
 
   // Load cities when country changes (for filters)
   useEffect(() => {
@@ -264,14 +354,16 @@ export default function GalleryPage() {
     }
   };
 
-  const handleEdit = (image: GalleryImage) => {
+  const handleEdit = useCallback((image: GalleryImage) => {
     setEditImage(image);
     setEditAlt(image.alt || '');
     setEditCaption(image.caption || '');
     setEditTags(image.tags?.join(', ') || '');
     setEditCountry(image.country_id?.toString() || '');
     setEditCity(image.city_id?.toString() || '');
-  };
+  }, []);
+
+  const handlePreview = useCallback((image: GalleryImage) => setPreviewImage(image), []);
 
   const handleSaveEdit = async () => {
     if (!editImage) return;
@@ -296,16 +388,16 @@ export default function GalleryPage() {
     }
   };
 
-  const handleToggleStatus = async (image: GalleryImage) => {
+  const handleToggleStatus = useCallback(async (image: GalleryImage) => {
     try {
       await galleryApi.toggleStatus(image.id);
       fetchImages();
     } catch (error) {
       console.error('Failed to toggle status:', error);
     }
-  };
+  }, [fetchImages]);
 
-  const handleDelete = async (image: GalleryImage) => {
+  const handleDelete = useCallback(async (image: GalleryImage) => {
     if (!confirm(`ต้องการลบรูป "${image.filename}" หรือไม่?`)) return;
     
     try {
@@ -319,7 +411,7 @@ export default function GalleryPage() {
       console.error('Failed to delete:', error);
       alert('ลบไม่สำเร็จ: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
-  };
+  }, [fetchImages, fetchStats]);
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
@@ -476,98 +568,14 @@ export default function GalleryPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {images.map((image) => (
-              <Card key={image.id} className="overflow-hidden group relative">
-                <div 
-                  className="aspect-[3/2] bg-gray-100 cursor-pointer"
-                  onClick={() => setPreviewImage(image)}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={image.thumbnail_url || image.url}
-                    alt={image.alt || image.filename}
-                    className="w-full h-full object-cover"
-                  />
-                  {!image.is_active && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="text-white text-sm">ปิดใช้งาน</span>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Overlay actions */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(image)}
-                      className="p-2 bg-white rounded-full hover:bg-gray-100"
-                    >
-                      <Edit className="w-4 h-4 text-gray-700" />
-                    </button>
-                    <button
-                      onClick={() => handleToggleStatus(image)}
-                      className="p-2 bg-white rounded-full hover:bg-gray-100"
-                    >
-                      {image.is_active ? (
-                        <EyeOff className="w-4 h-4 text-gray-700" />
-                      ) : (
-                        <Eye className="w-4 h-4 text-green-600" />
-                      )}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(image);
-                      }}
-                      className="p-2 bg-white rounded-full hover:bg-gray-100"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Info */}
-                <div className="p-2">
-                  <p className="text-xs text-gray-600 truncate">{image.filename}</p>
-                  <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    {image.country && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                        {image.country.name_th || image.country.name_en}
-                      </span>
-                    )}
-                    {image.city && (
-                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
-                        {image.city.name_th || image.city.name_en}
-                      </span>
-                    )}
-                  </div>
-                  {image.tags && image.tags.length > 0 && (
-                    <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      {image.tags.slice(0, 2).map((tag, i) => (
-                        <span key={i} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                          #{tag}
-                        </span>
-                      ))}
-                      {image.tags.length > 2 && (
-                        <span className="text-xs text-gray-400">+{image.tags.length - 2}</span>
-                      )}
-                    </div>
-                  )}
-                  {/* Tours count badge */}
-                  <div className="mt-1.5">
-                    {(image.tours_count ?? 0) > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded">
-                        <Package className="w-3 h-3" />
-                        {image.tours_count} โปรแกรม
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
-                        <Package className="w-3 h-3" />
-                        ไม่มีโปรแกรม
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </Card>
+              <ImageCard
+                key={image.id}
+                image={image}
+                onEdit={handleEdit}
+                onToggleStatus={handleToggleStatus}
+                onDelete={handleDelete}
+                onPreview={handlePreview}
+              />
             ))}
           </div>
 
