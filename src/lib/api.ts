@@ -3948,7 +3948,8 @@ export const domesticTourSettingsApi = {
 
 export interface TourReviewAdmin {
   id: number;
-  tour_id: number;
+  tour_id: number | null;
+  program_name: string | null;
   user_id: number | null;
   order_id: number | null;
   reviewer_name: string;
@@ -4052,7 +4053,7 @@ export const tourReviewApi = {
   reject: (id: number, reason: string) =>
     apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reject`, {
       method: 'PATCH',
-      body: JSON.stringify({ rejection_reason: reason }),
+      body: JSON.stringify({ reason }),
     }),
 
   reply: (id: number, replyText: string) =>

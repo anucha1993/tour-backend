@@ -82,10 +82,12 @@ export default function ReviewsPage() {
   const [tourSearch, setTourSearch] = useState('');
   const [tourResults, setTourResults] = useState<Tour[]>([]);
   const [tourSearching, setTourSearching] = useState(false);
+  const [useCustomProgram, setUseCustomProgram] = useState(false);
   const tourSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [createForm, setCreateForm] = useState({
-    tour_id: 0,
+    tour_id: null as number | null,
     tour_title: '',
+    program_name: '',
     reviewer_name: '',
     rating: 5,
     comment: '',
@@ -104,6 +106,7 @@ export default function ReviewsPage() {
   // Edit review modal state
   const [editingReview, setEditingReview] = useState<TourReviewAdmin | null>(null);
   const [editForm, setEditForm] = useState({
+    program_name: '',
     reviewer_name: '',
     rating: 5,
     comment: '',
@@ -263,14 +266,14 @@ export default function ReviewsPage() {
   };
 
   const handleSelectTour = (tour: Tour) => {
-    setCreateForm(f => ({ ...f, tour_id: tour.id, tour_title: tour.title }));
+    setCreateForm(f => ({ ...f, tour_id: tour.id, tour_title: tour.title, program_name: '' }));
     setTourSearch('');
     setTourResults([]);
   };
 
   const resetCreateForm = () => {
     setCreateForm({
-      tour_id: 0, tour_title: '', reviewer_name: '', rating: 5, comment: '',
+      tour_id: null, tour_title: '', program_name: '', reviewer_name: '', rating: 5, comment: '',
       approved_by_customer: true, tags: [],
       category_ratings: { guide: 5, food: 5, hotel: 5, value: 5, program_accuracy: 5, would_return: 5 },
       review_source: 'assisted', tour_type: 'individual', status: 'approved',
@@ -278,19 +281,31 @@ export default function ReviewsPage() {
     setScreenshotFile(null);
     setReviewImages([]);
     setAvatarFile(null);
+    setUseCustomProgram(false);
     setTourSearch('');
     setTourResults([]);
   };
 
   const handleCreateReview = async () => {
-    if (!createForm.tour_id || !createForm.reviewer_name.trim() || !createForm.comment.trim()) {
+    const hasTourRef = !!createForm.tour_id;
+    const hasProgramName = !!createForm.program_name.trim();
+    if (((useCustomProgram && !hasProgramName) || (!useCustomProgram && !hasTourRef)) || !createForm.reviewer_name.trim() || !createForm.comment.trim()) {
       alert('กรุณากรอกข้อมูลให้ครบ');
+      return;
+    }
+    if (!hasTourRef && (createForm.tags || []).length === 0) {
+      alert('กรุณาเพิ่มแท็กโปรแกรมอย่างน้อย 1 แท็ก เพื่อใช้แสดงรีวิวตามแท็กโปรแกรม');
       return;
     }
     setCreateSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append('tour_id', String(createForm.tour_id));
+      if (!useCustomProgram && createForm.tour_id) {
+        fd.append('tour_id', String(createForm.tour_id));
+      }
+      if (useCustomProgram && createForm.program_name.trim()) {
+        fd.append('program_name', createForm.program_name.trim());
+      }
       fd.append('reviewer_name', createForm.reviewer_name);
       // Compute average rating from category ratings
       const catVals = Object.values(createForm.category_ratings).map(Number);
@@ -339,6 +354,7 @@ export default function ReviewsPage() {
         })
       : [];
     setEditForm({
+      program_name: review.program_name || '',
       reviewer_name: review.reviewer_name || '',
       rating: review.rating || 5,
       comment: review.comment || '',
@@ -358,6 +374,7 @@ export default function ReviewsPage() {
   const closeEditModal = () => {
     setEditingReview(null);
     setEditForm({
+      program_name: '',
       reviewer_name: '',
       rating: 5,
       comment: '',
@@ -381,6 +398,9 @@ export default function ReviewsPage() {
     setEditSubmitting(true);
     try {
       const fd = new FormData();
+      if (editForm.program_name.trim()) {
+        fd.append('program_name', editForm.program_name.trim());
+      }
       fd.append('reviewer_name', editForm.reviewer_name);
       // Compute average rating from category ratings
       const editCatVals = Object.values(editForm.category_ratings).map(Number);
@@ -619,7 +639,7 @@ export default function ReviewsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="max-w-[200px]">
-                          <div className="truncate text-sm text-gray-700">{review.tour?.title || '-'}</div>
+                          <div className="truncate text-sm text-gray-700">{review.tour?.title || review.program_name || '-'}</div>
                           {review.tour?.tour_code && (
                             <div className="text-[10px] text-gray-400 mt-0.5">รหัส: {review.tour.tour_code}</div>
                           )}
@@ -840,42 +860,75 @@ export default function ReviewsPage() {
             <div className="p-6 space-y-5">
               {/* Tour Search */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">เลือกทัวร์ <span className="text-red-500">*</span></label>
-                {createForm.tour_id ? (
-                  <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                    <div className="flex-1 text-sm text-blue-800 font-medium">{createForm.tour_title}</div>
-                    <button onClick={() => setCreateForm(f => ({ ...f, tour_id: 0, tour_title: '' }))} className="p-1 hover:bg-blue-100 rounded">
-                      <X className="w-4 h-4 text-blue-500" />
-                    </button>
-                  </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">เลือกทัวร์หรือกำหนดเอง <span className="text-red-500">*</span></label>
+                <label className="inline-flex items-center gap-2 mb-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={useCustomProgram}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setUseCustomProgram(checked);
+                      if (checked) {
+                        setCreateForm(f => ({ ...f, tour_id: null, tour_title: '' }));
+                        setTourSearch('');
+                        setTourResults([]);
+                      } else {
+                        setCreateForm(f => ({ ...f, program_name: '' }));
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">กำหนดชื่อโปรแกรมเอง (กรณีไม่มีโปรแกรมในระบบ)</span>
+                </label>
+
+                {!useCustomProgram ? (
+                  createForm.tour_id ? (
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                      <div className="flex-1 text-sm text-blue-800 font-medium">{createForm.tour_title}</div>
+                      <button onClick={() => setCreateForm(f => ({ ...f, tour_id: null, tour_title: '' }))} className="p-1 hover:bg-blue-100 rounded">
+                        <X className="w-4 h-4 text-blue-500" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        value={tourSearch}
+                        onChange={(e) => handleTourSearch(e.target.value)}
+                        placeholder="พิมพ์ชื่อทัวร์หรือรหัสทัวร์เพื่อค้นหา..."
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {(tourResults.length > 0 || tourSearching) && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+                          {tourSearching ? (
+                            <div className="px-4 py-3 text-sm text-gray-400 text-center">กำลังค้นหา...</div>
+                          ) : (
+                            tourResults.map(t => (
+                              <div
+                                key={t.id}
+                                onClick={() => handleSelectTour(t)}
+                                className="px-4 py-2.5 hover:bg-blue-50 cursor-pointer text-sm border-b last:border-0"
+                              >
+                                <div className="font-medium text-gray-900">{t.title}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">รหัส: {t.tour_code}</div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
                 ) : (
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <div>
                     <input
                       type="text"
-                      value={tourSearch}
-                      onChange={(e) => handleTourSearch(e.target.value)}
-                      placeholder="พิมพ์ชื่อทัวร์หรือรหัสทัวร์เพื่อค้นหา..."
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={createForm.program_name}
+                      onChange={(e) => setCreateForm(f => ({ ...f, program_name: e.target.value }))}
+                      placeholder="กรณีไม่มีโปรแกรมนี้แล้ว ให้พิมพ์ชื่อโปรแกรมเอง"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    {(tourResults.length > 0 || tourSearching) && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
-                        {tourSearching ? (
-                          <div className="px-4 py-3 text-sm text-gray-400 text-center">กำลังค้นหา...</div>
-                        ) : (
-                          tourResults.map(t => (
-                            <div
-                              key={t.id}
-                              onClick={() => handleSelectTour(t)}
-                              className="px-4 py-2.5 hover:bg-blue-50 cursor-pointer text-sm border-b last:border-0"
-                            >
-                              <div className="font-medium text-gray-900">{t.title}</div>
-                              <div className="text-xs text-gray-500 mt-0.5">รหัส: {t.tour_code}</div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
+                    <p className="text-[10px] text-gray-400 mt-1">แนะนำให้เพิ่มแท็กโปรแกรมด้านล่าง เพื่อให้รีวิวไปแสดงในหน้าทัวร์ที่มีแท็กตรงกัน</p>
                   </div>
                 )}
               </div>
@@ -1196,7 +1249,7 @@ export default function ReviewsPage() {
               </button>
               <button
                 onClick={handleCreateReview}
-                disabled={createSubmitting || !createForm.tour_id || !createForm.reviewer_name.trim() || !createForm.comment.trim()}
+                disabled={createSubmitting || (useCustomProgram ? !createForm.program_name.trim() : !createForm.tour_id) || !createForm.reviewer_name.trim() || !createForm.comment.trim()}
                 className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 {createSubmitting ? (
@@ -1235,8 +1288,20 @@ export default function ReviewsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">ทัวร์</label>
                 <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                  <div className="flex-1 text-sm text-gray-700 font-medium">{editingReview.tour?.title || `Tour #${editingReview.tour_id}`}</div>
+                  <div className="flex-1 text-sm text-gray-700 font-medium">{editingReview.tour?.title || editingReview.program_name || (editingReview.tour_id ? `Tour #${editingReview.tour_id}` : 'ไม่ระบุโปรแกรม')}</div>
                 </div>
+                {!editingReview.tour && (
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">ชื่อโปรแกรม (แก้ไขได้)</label>
+                    <input
+                      type="text"
+                      value={editForm.program_name}
+                      onChange={(e) => setEditForm(f => ({ ...f, program_name: e.target.value }))}
+                      placeholder="ระบุชื่อโปรแกรม"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Reviewer Name + Avatar */}
