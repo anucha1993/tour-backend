@@ -132,6 +132,9 @@ function buildTimeList(times: string[]): string {
   return [...times].sort().join(',');
 }
 
+// Max length of sync_schedule column in DB (varchar(500) after migration 2026_04_23_000001)
+const SYNC_SCHEDULE_MAX_LEN = 500;
+
 // Helper: generate time-list from interval in minutes (e.g. 30 → every 30 min)
 function generateTimesFromInterval(intervalMinutes: number): string[] {
   if (intervalMinutes < 10 || intervalMinutes > 1440) return [];
@@ -423,7 +426,17 @@ export default function IntegrationSettingsPage() {
       setSaving(false);
       return;
     }
-    
+
+    // Guard: sync_schedule column is varchar(100). Reject over-long strings
+    // (e.g. จากช่วงเวลาถี่เกินไปจนสร้างรายการเวลาเยอะ) ก่อน hit API
+    if ((formData.sync_schedule || '').length > SYNC_SCHEDULE_MAX_LEN) {
+      setError(
+        `ตารางเวลา Sync ยาวเกินไป (${formData.sync_schedule.length}/${SYNC_SCHEDULE_MAX_LEN} ตัวอักษร) — กรุณาเลือกช่วงเวลาที่ห่างขึ้น (ขั้นต่ำ 90 นาที) หรือลบบางเวลาออก`
+      );
+      setSaving(false);
+      return;
+    }
+
     // Validate form data before saving
     if (formData.past_period_threshold_days < 0 || formData.past_period_threshold_days > 365) {
       setError('นับวันย้อนหลังต้องอยู่ระหว่าง 0-365 วัน');

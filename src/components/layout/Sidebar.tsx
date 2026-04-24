@@ -379,6 +379,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     href: '/dashboard/website/contact-settings',
     icon: Settings,
       },
+      {
+        title: 'Contact Popup',
+        href: '/dashboard/website/contact-popup',
+        icon: MessageSquare,
+      },
       
     ],
   },
