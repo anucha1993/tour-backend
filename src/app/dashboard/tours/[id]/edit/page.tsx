@@ -641,6 +641,7 @@ export default function EditTourPage() {
   const showNewPeriodRow = newPeriodRows.length > 0;
   const [periodForm, setPeriodForm] = useState<PeriodFormData>(emptyPeriodForm);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [massDeleteConfirm, setMassDeleteConfirm] = useState(false);
   const [selectedPeriodIds, setSelectedPeriodIds] = useState<number[]>([]);
   const [editingRowId, setEditingRowId] = useState<number | null>(null);
   const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'promo' | 'discount' | 'price'>('visibility');
@@ -1574,6 +1575,27 @@ export default function EditTourPage() {
       setDeleteConfirm(null);
     } catch (err) {
       console.error('Failed to delete period:', err);
+    }
+  };
+
+  const handleMassDelete = async () => {
+    if (!tour || selectedPeriodIds.length === 0) return;
+    try {
+      setSavingPeriod(true);
+      const results = await Promise.allSettled(
+        selectedPeriodIds.map((id) => periodsApi.delete(tour.id, id))
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) {
+        console.error(`Failed to delete ${failed} period(s)`);
+      }
+      setSelectedPeriodIds([]);
+      setMassDeleteConfirm(false);
+      fetchPeriods();
+    } catch (err) {
+      console.error('Failed to mass-delete periods:', err);
+    } finally {
+      setSavingPeriod(false);
     }
   };
 
@@ -2927,6 +2949,16 @@ export default function EditTourPage() {
                 {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                 คัดลอก {selectedPeriodIds.length} รอบ
               </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setMassDeleteConfirm(true)}
+                disabled={savingPeriod}
+                className="bg-red-500 hover:bg-red-600 text-white"
+              >
+                <Trash2 className="w-4 h-4" />
+                ลบ {selectedPeriodIds.length} รอบ
+              </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPeriodIds([])}>
                 <X className="w-4 h-4" />
                 ยกเลิกเลือก
@@ -3783,6 +3815,33 @@ export default function EditTourPage() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>ยกเลิก</Button>
               <Button variant="danger" onClick={() => handleDeletePeriod(deleteConfirm)}>ลบ</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Mass Delete Confirm */}
+      {massDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">ยืนยันการลบหลายรอบ</h3>
+            <p className="text-gray-600 mb-4">
+              คุณต้องการลบรอบเดินทางที่เลือกทั้งหมด{' '}
+              <span className="font-semibold text-red-600">{selectedPeriodIds.length}</span> รอบ
+              หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setMassDeleteConfirm(false)}
+                disabled={savingPeriod}
+              >
+                ยกเลิก
+              </Button>
+              <Button variant="danger" onClick={handleMassDelete} disabled={savingPeriod}>
+                {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                ลบทั้งหมด
+              </Button>
             </div>
           </Card>
         </div>
