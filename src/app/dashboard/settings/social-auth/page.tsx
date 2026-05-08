@@ -180,6 +180,14 @@ export default function SocialAuthSettingsPage() {
               onChange={(e) => setConfig(prev => ({ ...prev, google_client_id: e.target.value }))}
               placeholder={config.google_client_id_masked || 'Google OAuth Client ID'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              name="google-oauth-client-id-no-autofill"
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
             {config.has_google_client_id && !config.google_client_id && (
               <p className="text-xs text-green-600 mt-1">✓ กำหนดค่าแล้ว — เว้นว่างไว้หากไม่ต้องการเปลี่ยน</p>
@@ -198,6 +206,14 @@ export default function SocialAuthSettingsPage() {
                 onChange={(e) => setConfig(prev => ({ ...prev, google_client_secret: e.target.value }))}
                 placeholder={config.google_client_secret_masked || 'Google OAuth Client Secret'}
                 className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                name="google-oauth-client-secret-no-autofill"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
               />
               <button
                 type="button"
@@ -264,6 +280,14 @@ export default function SocialAuthSettingsPage() {
               onChange={(e) => setConfig(prev => ({ ...prev, facebook_app_id: e.target.value }))}
               placeholder={config.facebook_app_id_masked || 'Facebook App ID'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              name="facebook-app-id-no-autofill"
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
             {config.has_facebook_app_id && !config.facebook_app_id && (
               <p className="text-xs text-green-600 mt-1">✓ กำหนดค่าแล้ว — เว้นว่างไว้หากไม่ต้องการเปลี่ยน</p>
@@ -282,6 +306,14 @@ export default function SocialAuthSettingsPage() {
                 onChange={(e) => setConfig(prev => ({ ...prev, facebook_app_secret: e.target.value }))}
                 placeholder={config.facebook_app_secret_masked || 'Facebook App Secret'}
                 className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                name="facebook-app-secret-no-autofill"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
               />
               <button
                 type="button"
@@ -348,6 +380,14 @@ export default function SocialAuthSettingsPage() {
               onChange={(e) => setConfig(prev => ({ ...prev, line_channel_id: e.target.value }))}
               placeholder={config.line_channel_id_masked || 'LINE Login Channel ID'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              name="line-channel-id-no-autofill"
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
             {config.has_line_channel_id && !config.line_channel_id && (
               <p className="text-xs text-green-600 mt-1">✓ กำหนดค่าแล้ว — เว้นว่างไว้หากไม่ต้องการเปลี่ยน</p>
@@ -366,6 +406,14 @@ export default function SocialAuthSettingsPage() {
                 onChange={(e) => setConfig(prev => ({ ...prev, line_channel_secret: e.target.value }))}
                 placeholder={config.line_channel_secret_masked || 'LINE Login Channel Secret'}
                 className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                name="line-channel-secret-no-autofill"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
               />
               <button
                 type="button"
