@@ -3156,6 +3156,7 @@ export default function EditTourPage() {
                     className="rounded w-3.5 h-3.5"
                   />
                 </th>
+                <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">ID</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">วันเริ่ม</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">วันสิ้นสุด</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">แสดง</th>
@@ -3205,6 +3206,19 @@ export default function EditTourPage() {
                       onChange={() => togglePeriodSelect(period.id)}
                       className="rounded w-3.5 h-3.5"
                     />
+                  </td>
+                  {/* Period ID (for outbound booking test) */}
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(String(period.id));
+                      }}
+                      title="คลิกเพื่อคัดลอก Period ID"
+                      className="text-xs font-mono text-gray-600 hover:text-blue-600 hover:underline"
+                    >
+                      #{period.id}
+                    </button>
                   </td>
                   {/* วันเริ่ม */}
                   <td className="px-2 py-1">

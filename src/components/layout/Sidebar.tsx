@@ -94,9 +94,20 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
   },
   {
     title: 'ใบจอง',
-    href: '/dashboard/bookings',
     icon: FileText,
     badge: newBookingCount,
+    children: [
+      {
+        title: 'ทั้งหมด',
+        href: '/dashboard/bookings',
+        icon: FileText,
+      },
+      {
+        title: 'ทดสอบจอง Outbound',
+        href: '/dashboard/bookings/outbound-test',
+        icon: Cloud,
+      },
+    ],
   },
   {
     title: 'ทัวร์',

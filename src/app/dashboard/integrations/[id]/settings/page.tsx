@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { integrationsApi, type WholesalerApiConfig } from '@/lib/api';
+import BookingProviderSettings from './BookingProviderSettings';
 
 // Default form data structure
 const defaultFormData = {
@@ -2249,9 +2250,17 @@ export default function IntegrationSettingsPage() {
 
           {/* Booking Flow */}
           {activeTab === 'booking' && (
+            <div className="space-y-6">
+              {/* Outbound Booking Provider (Zego / Manual / etc.) */}
+              <Card className="p-4 sm:p-6">
+                <h2 className="text-base sm:text-lg font-semibold mb-2">Outbound Booking Provider</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mb-6">เลือก Provider และตั้งค่า credentials สำหรับส่งคำขอจองไปยัง Wholesaler</p>
+                <BookingProviderSettings integrationId={formData.id} />
+              </Card>
+
             <Card className="p-4 sm:p-6">
-              <h2 className="text-base sm:text-lg font-semibold mb-2">Booking Flow</h2>
-              <p className="text-xs sm:text-sm text-gray-500 mb-6">ตั้งค่าความสามารถของ API สำหรับการจอง</p>
+              <h2 className="text-base sm:text-lg font-semibold mb-2">Booking Flow (Legacy)</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">ตั้งค่าความสามารถของ API สำหรับการจอง (ตัวเลือกเดิม — จะถูกแทนที่ด้วย Provider ด้านบนในอนาคต)</p>
               
               <div className="space-y-6">
                 {/* Features */}
@@ -2355,6 +2364,7 @@ export default function IntegrationSettingsPage() {
                 </div>
               </div>
             </Card>
+            </div>
           )}
 
           {/* PDF Branding */}
