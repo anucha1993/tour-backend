@@ -5547,6 +5547,10 @@ export interface AdminBooking {
   source: 'website' | 'flash_sale' | 'manual';
   admin_note: string | null;
   cancelled_by: 'customer' | 'admin' | null;
+  // Outbound integration (set when the booking is sent to a wholesaler API)
+  provider?: string | null;
+  provider_status?: string | null;
+  provider_booking_ref?: string | null;
   created_at: string;
   updated_at: string;
   member?: {
@@ -5637,7 +5641,7 @@ export const bookingsApi = {
     admin_note?: string;
     status?: string;
   }) =>
-    apiRequest<{ success: boolean; message: string; booking: AdminBooking }>(
+    apiRequest<{ success: boolean; message: string; booking: AdminBooking; outbound_attempted?: boolean; is_confirmed_by_provider?: boolean }>(
       '/bookings',
       { method: 'POST', body: JSON.stringify(data) }
     ),

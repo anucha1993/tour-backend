@@ -342,7 +342,7 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
     setError('');
     setSubmitting(true);
     try {
-      await bookingsApi.create({
+      const res = await bookingsApi.create({
         tour_id: selectedTour.id,
         period_id: selectedPeriodId,
         first_name: firstName,
@@ -368,6 +368,13 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
         admin_note: adminNote || undefined,
         status,
       });
+      if (res?.outbound_attempted) {
+        if (res.is_confirmed_by_provider && res.booking?.provider_booking_ref) {
+          alert(`สร้าง booking + ยืนยันโดย ${res.booking.provider ?? 'provider'} แล้ว\nRef: ${res.booking.provider_booking_ref}`);
+        } else if (res.booking?.provider_status === 'failed') {
+          alert(`สร้าง booking สำเร็จ แต่ส่งไป provider ไม่สำเร็จ — กรุณาตรวจสอบและทำ manual booking`);
+        }
+      }
       onCreated();
     } catch (err) {
       setError((err as Error).message || 'เกิดข้อผิดพลาด');
