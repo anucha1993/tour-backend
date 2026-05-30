@@ -368,10 +368,13 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
         admin_note: adminNote || undefined,
         status,
       });
-      if (res?.outbound_attempted) {
-        if (res.is_confirmed_by_provider && res.booking?.provider_booking_ref) {
-          alert(`สร้าง booking + ยืนยันโดย ${res.booking.provider ?? 'provider'} แล้ว\nRef: ${res.booking.provider_booking_ref}`);
-        } else if (res.booking?.provider_status === 'failed') {
+      // Backend returns the outbound fields at top level (not wrapped in `data`),
+      // so cast to `any` to read them without fighting the generic ApiResponse<T> typing.
+      const r = res as any;
+      if (r?.outbound_attempted) {
+        if (r.is_confirmed_by_provider && r.booking?.provider_booking_ref) {
+          alert(`สร้าง booking + ยืนยันโดย ${r.booking.provider ?? 'provider'} แล้ว\nRef: ${r.booking.provider_booking_ref}`);
+        } else if (r.booking?.provider_status === 'failed') {
           alert(`สร้าง booking สำเร็จ แต่ส่งไป provider ไม่สำเร็จ — กรุณาตรวจสอบและทำ manual booking`);
         }
       }
