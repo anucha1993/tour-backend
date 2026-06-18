@@ -24,6 +24,7 @@ import {
   Download,
   AlertCircle,
   Percent,
+  ShoppingCart,
 } from 'lucide-react';
 
 interface Period {
@@ -109,6 +110,12 @@ interface TourCodeLookup {
   pdf_url: string | null;
 }
 
+// Booking modal target
+interface BookingTarget {
+  tour: Tour;
+  period: Period;
+}
+
 // Country list with Thai names
 const COUNTRY_OPTIONS = [
   { value: '', label: 'ทั้งหมด', labelTh: 'ทั้งหมด' },
@@ -182,6 +189,14 @@ export default function SalesSearchPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [syncResult, setSyncResult] = useState<{ success: number; failed: number; message: string } | null>(null);
+
+  // Booking modal state
+  const [bookingTarget, setBookingTarget] = useState<BookingTarget | null>(null);
+  const [bookingStep, setBookingStep] = useState<'form' | 'submitting' | 'success'>('form');
+  const [bookingResult, setBookingResult] = useState<Record<string, unknown> | null>(null);
+  const [bookingError, setBookingError] = useState('');
+  const [bookingPax, setBookingPax] = useState({ adult: 1, adult_single: 0, child_bed: 0, child_nobed: 0, infant: 0 });
+  const [bookingCustomer, setBookingCustomer] = useState({ first_name: '', last_name: '', email: '', phone: '', sale_code: '', special_request: '' });
 
   // Generate month options for the next 12 months
   const generateMonthOptions = () => {
@@ -941,6 +956,121 @@ export default function SalesSearchPage() {
       return () => clearTimeout(timer);
     }
   }, [syncResult]);
+
+  // Booking modal handlers
+  const openBookingModal = (tour: Tour, period: Period) => {
+    setBookingTarget({ tour, period });
+    setBookingStep('form');
+    setBookingResult(null);
+    setBookingError('');
+    setBookingPax({ adult: 1, adult_single: 0, child_bed: 0, child_nobed: 0, infant: 0 });
+    setBookingCustomer({ first_name: '', last_name: '', email: '', phone: '', sale_code: '', special_request: '' });
+  };
+
+  const closeBookingModal = () => {
+    setBookingTarget(null);
+    setBookingStep('form');
+    setBookingError('');
+  };
+
+  const handleBookingSubmit = async () => {
+    if (!bookingTarget) return;
+    const totalPax = bookingPax.adult + bookingPax.adult_single + bookingPax.child_bed + bookingPax.child_nobed + bookingPax.infant;
+    if (totalPax < 1) { setBookingError('กรุณาระบุผู้เดินทางอย่างน้อย 1 คน'); return; }
+    if (!bookingCustomer.first_name || !bookingCustomer.last_name) { setBookingError('กรุณากรอกชื่อและนามสกุลผู้ติดต่อ'); return; }
+    setBookingStep('submitting');
+    setBookingError('');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const authHeaders: Record<string, string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+    try {
+      const { tour, period } = bookingTarget;
+      const wholesalerTourCode = tour.wholesaler_tour_code || tour._raw?.ProductCode || tour._raw?.tour_code || '';
+      // 1. Ensure synced — get local tour_id
+      let tourId: number | null = wholesalerTourCode ? (tourCodeMap[wholesalerTourCode]?.tour_id ?? null) : null;
+      if (!tourId) {
+        if (!filters.integration_id) throw new Error('ไม่พบ Integration ID');
+        const syncResp = await fetch(`${API_BASE_URL}/integrations/${filters.integration_id}/tours/sync-selected`, {
+          method: 'POST', headers: authHeaders, body: JSON.stringify({ tours: [tour] }),
+        });
+        if (!syncResp.ok) throw new Error('ไม่สามารถ Sync ทัวร์ได้ กรุณาลอง Sync ทัวร์ก่อน');
+        if (wholesalerTourCode) {
+          const lookupResp = await fetch(`${API_BASE_URL}/tours/lookup-codes`, {
+            method: 'POST', headers: authHeaders,
+            body: JSON.stringify({ wholesaler_tour_codes: [{ wholesaler_tour_code: wholesalerTourCode }] }),
+          });
+          if (lookupResp.ok) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const lookupData = await lookupResp.json() as any;
+            if (lookupData.success && lookupData.data[wholesalerTourCode]?.synced) {
+              const newSync = lookupData.data[wholesalerTourCode] as TourCodeLookup;
+              tourId = newSync.tour_id;
+              setTourCodeMap(prev => ({ ...prev, [wholesalerTourCode]: newSync }));
+            }
+          }
+        }
+      }
+      if (!tourId) throw new Error('ไม่พบทัวร์ในระบบ กรุณา Sync ทัวร์ก่อนจอง');
+      // 2. Find local period_id
+      const periodsResp = await fetch(`${API_BASE_URL}/tours/${tourId}/periods`, {
+        headers: { 'Accept': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      });
+      if (!periodsResp.ok) throw new Error('ไม่สามารถดึงข้อมูล Period ได้');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const periodsData = await periodsResp.json() as any;
+      const localPeriods: Array<{ id: number; external_id?: string | number; start_date?: string }> =
+        Array.isArray(periodsData) ? periodsData : (periodsData.data || periodsData.periods || []);
+      const externalPeriodId = period.external_id;
+      const depRaw = period.start_date || period.departure_date || period._raw?.PeriodStartDate || period._raw?.DepartureDate || period._raw?.departureDate || '';
+      const depStr = depRaw ? new Date(depRaw).toISOString().split('T')[0] : '';
+      const matched =
+        (externalPeriodId ? localPeriods.find(lp => String(lp.external_id) === String(externalPeriodId)) : undefined)
+        ?? (depStr ? localPeriods.find(lp => lp.start_date?.startsWith(depStr)) : undefined);
+      if (!matched) throw new Error(`ไม่พบ Period ในระบบ (${depStr || externalPeriodId || '?'})\nกรุณา Sync ทัวร์ใหม่`);
+      // 3. Quote
+      const quoteResp = await fetch(`${API_BASE_URL}/bookings/outbound/quote`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({
+          period_id: matched.id,
+          pax: { adult: bookingPax.adult, adult_single: bookingPax.adult_single, child_bed: bookingPax.child_bed, child_nobed: bookingPax.child_nobed, infant: bookingPax.infant },
+          customer: { first_name: bookingCustomer.first_name, last_name: bookingCustomer.last_name, email: bookingCustomer.email || null, phone: bookingCustomer.phone || null },
+        }),
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const quoteData = await quoteResp.json() as any;
+      if (!quoteResp.ok) throw new Error((quoteData.message as string) || 'Quote ล้มเหลว');
+      const bookingId = quoteData.id as number;
+      // 4. Hold — synthesize passengers
+      const passengers: Array<Record<string, unknown>> = [];
+      let paxIdx = 0;
+      for (let i = 0; i < bookingPax.adult; i++, paxIdx++) {
+        const isLead = paxIdx === 0;
+        passengers.push({ type: 'adult', first_name: isLead ? bookingCustomer.first_name : 'PAX', last_name: isLead ? bookingCustomer.last_name : String(paxIdx + 1), is_lead: isLead, ...(isLead && bookingCustomer.email ? { email: bookingCustomer.email } : {}), ...(isLead && bookingCustomer.phone ? { phone: bookingCustomer.phone } : {}) });
+      }
+      for (let i = 0; i < bookingPax.adult_single; i++, paxIdx++) passengers.push({ type: 'adult', first_name: 'PAX', last_name: String(paxIdx + 1), room_type: 'SGL' });
+      for (let i = 0; i < bookingPax.child_bed; i++) passengers.push({ type: 'child', first_name: 'CHILD', last_name: String(i + 1) });
+      for (let i = 0; i < bookingPax.child_nobed; i++) passengers.push({ type: 'child', first_name: 'CHILD', last_name: String(i + 1) });
+      for (let i = 0; i < bookingPax.infant; i++) passengers.push({ type: 'infant', first_name: 'INF', last_name: String(i + 1) });
+      const holdResp = await fetch(`${API_BASE_URL}/bookings/outbound/${bookingId}/hold`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify({ passengers }),
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const holdData = await holdResp.json() as any;
+      if (!holdResp.ok) throw new Error((holdData.message as string) || 'Hold ล้มเหลว');
+      // 5. Confirm
+      const confirmResp = await fetch(`${API_BASE_URL}/bookings/outbound/${bookingId}/confirm`, {
+        method: 'POST', headers: authHeaders,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const confirmData = await confirmResp.json() as any;
+      if (!confirmResp.ok) throw new Error((confirmData.message as string) || 'Confirm ล้มเหลว');
+      setBookingResult(confirmData as Record<string, unknown>);
+      setBookingStep('success');
+    } catch (err) {
+      setBookingError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+      setBookingStep('form');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1775,9 +1905,9 @@ export default function SalesSearchPage() {
                           {/* ปุ่มจอง */}
                           <td className="px-2 py-3 text-center">
                             <button
-                              onClick={() => alert('ฟีเจอร์จองทัวร์กำลังพัฒนา')}
-                              className="p-2 rounded-lg transition-all bg-orange-100 hover:bg-orange-500 text-orange-500 hover:text-white hover:shadow-md"
-                              title="จองทัวร์"
+                              onClick={() => setExpandedTour(isExpanded ? null : index)}
+                              className="p-2 rounded-lg transition-all bg-indigo-100 hover:bg-indigo-500 text-indigo-500 hover:text-white hover:shadow-md"
+                              title="ดูรอบเดินทาง / จองทัวร์"
                             >
                               <Plane className="w-5 h-5" />
                             </button>
@@ -2079,7 +2209,14 @@ export default function SalesSearchPage() {
                                     )}
                                   </td>
                                   <td className="py-2">
-                                    <Button size="sm" disabled={available === 0}>จอง</Button>
+                                    <Button
+                                      size="sm"
+                                      disabled={available === 0}
+                                      onClick={() => { setExpandedTour(null); openBookingModal(tour, period); }}
+                                      className={available > 0 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
+                                    >
+                                      จอง
+                                    </Button>
                                   </td>
                                 </tr>
                               );
@@ -2099,6 +2236,171 @@ export default function SalesSearchPage() {
           </>
         )}
       </div>
+
+      {/* Booking Modal */}
+      {bookingTarget && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={closeBookingModal}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-4 border-b flex items-center justify-between bg-indigo-50 rounded-t-xl sticky top-0 z-10">
+              <div className="min-w-0 mr-3">
+                <h3 className="font-semibold text-indigo-900 flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 flex-shrink-0" />
+                  จองทัวร์ผ่าน Integration
+                </h3>
+                <p className="text-sm text-indigo-700 mt-0.5 truncate">
+                  {bookingTarget.tour.title || bookingTarget.tour._raw?.ProductName || ''}
+                </p>
+                <p className="text-xs text-indigo-600 mt-0.5">
+                  {(() => {
+                    const p = bookingTarget.period;
+                    const dep = p.start_date || p.departure_date || p._raw?.PeriodStartDate || p._raw?.DepartureDate || p._raw?.departureDate || '';
+                    const ret = p.return_date || p._raw?.PeriodEndDate || p._raw?.ReturnDate || p._raw?.returnDate || '';
+                    return dep ? `${formatDate(dep)}${ret ? ' → ' + formatDate(ret) : ''}` : '';
+                  })()}
+                </p>
+              </div>
+              <button onClick={closeBookingModal} className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors flex-shrink-0">
+                <X className="w-5 h-5 text-indigo-600" />
+              </button>
+            </div>
+
+            {bookingStep === 'success' && bookingResult ? (
+              /* Success Screen */
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Check className="w-8 h-8 text-green-600" />
+                </div>
+                <h4 className="text-lg font-bold text-gray-900 mb-1">จองสำเร็จ!</h4>
+                <p className="text-3xl font-mono font-bold text-indigo-600 mb-4">{String(bookingResult.booking_code || '')}</p>
+                <div className="bg-gray-50 rounded-lg p-4 text-left space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Provider Status</span>
+                    <span className={`font-medium px-2 py-0.5 rounded-full text-xs ${
+                      bookingResult.provider_status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                      bookingResult.provider_status === 'held' ? 'bg-blue-100 text-blue-700' :
+                      bookingResult.provider_status === 'failed' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {String(bookingResult.provider_status || bookingResult.status || 'pending')}
+                    </span>
+                  </div>
+                  {bookingResult.provider_booking_ref ? (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Provider Ref</span>
+                      <span className="font-mono font-medium">{String(bookingResult.provider_booking_ref)}</span>
+                    </div>
+                  ) : null}
+                  {bookingResult.total_amount ? (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">ยอดรวม</span>
+                      <span className="font-bold text-blue-600">฿{formatPrice(Number(bookingResult.total_amount))}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">ผู้ติดต่อ</span>
+                    <span className="font-medium">{bookingCustomer.first_name} {bookingCustomer.last_name}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={closeBookingModal}>ปิด</Button>
+                  <Button
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    onClick={() => window.open('/dashboard/bookings', '_blank')}
+                  >
+                    ดูการจอง
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Booking Form */
+              <div className="p-5 space-y-5">
+                {bookingError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-700 text-sm whitespace-pre-line">{bookingError}</p>
+                  </div>
+                )}
+
+                {/* Pax Selection */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+                    <Users className="w-4 h-4" /> จำนวนผู้เดินทาง
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['adult', 'adult_single', 'child_bed', 'child_nobed', 'infant'] as Array<keyof typeof bookingPax>).map((key) => {
+                      const labels: Record<keyof typeof bookingPax, string> = { adult: 'ผู้ใหญ่', adult_single: 'พักเดี่ยว', child_bed: 'เด็กมีเตียง', child_nobed: 'เด็กไม่มีเตียง', infant: 'ทารก' };
+                      const mins: Record<keyof typeof bookingPax, number> = { adult: 1, adult_single: 0, child_bed: 0, child_nobed: 0, infant: 0 };
+                      return (
+                        <div key={key} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                          <span className="text-xs text-gray-700">{labels[key]}</span>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setBookingPax(p => ({ ...p, [key]: Math.max(mins[key], p[key] - 1) }))} className="w-6 h-6 rounded-full bg-white border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold text-sm leading-none">−</button>
+                            <span className="w-5 text-center text-sm font-semibold">{bookingPax[key]}</span>
+                            <button type="button" onClick={() => setBookingPax(p => ({ ...p, [key]: p[key] + 1 }))} className="w-6 h-6 rounded-full bg-white border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold text-sm leading-none">+</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Customer Info */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">ข้อมูลผู้ติดต่อ</h4>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ชื่อ <span className="text-red-500">*</span></label>
+                        <input type="text" value={bookingCustomer.first_name} onChange={(e) => setBookingCustomer(c => ({ ...c, first_name: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="ชื่อจริง" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">นามสกุล <span className="text-red-500">*</span></label>
+                        <input type="text" value={bookingCustomer.last_name} onChange={(e) => setBookingCustomer(c => ({ ...c, last_name: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="นามสกุล" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">อีเมล</label>
+                        <input type="email" value={bookingCustomer.email} onChange={(e) => setBookingCustomer(c => ({ ...c, email: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="email@example.com" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">เบอร์โทร</label>
+                        <input type="tel" value={bookingCustomer.phone} onChange={(e) => setBookingCustomer(c => ({ ...c, phone: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="08x-xxx-xxxx" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">รหัส Sale (ถ้ามี)</label>
+                      <input type="text" value={bookingCustomer.sale_code} onChange={(e) => setBookingCustomer(c => ({ ...c, sale_code: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="SALE001" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ความต้องการพิเศษ</label>
+                      <textarea value={bookingCustomer.special_request} onChange={(e) => setBookingCustomer(c => ({ ...c, special_request: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="Vegetarian, Wheelchair..." />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" className="flex-1" onClick={closeBookingModal} disabled={bookingStep === 'submitting'}>ยกเลิก</Button>
+                  <Button
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    onClick={handleBookingSubmit}
+                    disabled={bookingStep === 'submitting'}
+                  >
+                    {bookingStep === 'submitting' ? (
+                      <><Loader2 className="w-4 h-4 animate-spin mr-1" />กำลังจอง...</>
+                    ) : (
+                      <><ShoppingCart className="w-4 h-4 mr-1" />ยืนยันจอง</>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 text-center">ระบบจะส่งการจองไปยัง Provider โดยอัตโนมัติ (ถ้า Integration เปิดใช้งาน Outbound Booking)</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

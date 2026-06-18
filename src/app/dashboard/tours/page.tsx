@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
   Search,
@@ -92,6 +93,10 @@ function resolveTab(searchParams: URLSearchParams): TabKey {
 export default function ToursPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { hasPermission } = useAuth();
+
+  const canWrite = hasPermission('tours', 'write');
+  const canDelete = hasPermission('tours', 'delete');
 
   // ─── Active tab (derived from URL) ────────────────────────────
   const activeTab = resolveTab(searchParams);
@@ -115,6 +120,7 @@ export default function ToursPage() {
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [minPriceFilter, setMinPriceFilter] = useState('');
   const [maxPriceFilter, setMaxPriceFilter] = useState('');
+  const [minAvailableFilter, setMinAvailableFilter] = useState('');
   
   // Date search mode filters
   const [dateSearchMode, setDateSearchMode] = useState<DateSearchMode>('range');
@@ -126,7 +132,7 @@ export default function ToursPage() {
   const [exactReturn, setExactReturn] = useState('');
   
   // Sort
-  const [sortBy, setSortBy] = useState('created_at');
+  const [sortBy, setSortBy] = useState('-created_at');
   
   // Countries from database
   const [countries, setCountries] = useState<Country[]>([]);
@@ -199,7 +205,7 @@ export default function ToursPage() {
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const res = await countriesApi.list({ is_active: 'true' });
+        const res = await countriesApi.list({ is_active: 'true', per_page: '1000' });
         if (res.success && res.data) {
           setCountries(res.data);
         }
@@ -260,6 +266,7 @@ export default function ToursPage() {
       if (promotionFilters.length > 0) params.promotion_ids = promotionFilters.join(',');
       if (minPriceFilter) params.min_price = minPriceFilter;
       if (maxPriceFilter) params.max_price = maxPriceFilter;
+      if (minAvailableFilter) params.min_available = minAvailableFilter;
       if (sortBy) {
         if (sortBy.startsWith('-')) {
           params.sort_by = sortBy.substring(1);
@@ -314,7 +321,7 @@ export default function ToursPage() {
         setLoading(false);
       }
     }
-  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, wholesalerTourCodeFilter, promotionFilters, minPriceFilter, maxPriceFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
+  }, [currentPage, search, tourTypeFilter, themeFilter, countryFilter, wholesalerFilter, wholesalerTourCodeFilter, promotionFilters, minPriceFilter, maxPriceFilter, minAvailableFilter, departureFrom, departureTo, dateSearchMode, departureMonthFrom, departureMonthTo, exactDeparture, sortBy, activeTabDef]);
 
   useEffect(() => { fetchTours(); }, [fetchTours]);
 
@@ -339,6 +346,7 @@ export default function ToursPage() {
     setPromotionSearch('');
     setMinPriceFilter('');
     setMaxPriceFilter('');
+    setMinAvailableFilter('');
     setDateSearchMode('range');
     setDepartureFrom('');
     setDepartureTo('');
@@ -346,7 +354,7 @@ export default function ToursPage() {
     setDepartureMonthTo('');
     setExactDeparture('');
     setExactReturn('');
-    setSortBy('created_at');
+    setSortBy('-created_at');
     setCurrentPage(1);
     setSelectedTours(new Set());
 
@@ -437,6 +445,12 @@ export default function ToursPage() {
     return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
   };
 
+  const formatDateShort = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-700';
@@ -467,7 +481,7 @@ export default function ToursPage() {
   };
 
   // Check if any additional filter is active (beyond tab preset)
-  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || wholesalerTourCodeFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== 'created_at');
+  const hasAdditionalFilters = tourTypeFilter || themeFilter || search || countryFilter || wholesalerFilter || wholesalerTourCodeFilter || promotionFilters.length > 0 || minPriceFilter || maxPriceFilter || minAvailableFilter || departureFrom || departureTo || departureMonthFrom || exactDeparture || (sortBy !== '-created_at');
   
   // Clear additional filters only
   const clearAdditionalFilters = () => {
@@ -483,6 +497,7 @@ export default function ToursPage() {
     setPromotionSearch('');
     setMinPriceFilter('');
     setMaxPriceFilter('');
+    setMinAvailableFilter('');
     setDateSearchMode('range');
     setDepartureFrom('');
     setDepartureTo('');
@@ -490,7 +505,7 @@ export default function ToursPage() {
     setDepartureMonthTo('');
     setExactDeparture('');
     setExactReturn('');
-    setSortBy('created_at');
+    setSortBy('-created_at');
     setCurrentPage(1);
   };
 
@@ -579,7 +594,7 @@ export default function ToursPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {selectedTours.size > 0 && (
+          {selectedTours.size > 0 && canDelete && (
             <>
               <Button
                 variant="outline"
@@ -604,12 +619,14 @@ export default function ToursPage() {
           <Button variant="outline" size="sm" onClick={() => { fetchTours(); fetchCounts(); }}>
             <RefreshCw className="w-4 h-4" />
           </Button>
-          <Link href="/dashboard/tours/create">
-            <Button size="sm">
-              <Plus className="w-4 h-4" />
-              เพิ่มทัวร์
-            </Button>
-          </Link>
+          {canWrite && (
+            <Link href="/dashboard/tours/create">
+              <Button size="sm">
+                <Plus className="w-4 h-4" />
+                เพิ่มทัวร์
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -692,8 +709,8 @@ export default function ToursPage() {
               onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
-              <option value="created_at">ล่าสุด</option>
-              <option value="-created_at">เก่าสุด</option>
+              <option value="-created_at">สร้างล่าสุด</option>
+              <option value="created_at">สร้างเก่าสุด</option>
               <option value="display_price">ราคาต่ำ→สูง</option>
               <option value="-display_price">ราคาสูง→ต่ำ</option>
               <option value="next_departure_date">เดินทางใกล้</option>
@@ -1300,6 +1317,19 @@ export default function ToursPage() {
                   />
                 </div>
               </div>
+
+              {/* Minimum Available Seats */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">🪑 ที่นั่งว่างขั้นต่ำ</label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="เช่น 5 (มีอย่างน้อย 1 รอบที่ว่าง ≥ 5 ที่นั่ง)"
+                  value={minAvailableFilter}
+                  onChange={(e) => { setMinAvailableFilter(e.target.value); setCurrentPage(1); }}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
         )}
@@ -1322,7 +1352,7 @@ export default function ToursPage() {
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน<br/><span className="text-gray-400 font-normal">โรงแรม</span></th>
                   <th className="text-right px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ราคา</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รอบ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ<br/><span className="text-gray-400 font-normal">อัปเดต</span></th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ<br/><span className="text-gray-400 font-normal">อัปเดต / สร้าง</span></th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">จัดการ</th>
                 </tr>
               </thead>
@@ -1427,7 +1457,7 @@ export default function ToursPage() {
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">วัน/คืน<br/><span className="text-gray-400 font-normal">โรงแรม</span></th>
                   <th className="text-right px-4 py-3 font-medium text-gray-700 whitespace-nowrap">ราคา</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">รอบ</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ<br/><span className="text-gray-400 font-normal">อัปเดต</span></th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">สถานะ<br/><span className="text-gray-400 font-normal">อัปเดต / สร้าง</span></th>
                   <th className="text-center px-4 py-3 font-medium text-gray-700 whitespace-nowrap">จัดการ</th>
                 </tr>
               </thead>
@@ -1644,16 +1674,22 @@ export default function ToursPage() {
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(tour.status)}`}>
                           {TOUR_STATUS[tour.status]}
                         </span>
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center gap-0.5">
                           {tour.last_synced_at ? (
                             <div className="flex items-center gap-0.5 text-[10px] text-blue-600" title={`Sync: ${tour.last_synced_at}`}>
                               <Cloud className="w-3 h-3" />
                               <span>{formatDateTime(tour.last_synced_at)}</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-0.5 text-[10px] text-gray-400">
+                            <div className="flex items-center gap-0.5 text-[10px] text-gray-400" title={`อัปเดต: ${tour.updated_at || tour.created_at}`}>
                               <Clock className="w-3 h-3" />
                               <span>{formatDateTime(tour.updated_at || tour.created_at)}</span>
+                            </div>
+                          )}
+                          {tour.created_at && (
+                            <div className="flex items-center gap-0.5 text-[10px] text-gray-400" title={`สร้าง: ${tour.created_at}`}>
+                              <Plus className="w-3 h-3" />
+                              <span>{formatDateShort(tour.created_at)}</span>
                             </div>
                           )}
                         </div>
@@ -1689,13 +1725,15 @@ export default function ToursPage() {
                             <Edit className="w-4 h-4" />
                           </button>
                         </Link>
-                        <button
-                          onClick={() => setDeleteConfirm(tour.id)}
-                          className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
-                          title="ลบ"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeleteConfirm(tour.id)}
+                            className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
+                            title="ลบ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

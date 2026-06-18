@@ -9,6 +9,7 @@ import {
   Minus, X, Loader2,
 } from 'lucide-react';
 import { bookingsApi, AdminBooking, BookingStatistics, toursApi, Tour } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   pending: { label: 'รอดำเนินการ', color: 'text-yellow-700', bg: 'bg-yellow-100', icon: Clock },
@@ -47,11 +48,12 @@ function SourceBadge({ source }: { source: string }) {
 }
 
 // ─── Booking Detail Modal ───
-function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit }: {
+function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, canWrite }: {
   booking: AdminBooking;
   onClose: () => void;
   onStatusUpdate: (id: number, status: string, note?: string) => Promise<void>;
   onEdit: () => void;
+  canWrite: boolean;
 }) {
   const [newStatus, setNewStatus] = useState(booking.status);
   const [adminNote, setAdminNote] = useState(booking.admin_note || '');
@@ -79,10 +81,12 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit }: {
             <p className="text-sm text-gray-500 font-mono">{booking.booking_code}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 cursor-pointer">
-              <Edit3 className="w-4 h-4" />
-              แก้ไข
-            </button>
+            {canWrite && (
+              <button onClick={onEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 cursor-pointer">
+                <Edit3 className="w-4 h-4" />
+                แก้ไข
+              </button>
+            )}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
               <XCircle className="w-6 h-6" />
             </button>
@@ -338,7 +342,7 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
     setError('');
     setSubmitting(true);
     try {
-      await bookingsApi.create({
+      const res = await bookingsApi.create({
         tour_id: selectedTour.id,
         period_id: selectedPeriodId,
         first_name: firstName,
@@ -364,6 +368,16 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
         admin_note: adminNote || undefined,
         status,
       });
+      // Backend returns the outbound fields at top level (not wrapped in `data`),
+      // so cast to `any` to read them without fighting the generic ApiResponse<T> typing.
+      const r = res as any;
+      if (r?.outbound_attempted) {
+        if (r.is_confirmed_by_provider && r.booking?.provider_booking_ref) {
+          alert(`สร้าง booking + ยืนยันโดย ${r.booking.provider ?? 'provider'} แล้ว\nRef: ${r.booking.provider_booking_ref}`);
+        } else if (r.booking?.provider_status === 'failed') {
+          alert(`สร้าง booking สำเร็จ แต่ส่งไป provider ไม่สำเร็จ — กรุณาตรวจสอบและทำ manual booking`);
+        }
+      }
       onCreated();
     } catch (err) {
       setError((err as Error).message || 'เกิดข้อผิดพลาด');
@@ -1146,6 +1160,10 @@ function EditBookingModal({ booking, onClose, onSaved }: { booking: AdminBooking
 
 // ─── Main Page ───
 export default function BookingsPage() {
+  const { hasPermission } = useAuth();
+  const canWrite = hasPermission('bookings', 'write');
+  const canDelete = hasPermission('bookings', 'delete');
+
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
   const [stats, setStats] = useState<BookingStatistics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1224,10 +1242,12 @@ export default function BookingsPage() {
           <p className="text-sm text-gray-500 mt-0.5">จัดการใบจองทัวร์จากเว็บไซต์และ Flash Sale</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 cursor-pointer">
-            <Plus className="w-4 h-4" />
-            สร้างใบจอง
-          </button>
+          {canWrite && (
+            <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 cursor-pointer">
+              <Plus className="w-4 h-4" />
+              สร้างใบจอง
+            </button>
+          )}
           <button onClick={() => { fetchBookings(); fetchStats(); }} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
             <RefreshCw className="w-4 h-4" />
             รีเฟรช
@@ -1401,6 +1421,7 @@ export default function BookingsPage() {
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
           onStatusUpdate={handleStatusUpdate}
+          canWrite={canWrite}
           onEdit={() => {
             setEditingBooking(selectedBooking);
             setSelectedBooking(null);

@@ -6,12 +6,13 @@ import { Button, Card, Input } from '@/components/ui';
 import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { usersApi, ApiError } from '@/lib/api';
+import { UserRole, ROLE_OPTIONS } from '@/lib/permissions';
 
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'manager' | 'staff';
+  role: UserRole;
   is_active: boolean;
   is_sales: boolean;
 }
@@ -29,7 +30,7 @@ export default function EditUserPage() {
     email: '',
     password: '',
     password_confirmation: '',
-    role: 'staff' as 'admin' | 'manager' | 'staff',
+    role: 'sale' as UserRole,
     is_active: true,
     is_sales: false,
   });
@@ -259,14 +260,12 @@ export default function EditUserPage() {
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                   >
-                    <option value="admin">ผู้ดูแลระบบ</option>
-                    <option value="manager">ผู้จัดการ</option>
-                    <option value="staff">พนักงาน</option>
+                    {ROLE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                   <p className="mt-1 text-xs text-gray-500">
-                    {formData.role === 'admin' && 'เข้าถึงทุกฟังก์ชันในระบบ'}
-                    {formData.role === 'manager' && 'จัดการทัวร์และตัวแทน'}
-                    {formData.role === 'staff' && 'ดูข้อมูลและบันทึกพื้นฐาน'}
+                    {ROLE_OPTIONS.find(o => o.value === formData.role)?.description}
                   </p>
                 </div>
 

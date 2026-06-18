@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { toursApi, TourCounts, groupTourInquiriesApi, contactMessagesApi, bookingsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { MENU_TITLE_KEY_MAP } from '@/lib/permissions';
 import QueueStatus from './QueueStatus';
 import {
   LayoutDashboard,
@@ -92,9 +94,20 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
   },
   {
     title: 'ใบจอง',
-    href: '/dashboard/bookings',
     icon: FileText,
     badge: newBookingCount,
+    children: [
+      {
+        title: 'ทั้งหมด',
+        href: '/dashboard/bookings',
+        icon: FileText,
+      },
+      {
+        title: 'ทดสอบจอง Outbound',
+        href: '/dashboard/bookings/outbound-test',
+        icon: Cloud,
+      },
+    ],
   },
   {
     title: 'ทัวร์',
@@ -186,6 +199,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     title: 'สมาชิกเว็บ',
     href: '/dashboard/web-members',
     icon: Users,
+  },
+  {
+    title: 'ใบเสนอราคา',
+    href: '/dashboard/quotations',
+    icon: FileText,
   },
   {
     title: 'ระบบคะแนนสมาชิก',
@@ -377,6 +395,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     href: '/dashboard/website/contact-settings',
     icon: Settings,
       },
+      {
+        title: 'Contact Popup',
+        href: '/dashboard/website/contact-popup',
+        icon: MessageSquare,
+      },
       
     ],
   },
@@ -547,9 +570,20 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
     const interval = setInterval(() => { fetchCounts(); fetchInquiryCount(); fetchContactMsgCount(); fetchBookingCount(); }, 60000);
     return () => clearInterval(interval);
   }, []);
+  const { canSeeMenu: canSee } = useAuth();
   
   // Build menu items with counts
-  const menuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined, newContactMsgCount || undefined, newBookingCount || undefined);
+  const allMenuItems = buildMenuItems(tourCounts || undefined, newInquiryCount || undefined, newContactMsgCount || undefined, newBookingCount || undefined);
+  
+  // Filter menu items based on user role permissions
+  const menuItems = useMemo(() =>
+    allMenuItems.filter((item) => {
+      const menuKey = MENU_TITLE_KEY_MAP[item.title];
+      if (!menuKey) return true; // Unknown items default visible
+      return canSee(menuKey);
+    }),
+    [allMenuItems, canSee]
+  );
   
   // Build current full URL for matching
   const currentUrl = searchParams.toString() 

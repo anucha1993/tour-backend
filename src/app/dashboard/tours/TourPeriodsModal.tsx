@@ -93,7 +93,7 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
   // Mass update
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showMassUpdate, setShowMassUpdate] = useState(false);
-  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'sale_status' | 'promo'>('visibility');
+  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'promo'>('visibility');
   const [massUpdateValue, setMassUpdateValue] = useState<string>('');
   const [massPromo, setMassPromo] = useState({
     promo_name: '',
@@ -262,8 +262,6 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
         const updates: Record<string, unknown> = {};
         if (massUpdateType === 'visibility') {
           updates.is_visible = massUpdateValue === 'on';
-        } else if (massUpdateType === 'sale_status') {
-          updates.sale_status = massUpdateValue;
         }
         
         await periodsApi.bulkUpdate(tour.id, {
@@ -305,6 +303,12 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
       case 'sold_out': return 'bg-red-100 text-red-700';
       default: return 'bg-gray-100 text-gray-600';
     }
+  };
+
+  const computeSaleStatus = (available: number): string => {
+    if (available === 0) return 'sold_out';
+    if (available < 4) return 'available';
+    return 'booking';
   };
 
   return (
@@ -582,11 +586,10 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                       <label className="block text-xs font-medium text-gray-700 mb-1">ประเภท</label>
                       <select
                         value={massUpdateType}
-                        onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'sale_status' | 'promo')}
+                        onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'promo')}
                         className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
                         <option value="visibility">สถานะแสดง</option>
-                        <option value="sale_status">สถานะวางขาย</option>
                         <option value="promo">โปรโมชั่น</option>
                       </select>
                     </div>
@@ -602,22 +605,6 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                           <option value="">เลือก...</option>
                           <option value="on">On (แสดง)</option>
                           <option value="off">Off (ซ่อน)</option>
-                        </select>
-                      </div>
-                    )}
-                    
-                    {massUpdateType === 'sale_status' && (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">เปลี่ยนเป็น</label>
-                        <select
-                          value={massUpdateValue}
-                          onChange={(e) => setMassUpdateValue(e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                        >
-                          <option value="">เลือก...</option>
-                          {Object.entries(SALE_STATUS).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
                         </select>
                       </div>
                     )}
@@ -746,9 +733,14 @@ export default function TourPeriodsModal({ tour, onClose, onUpdate }: TourPeriod
                         )}
                       </td>
                       <td className="px-3 py-3 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getSaleStatusColor(period.sale_status)}`}>
-                          {SALE_STATUS[period.sale_status] || period.sale_status}
-                        </span>
+                        {(() => {
+                          const computed = computeSaleStatus(Math.max(0, period.capacity - period.booked));
+                          return (
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getSaleStatusColor(computed)}`}>
+                              {SALE_STATUS[computed]}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-3 text-right">
                         <div className="font-semibold text-gray-900">฿{formatPrice(period.offer?.price_adult)}</div>

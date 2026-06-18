@@ -19,13 +19,14 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usersApi, ApiError } from '@/lib/api';
+import { UserRole, ROLE_OPTIONS } from '@/lib/permissions';
 
 // Types
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'manager' | 'staff';
+  role: UserRole;
   is_active: boolean;
   created_at: string;
 }
@@ -38,24 +39,24 @@ interface PaginationMeta {
 }
 
 // Role badge colors
-const roleBadges = {
+const roleBadges: Record<string, { bg: string; text: string; icon: React.ComponentType<{ className?: string }>; label: string }> = {
   admin: { 
     bg: 'bg-purple-50', 
     text: 'text-purple-700', 
     icon: ShieldCheck,
     label: 'ผู้ดูแลระบบ' 
   },
-  manager: { 
+  sale: { 
+    bg: 'bg-green-50', 
+    text: 'text-green-700', 
+    icon: UserIcon,
+    label: 'ฝ่ายขาย' 
+  },
+  it: { 
     bg: 'bg-blue-50', 
     text: 'text-blue-700', 
     icon: Shield,
-    label: 'ผู้จัดการ' 
-  },
-  staff: { 
-    bg: 'bg-gray-100', 
-    text: 'text-gray-700', 
-    icon: UserIcon,
-    label: 'พนักงาน' 
+    label: 'ฝ่ายไอที' 
   },
 };
 
@@ -233,6 +234,7 @@ export default function UsersPage() {
         </Card>
       </div>
 
+
       {/* Filters & Search */}
       <Card>
         <div className="p-4 flex flex-col sm:flex-row gap-4">
@@ -252,9 +254,9 @@ export default function UsersPage() {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
           >
             <option value="">ทุกบทบาท</option>
-            <option value="admin">ผู้ดูแลระบบ</option>
-            <option value="manager">ผู้จัดการ</option>
-            <option value="staff">พนักงาน</option>
+            {ROLE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         </div>
       </Card>
@@ -284,7 +286,7 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map((user) => {
-                const roleBadge = roleBadges[user.role];
+                const roleBadge = roleBadges[user.role] || { bg: 'bg-gray-100', text: 'text-gray-700', icon: UserIcon, label: user.role };
                 const RoleIcon = roleBadge.icon;
 
                 return (
@@ -371,11 +373,14 @@ export default function UsersPage() {
 
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+          
           <p className="text-sm text-gray-500">
             แสดง <span className="font-medium">{((meta?.current_page || 1) - 1) * (meta?.per_page || 15) + 1}</span> ถึง{' '}
             <span className="font-medium">{Math.min((meta?.current_page || 1) * (meta?.per_page || 15), meta?.total || users.length)}</span> จาก{' '}
             <span className="font-medium">{meta?.total || users.length}</span> รายการ
           </p>
+
+
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
@@ -385,6 +390,7 @@ export default function UsersPage() {
             >
               ก่อนหน้า
             </Button>
+            
             <Button 
               variant="outline" 
               size="sm" 
@@ -400,7 +406,7 @@ export default function UsersPage() {
       {/* Cards - Mobile/Tablet */}
       <div className="lg:hidden space-y-4">
         {users.map((user) => {
-          const roleBadge = roleBadges[user.role];
+          const roleBadge = roleBadges[user.role] || { bg: 'bg-gray-100', text: 'text-gray-700', icon: UserIcon, label: user.role };
           const RoleIcon = roleBadge.icon;
 
           return (

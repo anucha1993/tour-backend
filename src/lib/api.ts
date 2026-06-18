@@ -1227,7 +1227,7 @@ export const periodsApi = {
   toggleStatus: (tourId: number, periodId: number) =>
     apiRequest<Period>(`/tours/${tourId}/periods/${periodId}/toggle-status`, { method: 'PATCH' }),
 
-  bulkUpdate: (tourId: number, data: { period_ids: number[]; updates: Partial<{ is_visible: boolean; sale_status: string; promo_name: string }> }) =>
+  bulkUpdate: (tourId: number, data: { period_ids: number[]; updates: Partial<{ is_visible: boolean; promo_name: string }> }) =>
     apiRequest(`/tours/${tourId}/periods/bulk-update`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -3948,7 +3948,8 @@ export const domesticTourSettingsApi = {
 
 export interface TourReviewAdmin {
   id: number;
-  tour_id: number;
+  tour_id: number | null;
+  program_name: string | null;
   user_id: number | null;
   order_id: number | null;
   reviewer_name: string;
@@ -4052,7 +4053,7 @@ export const tourReviewApi = {
   reject: (id: number, reason: string) =>
     apiRequest<{ data: TourReviewAdmin }>(`/tour-reviews/${id}/reject`, {
       method: 'PATCH',
-      body: JSON.stringify({ rejection_reason: reason }),
+      body: JSON.stringify({ reason }),
     }),
 
   reply: (id: number, replyText: string) =>
@@ -5546,6 +5547,10 @@ export interface AdminBooking {
   source: 'website' | 'flash_sale' | 'manual';
   admin_note: string | null;
   cancelled_by: 'customer' | 'admin' | null;
+  // Outbound integration (set when the booking is sent to a wholesaler API)
+  provider?: string | null;
+  provider_status?: string | null;
+  provider_booking_ref?: string | null;
   created_at: string;
   updated_at: string;
   member?: {
@@ -5636,7 +5641,7 @@ export const bookingsApi = {
     admin_note?: string;
     status?: string;
   }) =>
-    apiRequest<{ success: boolean; message: string; booking: AdminBooking }>(
+    apiRequest<{ success: boolean; message: string; booking: AdminBooking; outbound_attempted?: boolean; is_confirmed_by_provider?: boolean }>(
       '/bookings',
       { method: 'POST', body: JSON.stringify(data) }
     ),
@@ -5679,4 +5684,103 @@ export const bookingsApi = {
 
   statistics: () =>
     apiRequest<BookingStatistics>('/bookings/statistics'),
+};
+
+// ==================== Quotations ====================
+
+export interface QuotationItem {
+  description: string;
+  qty: number;
+  unit_price: number;
+  amount: number;
+}
+
+export interface Quotation {
+  id: number;
+  quotation_number: string;
+  web_member_id: number;
+  tour_id: number | null;
+  period_id: number | null;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string | null;
+  pax_adult: number;
+  pax_child: number;
+  pax_infant: number;
+  travel_date_preference: string | null;
+  notes: string | null;
+  title: string | null;
+  description: string | null;
+  items: QuotationItem[] | null;
+  subtotal: number | string;
+  discount: number | string;
+  total_amount: number | string;
+  valid_until: string | null;
+  admin_notes: string | null;
+  status: 'requested' | 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  sent_at: string | null;
+  accepted_at: string | null;
+  declined_at: string | null;
+  decline_reason: string | null;
+  converted_booking_id: number | null;
+  handled_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+  member?: { id: number; first_name: string; last_name: string; phone: string; email: string | null; line_id?: string | null };
+  tour?: { id: number; title: string; slug: string; cover_image_url: string | null };
+  handler?: { id: number; name: string };
+}
+
+export interface QuotationStatistics {
+  requested: number;
+  draft: number;
+  sent: number;
+  accepted: number;
+  declined: number;
+  expired: number;
+  cancelled: number;
+  total: number;
+}
+
+export const quotationsApi = {
+  list: (params?: { page?: number; per_page?: number; status?: string; search?: string; mine?: boolean }) => {
+    const sp = new URLSearchParams();
+    if (params?.page) sp.append('page', params.page.toString());
+    if (params?.per_page) sp.append('per_page', params.per_page.toString());
+    if (params?.status) sp.append('status', params.status);
+    if (params?.search) sp.append('search', params.search);
+    if (params?.mine) sp.append('mine', '1');
+    return apiRequest<{
+      data: Quotation[];
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+    }>(`/quotations?${sp.toString()}`);
+  },
+
+  get: (id: number) =>
+    apiRequest<Quotation>(`/quotations/${id}`),
+
+  statistics: () =>
+    apiRequest<QuotationStatistics>('/quotations/statistics'),
+
+  update: (id: number, data: {
+    title?: string;
+    description?: string;
+    items?: QuotationItem[];
+    discount?: number;
+    valid_until?: string | null;
+    admin_notes?: string;
+  }) =>
+    apiRequest<Quotation>(`/quotations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  send: (id: number) =>
+    apiRequest<Quotation>(`/quotations/${id}/send`, { method: 'POST' }),
+
+  cancel: (id: number) =>
+    apiRequest<Quotation>(`/quotations/${id}/cancel`, { method: 'POST' }),
 };

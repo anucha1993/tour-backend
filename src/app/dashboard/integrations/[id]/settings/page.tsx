@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { integrationsApi, type WholesalerApiConfig } from '@/lib/api';
+import BookingProviderSettings from './BookingProviderSettings';
 
 // Default form data structure
 const defaultFormData = {
@@ -131,6 +132,9 @@ function parseTimeList(schedule: string): string[] {
 function buildTimeList(times: string[]): string {
   return [...times].sort().join(',');
 }
+
+// Max length of sync_schedule column in DB (varchar(500) after migration 2026_04_23_000001)
+const SYNC_SCHEDULE_MAX_LEN = 500;
 
 // Helper: generate time-list from interval in minutes (e.g. 30 → every 30 min)
 function generateTimesFromInterval(intervalMinutes: number): string[] {
@@ -423,7 +427,17 @@ export default function IntegrationSettingsPage() {
       setSaving(false);
       return;
     }
-    
+
+    // Guard: sync_schedule column is varchar(100). Reject over-long strings
+    // (e.g. จากช่วงเวลาถี่เกินไปจนสร้างรายการเวลาเยอะ) ก่อน hit API
+    if ((formData.sync_schedule || '').length > SYNC_SCHEDULE_MAX_LEN) {
+      setError(
+        `ตารางเวลา Sync ยาวเกินไป (${formData.sync_schedule.length}/${SYNC_SCHEDULE_MAX_LEN} ตัวอักษร) — กรุณาเลือกช่วงเวลาที่ห่างขึ้น (ขั้นต่ำ 90 นาที) หรือลบบางเวลาออก`
+      );
+      setSaving(false);
+      return;
+    }
+
     // Validate form data before saving
     if (formData.past_period_threshold_days < 0 || formData.past_period_threshold_days > 365) {
       setError('นับวันย้อนหลังต้องอยู่ระหว่าง 0-365 วัน');
@@ -2236,9 +2250,17 @@ export default function IntegrationSettingsPage() {
 
           {/* Booking Flow */}
           {activeTab === 'booking' && (
+            <div className="space-y-6">
+              {/* Outbound Booking Provider (Zego / Manual / etc.) */}
+              <Card className="p-4 sm:p-6">
+                <h2 className="text-base sm:text-lg font-semibold mb-2">Outbound Booking Provider</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mb-6">เลือก Provider และตั้งค่า credentials สำหรับส่งคำขอจองไปยัง Wholesaler</p>
+                <BookingProviderSettings integrationId={formData.id} />
+              </Card>
+
             <Card className="p-4 sm:p-6">
-              <h2 className="text-base sm:text-lg font-semibold mb-2">Booking Flow</h2>
-              <p className="text-xs sm:text-sm text-gray-500 mb-6">ตั้งค่าความสามารถของ API สำหรับการจอง</p>
+              <h2 className="text-base sm:text-lg font-semibold mb-2">Booking Flow (Legacy)</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-6">ตั้งค่าความสามารถของ API สำหรับการจอง (ตัวเลือกเดิม — จะถูกแทนที่ด้วย Provider ด้านบนในอนาคต)</p>
               
               <div className="space-y-6">
                 {/* Features */}
@@ -2342,6 +2364,7 @@ export default function IntegrationSettingsPage() {
                 </div>
               </div>
             </Card>
+            </div>
           )}
 
           {/* PDF Branding */}

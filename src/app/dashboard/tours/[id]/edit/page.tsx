@@ -124,7 +124,6 @@ interface PeriodFormData {
   booked: number;
   status: string;
   is_visible: boolean;
-  sale_status: string;
   price_adult: string;
   discount_adult: string;
   price_single: string;
@@ -150,7 +149,6 @@ const emptyPeriodForm: PeriodFormData = {
   booked: 0,
   status: 'open',
   is_visible: true,
-  sale_status: 'available',
   price_adult: '',
   discount_adult: '0',
   price_single: '',
@@ -643,9 +641,10 @@ export default function EditTourPage() {
   const showNewPeriodRow = newPeriodRows.length > 0;
   const [periodForm, setPeriodForm] = useState<PeriodFormData>(emptyPeriodForm);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [massDeleteConfirm, setMassDeleteConfirm] = useState(false);
   const [selectedPeriodIds, setSelectedPeriodIds] = useState<number[]>([]);
   const [editingRowId, setEditingRowId] = useState<number | null>(null);
-  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'sale_status' | 'promo' | 'discount' | 'price'>('visibility');
+  const [massUpdateType, setMassUpdateType] = useState<'visibility' | 'promo' | 'discount' | 'price'>('visibility');
   const [massUpdateValue, setMassUpdateValue] = useState<string>('');
   const [massDiscount, setMassDiscount] = useState({
     discount_adult: '',
@@ -1519,7 +1518,6 @@ export default function EditTourPage() {
       booked: period.booked,
       status: period.status,
       is_visible: period.is_visible ?? true,
-      sale_status: period.sale_status || 'available',
       price_adult: period.offer?.price_adult || '',
       discount_adult: period.offer?.discount_adult || '0',
       price_single: period.offer?.price_single || '',
@@ -1589,6 +1587,27 @@ export default function EditTourPage() {
     }
   };
 
+  const handleMassDelete = async () => {
+    if (!tour || selectedPeriodIds.length === 0) return;
+    try {
+      setSavingPeriod(true);
+      const results = await Promise.allSettled(
+        selectedPeriodIds.map((id) => periodsApi.delete(tour.id, id))
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) {
+        console.error(`Failed to delete ${failed} period(s)`);
+      }
+      setSelectedPeriodIds([]);
+      setMassDeleteConfirm(false);
+      fetchPeriods();
+    } catch (err) {
+      console.error('Failed to mass-delete periods:', err);
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
   const handlePeriodStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const startDate = new Date(e.target.value);
     const endDate = new Date(startDate);
@@ -1651,13 +1670,11 @@ export default function EditTourPage() {
         const updates: Record<string, unknown> = {};
         if (massUpdateType === 'visibility') {
           updates.is_visible = massUpdateValue === 'on';
-        } else if (massUpdateType === 'sale_status') {
-          updates.sale_status = massUpdateValue;
         }
         
         await periodsApi.bulkUpdate(tour.id, {
           period_ids: selectedPeriodIds,
-          updates: updates as { is_visible?: boolean; sale_status?: string; promo_name?: string },
+          updates: updates as { is_visible?: boolean; promo_name?: string },
         });
       }
       
@@ -1807,6 +1824,12 @@ export default function EditTourPage() {
       case 'sold_out': return 'bg-red-100 text-red-700';
       default: return 'bg-gray-100 text-gray-600';
     }
+  };
+
+  const computeSaleStatus = (available: number): string => {
+    if (available === 0) return 'sold_out';
+    if (available < 4) return 'available';
+    return 'booking';
   };
 
   if (loadingData) {
@@ -2731,15 +2754,15 @@ export default function EditTourPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">สถานะวางขาย</label>
-                <select
-                  value={periodForm.sale_status}
-                  onChange={(e) => setPeriodForm(prev => ({ ...prev, sale_status: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  {Object.entries(SALE_STATUS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
+                {(() => {
+                  const available = Math.max(0, periodForm.capacity - periodForm.booked);
+                  const status = computeSaleStatus(available);
+                  return (
+                    <div className={`w-full px-3 py-2 rounded-lg text-sm text-center font-medium ${getSaleStatusColor(status)}`}>
+                      {SALE_STATUS[status]} (Auto)
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2935,6 +2958,16 @@ export default function EditTourPage() {
                 {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                 คัดลอก {selectedPeriodIds.length} รอบ
               </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setMassDeleteConfirm(true)}
+                disabled={savingPeriod}
+                className="bg-red-500 hover:bg-red-600 text-white"
+              >
+                <Trash2 className="w-4 h-4" />
+                ลบ {selectedPeriodIds.length} รอบ
+              </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPeriodIds([])}>
                 <X className="w-4 h-4" />
                 ยกเลิกเลือก
@@ -2947,11 +2980,10 @@ export default function EditTourPage() {
               <label className="block text-xs font-medium text-gray-700 mb-1">อัปเดตประเภท</label>
               <select
                 value={massUpdateType}
-                onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'sale_status' | 'promo' | 'discount' | 'price')}
+                onChange={(e) => setMassUpdateType(e.target.value as 'visibility' | 'promo' | 'discount' | 'price')}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
               >
                 <option value="visibility">สถานะแสดง</option>
-                <option value="sale_status">สถานะวางขาย</option>
                 <option value="price">ราคาทัวร์</option>
                 <option value="promo">โปรโมชั่น</option>
                 <option value="discount">ส่วนลดราคา</option>
@@ -2969,22 +3001,6 @@ export default function EditTourPage() {
                   <option value="">เลือก...</option>
                   <option value="on">On (แสดง)</option>
                   <option value="off">Off (ซ่อน)</option>
-                </select>
-              </div>
-            )}
-            
-            {massUpdateType === 'sale_status' && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">เปลี่ยนเป็น</label>
-                <select
-                  value={massUpdateValue}
-                  onChange={(e) => setMassUpdateValue(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="">เลือก...</option>
-                  {Object.entries(SALE_STATUS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
                 </select>
               </div>
             )}
@@ -3112,7 +3128,7 @@ export default function EditTourPage() {
               type="button"
               size="sm"
               onClick={handleMassUpdate}
-              disabled={savingPeriod || (massUpdateType === 'visibility' && !massUpdateValue) || (massUpdateType === 'sale_status' && !massUpdateValue) || (massUpdateType === 'promo' && !massUpdateValue) || (massUpdateType === 'discount' && !massDiscount.discount_adult && !massDiscount.discount_single && !massDiscount.discount_child_bed && !massDiscount.discount_child_nobed) || (massUpdateType === 'price' && !massPrice.price_adult && !massPrice.price_single && !massPrice.price_child && !massPrice.price_child_nobed && !massPrice.price_infant)}
+              disabled={savingPeriod || (massUpdateType === 'visibility' && !massUpdateValue) || (massUpdateType === 'promo' && !massUpdateValue) || (massUpdateType === 'discount' && !massDiscount.discount_adult && !massDiscount.discount_single && !massDiscount.discount_child_bed && !massDiscount.discount_child_nobed) || (massUpdateType === 'price' && !massPrice.price_adult && !massPrice.price_single && !massPrice.price_child && !massPrice.price_child_nobed && !massPrice.price_infant)}
               className="bg-orange-500 hover:bg-orange-600"
             >
               {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -3149,6 +3165,7 @@ export default function EditTourPage() {
                     className="rounded w-3.5 h-3.5"
                   />
                 </th>
+                <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">ID</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">วันเริ่ม</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700 whitespace-nowrap">วันสิ้นสุด</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-700">แสดง</th>
@@ -3198,6 +3215,19 @@ export default function EditTourPage() {
                       onChange={() => togglePeriodSelect(period.id)}
                       className="rounded w-3.5 h-3.5"
                     />
+                  </td>
+                  {/* Period ID (for outbound booking test) */}
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(String(period.id));
+                      }}
+                      title="คลิกเพื่อคัดลอก Period ID"
+                      className="text-xs font-mono text-gray-600 hover:text-blue-600 hover:underline"
+                    >
+                      #{period.id}
+                    </button>
                   </td>
                   {/* วันเริ่ม */}
                   <td className="px-2 py-1">
@@ -3253,21 +3283,14 @@ export default function EditTourPage() {
                   </td>
                   {/* วางขาย */}
                   <td className="px-2 py-1 text-center">
-                    {isEditing ? (
-                      <select
-                        value={period.sale_status || 'available'}
-                        onChange={(e) => handleInlineUpdate(period.id, 'sale_status', e.target.value)}
-                        className={`px-1 py-1 border rounded text-xs ${getSaleStatusColor(period.sale_status)}`}
-                      >
-                        {Object.entries(SALE_STATUS).map(([key, label]) => (
-                          <option key={key} value={key}>{label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className={`text-sm px-2 py-0.5 rounded ${getSaleStatusColor(period.sale_status)}`}>
-                        {SALE_STATUS[period.sale_status as keyof typeof SALE_STATUS] || period.sale_status}
-                      </span>
-                    )}
+                    {(() => {
+                      const computed = computeSaleStatus(Math.max(0, period.capacity - period.booked));
+                      return (
+                        <span className={`text-sm px-2 py-0.5 rounded ${getSaleStatusColor(computed)}`}>
+                          {SALE_STATUS[computed]}
+                        </span>
+                      );
+                    })()}
                   </td>
                   {/* ผู้ใหญ่(2-3) */}
                   <td className="px-1 py-1">
@@ -3590,7 +3613,14 @@ export default function EditTourPage() {
                     <span className="text-xs text-green-600">On</span>
                   </td>
                   <td className="px-2 py-1 text-center">
-                    <span className="text-xs text-green-600">พร้อม</span>
+                    {(() => {
+                      const status = computeSaleStatus(rowData.capacity);
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded ${getSaleStatusColor(status)}`}>
+                          {SALE_STATUS[status]}
+                        </span>
+                      );
+                    })()}
                   </td>
                   {/* ผู้ใหญ่(2-3) */}
                   <td className="px-1 py-1">
@@ -3808,6 +3838,33 @@ export default function EditTourPage() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>ยกเลิก</Button>
               <Button variant="danger" onClick={() => handleDeletePeriod(deleteConfirm)}>ลบ</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Mass Delete Confirm */}
+      {massDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">ยืนยันการลบหลายรอบ</h3>
+            <p className="text-gray-600 mb-4">
+              คุณต้องการลบรอบเดินทางที่เลือกทั้งหมด{' '}
+              <span className="font-semibold text-red-600">{selectedPeriodIds.length}</span> รอบ
+              หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setMassDeleteConfirm(false)}
+                disabled={savingPeriod}
+              >
+                ยกเลิก
+              </Button>
+              <Button variant="danger" onClick={handleMassDelete} disabled={savingPeriod}>
+                {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                ลบทั้งหมด
+              </Button>
             </div>
           </Card>
         </div>
