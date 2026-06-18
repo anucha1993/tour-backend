@@ -201,6 +201,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     icon: Users,
   },
   {
+    title: 'ใบเสนอราคา',
+    href: '/dashboard/quotations',
+    icon: FileText,
+  },
+  {
     title: 'ระบบคะแนนสมาชิก',
     icon: Trophy,
     children: [
