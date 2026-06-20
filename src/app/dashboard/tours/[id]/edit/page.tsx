@@ -782,6 +782,15 @@ export default function EditTourPage() {
           setTour(tourRes.data);
           
           const t = tourRes.data;
+          // DEBUG: ตรวจสอบ hashtags ที่ได้จาก API
+          console.log('🏷️ DEBUG Tour Edit - hashtags from API:', {
+            raw: t.hashtags,
+            type: typeof t.hashtags,
+            isArray: Array.isArray(t.hashtags),
+            length: Array.isArray(t.hashtags) ? t.hashtags.length : 'N/A',
+            keywords_raw: t.keywords,
+            keywords_isArray: Array.isArray(t.keywords),
+          });
           const tourData = t as unknown as { 
             description?: string;
             price_adult?: number | string;
