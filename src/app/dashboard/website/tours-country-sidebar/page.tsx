@@ -78,7 +78,7 @@ export default function ToursCountrySidebarPage() {
     setLoading(true);
     try {
       const res = await internationalTourSettingsApi.list();
-      const items = res?.data?.data || [];
+      const items = ((res as any)?.data as InternationalTourSetting[]) || [];
       setSettings(items);
       if (items.length > 0) {
         const active = items.find((s) => s.is_active) || items[0];
@@ -170,7 +170,7 @@ export default function ToursCountrySidebarPage() {
     try {
       const res = await internationalTourSettingsApi.create({
         name: 'ค่าเริ่มต้น (Default)',
-        slug: 'default-sidebar',
+        slug: `default-sidebar-${Date.now()}`,
         description: 'ชุดการตั้งค่าเริ่มต้นสำหรับแถบข้างหน้าทัวร์ตามประเทศ',
         is_active: true,
         show_sidebar: true,
@@ -187,7 +187,7 @@ export default function ToursCountrySidebarPage() {
         sidebar_portfolios_title: 'ผลงานที่ผ่านมา',
         sidebar_popular_tours_mode: 'popular',
       } as any);
-      const created = (res?.data as any)?.data || (res?.data as any);
+      const created = (res?.data as any) as InternationalTourSetting | undefined;
       if (created && created.id) {
         setSettings([created]);
         setSelectedId(created.id);
@@ -197,7 +197,8 @@ export default function ToursCountrySidebarPage() {
       }
     } catch (e) {
       console.error(e);
-      alert('สร้างไม่สำเร็จ');
+      alert('สร้างไม่สำเร็จ — อาจมีชุดตั้งค่าอยู่แล้ว ลองรีโหลดหน้า');
+      await load();
     } finally {
       setCreatingDefault(false);
     }

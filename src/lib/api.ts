@@ -3683,22 +3683,22 @@ export interface InternationalTourPreview {
 export const internationalTourSettingsApi = {
   // List all settings
   list: () =>
-    apiRequest<{ data: InternationalTourSetting[] }>('/international-tour-settings'),
+    apiRequest<InternationalTourSetting[]>('/international-tour-settings'),
 
   // Get single setting
   get: (id: number) =>
-    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}`),
+    apiRequest<InternationalTourSetting>(`/international-tour-settings/${id}`),
 
   // Create setting
   create: (data: Partial<InternationalTourSetting>) =>
-    apiRequest<{ data: InternationalTourSetting }>('/international-tour-settings', {
+    apiRequest<InternationalTourSetting>('/international-tour-settings', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   // Update setting
   update: (id: number, data: Partial<InternationalTourSetting>) =>
-    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}`, {
+    apiRequest<InternationalTourSetting>(`/international-tour-settings/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
@@ -3711,7 +3711,7 @@ export const internationalTourSettingsApi = {
 
   // Toggle active status
   toggleStatus: (id: number) =>
-    apiRequest<{ data: InternationalTourSetting }>(`/international-tour-settings/${id}/toggle-status`, {
+    apiRequest<InternationalTourSetting>(`/international-tour-settings/${id}/toggle-status`, {
       method: 'PATCH',
     }),
 
