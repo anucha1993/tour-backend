@@ -72,6 +72,7 @@ export default function ToursCountrySidebarPage() {
   const [searching, setSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [creatingDefault, setCreatingDefault] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,6 +165,44 @@ export default function ToursCountrySidebarPage() {
     }
   };
 
+  const createDefaultSetting = async () => {
+    setCreatingDefault(true);
+    try {
+      const res = await internationalTourSettingsApi.create({
+        name: 'ค่าเริ่มต้น (Default)',
+        slug: 'default-sidebar',
+        description: 'ชุดการตั้งค่าเริ่มต้นสำหรับแถบข้างหน้าทัวร์ตามประเทศ',
+        is_active: true,
+        show_sidebar: true,
+        sidebar_show_blog_posts: true,
+        sidebar_show_popular_tours: true,
+        sidebar_show_contact: true,
+        sidebar_show_portfolios: true,
+        sidebar_blog_posts_limit: 5,
+        sidebar_popular_tours_limit: 3,
+        sidebar_portfolios_limit: 3,
+        sidebar_blog_posts_title: 'บทความท่องเที่ยว',
+        sidebar_popular_tours_title: 'ทัวร์ยอดนิยม',
+        sidebar_contact_title: 'ติดต่อสอบถาม',
+        sidebar_portfolios_title: 'ผลงานที่ผ่านมา',
+        sidebar_popular_tours_mode: 'popular',
+      } as any);
+      const created = (res?.data as any)?.data || (res?.data as any);
+      if (created && created.id) {
+        setSettings([created]);
+        setSelectedId(created.id);
+        loadFromSetting(created);
+      } else {
+        await load();
+      }
+    } catch (e) {
+      console.error(e);
+      alert('สร้างไม่สำเร็จ');
+    } finally {
+      setCreatingDefault(false);
+    }
+  };
+
   // Tour code helpers
   const getCodeList = (): string[] => {
     return (form.sidebar_popular_tours_codes || '')
@@ -206,12 +245,34 @@ export default function ToursCountrySidebarPage() {
 
   if (settings.length === 0) {
     return (
-      <div className="p-6">
-        <Card className="p-6 text-center text-gray-500">
-          ยังไม่มีการตั้งค่า "ทัวร์ต่างประเทศ" — โปรดไปสร้างที่เมนู
-          <a href="/dashboard/website/international-tours" className="ml-1 text-blue-600 hover:underline">
-            ทัวร์ต่างประเทศ
-          </a>
+      <div className="p-6 max-w-4xl mx-auto">
+        <Card className="p-8 text-center space-y-4">
+          <div className="flex justify-center">
+            <SidebarIcon className="w-12 h-12 text-blue-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            เริ่มต้นใช้งานแถบข้างของหน้าทัวร์ตามประเทศ
+          </h2>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">
+            ระบบจะสร้างชุดตั้งค่าเริ่มต้นให้อัตโนมัติ พร้อมเปิดใช้งานทุก widget — คุณสามารถปรับแต่งได้ทันทีหลังกดปุ่ม
+          </p>
+          <Button
+            onClick={createDefaultSetting}
+            disabled={creatingDefault}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {creatingDefault ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                กำลังสร้าง...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                เริ่มต้นใช้งาน
+              </>
+            )}
+          </Button>
         </Card>
       </div>
     );
