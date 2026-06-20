@@ -31,6 +31,8 @@ import {
   TestTube,
   X,
   Filter,
+  Pencil,
+  Copy,
 } from 'lucide-react';
 import { subscriberApi, Subscriber, SubscriberStats, NewsletterItem, SubscriberSmtpConfig } from '@/lib/api';
 
@@ -343,6 +345,9 @@ function NewslettersList() {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<{ current_page: number; last_page: number; total: number }>({ current_page: 1, last_page: 1, total: 0 });
+  const [previewItem, setPreviewItem] = useState<NewsletterItem | null>(null);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [editItem, setEditItem] = useState<NewsletterItem | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -400,6 +405,30 @@ function NewslettersList() {
       fetchData();
     } catch {
       alert('ลบไม่สำเร็จ');
+    }
+  };
+
+  const handleDuplicate = async (nl: NewsletterItem) => {
+    if (!confirm(`คัดลอก "${nl.subject}" เป็น Draft ใหม่เพื่อแก้ไข?`)) return;
+    try {
+      const res = await subscriberApi.createNewsletter({
+        subject: `${nl.subject} (สำเนา)`,
+        content_html: nl.content_html,
+        content_text: nl.content_text,
+        template: nl.template,
+        recipient_filter: nl.recipient_filter,
+        batch_size: nl.batch_size,
+        batch_delay_seconds: nl.batch_delay_seconds,
+      });
+      if (res.success && res.data) {
+        alert('คัดลอกเป็น Draft สำเร็จ — กดปุ่มแก้ไขเพื่อแก้เนื้อหา');
+        fetchData();
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        alert((res as any).message || 'คัดลอกไม่สำเร็จ');
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาด');
     }
   };
 
@@ -464,8 +493,29 @@ function NewslettersList() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setPreviewItem(nl)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="ดูตัวอย่าง"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicate(nl)}
+                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="คัดลอกเป็น Draft ใหม่"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
                       {nl.status === 'draft' && (
                         <>
+                          <button
+                            onClick={() => setEditItem(nl)}
+                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="แก้ไข"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleSend(nl)}
                             className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -515,6 +565,347 @@ function NewslettersList() {
           </div>
         )}
       </Card>
+
+      {/* Preview Modal */}
+      {previewItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setPreviewItem(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-50 to-white">
+              <div className="flex items-center gap-2 min-w-0">
+                <Mail className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">ตัวอย่างอีเมล #{previewItem.id}</div>
+                  <div className="font-semibold text-gray-900 truncate">{previewItem.subject}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setPreviewMode('desktop')}
+                    className={`text-xs px-3 py-1 rounded cursor-pointer ${previewMode === 'desktop' ? 'bg-white shadow-sm text-blue-700 font-medium' : 'text-gray-500'}`}
+                  >
+                    Desktop
+                  </button>
+                  <button
+                    onClick={() => setPreviewMode('mobile')}
+                    className={`text-xs px-3 py-1 rounded cursor-pointer ${previewMode === 'mobile' ? 'bg-white shadow-sm text-blue-700 font-medium' : 'text-gray-500'}`}
+                  >
+                    Mobile
+                  </button>
+                </div>
+                <button
+                  onClick={() => setPreviewItem(null)}
+                  className="p-1.5 hover:bg-gray-100 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Meta */}
+            <div className="px-6 py-3 border-b border-gray-200 bg-white grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div>
+                <div className="text-gray-400">สถานะ</div>
+                <div className="mt-0.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${(NL_STATUS_LABELS[previewItem.status] || NL_STATUS_LABELS.draft).color}`}>
+                    {(NL_STATUS_LABELS[previewItem.status] || NL_STATUS_LABELS.draft).label}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-400">Template</div>
+                <div className="mt-0.5 font-medium text-gray-700">{previewItem.template}</div>
+              </div>
+              <div>
+                <div className="text-gray-400">ผู้รับ</div>
+                <div className="mt-0.5 font-medium text-gray-700">
+                  {previewItem.recipient_filter?.type === 'country'
+                    ? `ประเทศ: ${previewItem.recipient_filter.country || '-'}`
+                    : 'Active ทั้งหมด'}
+                  {previewItem.total_recipients > 0 && ` (${previewItem.sent_count}/${previewItem.total_recipients})`}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-400">Batch</div>
+                <div className="mt-0.5 font-medium text-gray-700">{previewItem.batch_size}/{previewItem.batch_delay_seconds}s</div>
+              </div>
+            </div>
+
+            {/* Mock email envelope */}
+            <div className="px-6 py-2.5 border-b border-gray-200 bg-gray-50 text-xs space-y-0.5">
+              <div className="flex gap-2">
+                <span className="text-gray-400 w-14 flex-shrink-0">From:</span>
+                <span className="text-gray-700">NextTrip Holiday &lt;noreply@nexttrip.asia&gt;</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-gray-400 w-14 flex-shrink-0">Subject:</span>
+                <span className="font-semibold text-gray-900">{previewItem.subject}</span>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-auto p-4 bg-gray-100 flex justify-center">
+              <div
+                className="bg-white shadow-sm transition-all"
+                style={{ width: previewMode === 'mobile' ? 375 : '100%', maxWidth: previewMode === 'mobile' ? 375 : 720 }}
+              >
+                <iframe
+                  title="newsletter-preview-modal"
+                  srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"><style>body{margin:0;padding:8px;font-family:sans-serif;background:#fff;color:#111;}img{max-width:100%;height:auto;}</style></head><body>${previewItem.content_html || ''}</body></html>`}
+                  sandbox="allow-same-origin"
+                  className="w-full border-0"
+                  style={{ minHeight: 520 }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-white flex items-center justify-between gap-3">
+              <div className="text-xs text-gray-400">
+                * ตัวอย่างจะถูก render ใน sandbox iframe — อาจต่างจาก email client จริงเล็กน้อย
+              </div>
+              <div className="flex items-center gap-2">
+                {previewItem.status === 'draft' && (
+                  <Button
+                    onClick={async () => {
+                      const item = previewItem;
+                      setPreviewItem(null);
+                      await handleSend(item);
+                    }}
+                  >
+                    <Send className="w-4 h-4 mr-1" />
+                    ส่งเลย
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setPreviewItem(null)}>ปิด</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal (draft only) */}
+      {editItem && (
+        <EditNewsletterModal
+          item={editItem}
+          onClose={() => setEditItem(null)}
+          onSaved={() => {
+            setEditItem(null);
+            fetchData();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ==================== Edit Newsletter Modal ====================
+function EditNewsletterModal({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: NewsletterItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [subject, setSubject] = useState(item.subject);
+  const [contentHtml, setContentHtml] = useState(item.content_html);
+  const [template, setTemplate] = useState(item.template);
+  const [filterType, setFilterType] = useState(item.recipient_filter?.type || 'all');
+  const [filterCountry, setFilterCountry] = useState(item.recipient_filter?.country || '');
+  const [batchSize, setBatchSize] = useState(item.batch_size);
+  const [batchDelay, setBatchDelay] = useState(item.batch_delay_seconds);
+  const [expiresAt, setExpiresAt] = useState(item.expires_at ? item.expires_at.slice(0, 16) : '');
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (andSend: boolean = false) => {
+    if (!subject.trim() || !contentHtml.trim()) {
+      alert('กรุณากรอกหัวข้อและเนื้อหา');
+      return;
+    }
+    setSaving(true);
+    try {
+      const recipientFilter: Record<string, unknown> = { type: filterType };
+      if (filterType === 'country') recipientFilter.country = filterCountry;
+
+      const res = await subscriberApi.updateNewsletter(item.id, {
+        subject,
+        content_html: contentHtml,
+        template,
+        expires_at: expiresAt || undefined,
+        recipient_filter: recipientFilter as NewsletterItem['recipient_filter'],
+        batch_size: batchSize,
+        batch_delay_seconds: batchDelay,
+      });
+
+      if (res.success) {
+        if (andSend) {
+          const sendRes = await subscriberApi.sendNewsletter(item.id);
+          if (sendRes.success) {
+            alert('บันทึกและส่ง Newsletter สำเร็จ');
+          } else {
+            alert(sendRes.message || 'บันทึกแล้ว แต่ส่งไม่สำเร็จ');
+          }
+        } else {
+          alert('บันทึกการแก้ไขสำเร็จ');
+        }
+        onSaved();
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        alert((res as any).message || 'บันทึกไม่สำเร็จ');
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาด');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-amber-50 to-white">
+          <div className="flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-amber-600" />
+            <div>
+              <div className="text-xs text-gray-500">แก้ไข Draft #{item.id}</div>
+              <div className="font-semibold text-gray-900">Newsletter</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg cursor-pointer">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-auto p-6 space-y-4">
+          {/* Subject */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">หัวข้อ (Subject)</label>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </div>
+
+          {/* Template */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Template</label>
+            <select
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="promotion">โปรโมชั่น</option>
+              <option value="review">รีวิว</option>
+              <option value="welcome">Welcome</option>
+            </select>
+          </div>
+
+          {/* Content + Preview */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">เนื้อหา HTML</label>
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setPreviewMode('desktop')}
+                  className={`text-xs px-2 py-1 rounded cursor-pointer ${previewMode === 'desktop' ? 'bg-white shadow-sm text-blue-700 font-medium' : 'text-gray-500'}`}
+                >
+                  Desktop
+                </button>
+                <button
+                  onClick={() => setPreviewMode('mobile')}
+                  className={`text-xs px-2 py-1 rounded cursor-pointer ${previewMode === 'mobile' ? 'bg-white shadow-sm text-blue-700 font-medium' : 'text-gray-500'}`}
+                >
+                  Mobile
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <textarea
+                value={contentHtml}
+                onChange={(e) => setContentHtml(e.target.value)}
+                rows={14}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-100 flex justify-center p-2">
+                <div
+                  className="bg-white shadow-sm transition-all w-full"
+                  style={{ maxWidth: previewMode === 'mobile' ? 375 : 640 }}
+                >
+                  <iframe
+                    title="edit-preview"
+                    srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"><style>body{margin:0;padding:8px;font-family:sans-serif;background:#fff;color:#111;}img{max-width:100%;height:auto;}</style></head><body>${contentHtml}</body></html>`}
+                    sandbox="allow-same-origin"
+                    className="w-full border-0"
+                    style={{ height: 380 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ส่งถึง</label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="all">Subscriber ทั้งหมด (Active)</option>
+                <option value="country">ตามประเทศที่สนใจ</option>
+              </select>
+            </div>
+            {filterType === 'country' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ประเทศ</label>
+                <Input value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} placeholder="เช่น ญี่ปุ่น" />
+              </div>
+            )}
+          </div>
+
+          {/* Batch */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch Size</label>
+              <Input type="number" value={batchSize} onChange={(e) => setBatchSize(Number(e.target.value))} min={1} max={500} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">หน่วงเวลา (วินาที)</label>
+              <Input type="number" value={batchDelay} onChange={(e) => setBatchDelay(Number(e.target.value))} min={0} max={3600} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">วันหมดอายุ</label>
+              <Input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>ยกเลิก</Button>
+          <Button variant="outline" onClick={() => handleSave(false)} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+            บันทึก
+          </Button>
+          <Button onClick={() => handleSave(true)} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+            บันทึกและส่งทันที
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -531,6 +922,8 @@ function CreateNewsletter({ onCreated }: { onCreated: () => void }) {
   const [filterCountry, setFilterCountry] = useState('');
   const [saving, setSaving] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [showPreview, setShowPreview] = useState(true);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
 
   const handlePreviewCount = async () => {
     try {
@@ -664,14 +1057,92 @@ function CreateNewsletter({ onCreated }: { onCreated: () => void }) {
 
         {/* Content HTML */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">เนื้อหา HTML</label>
-          <textarea
-            value={contentHtml}
-            onChange={(e) => setContentHtml(e.target.value)}
-            rows={12}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="<div>...</div>"
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">เนื้อหา HTML</label>
+            <button
+              type="button"
+              onClick={() => setShowPreview(!showPreview)}
+              className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 cursor-pointer"
+            >
+              {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {showPreview ? 'ซ่อนตัวอย่าง' : 'แสดงตัวอย่าง'}
+            </button>
+          </div>
+          <div className={`grid gap-3 ${showPreview ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+            <textarea
+              value={contentHtml}
+              onChange={(e) => setContentHtml(e.target.value)}
+              rows={16}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="<div>...</div>"
+            />
+            {showPreview && (
+              <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-100 flex flex-col">
+                {/* Preview header (mock email client) */}
+                <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <span className="text-xs font-semibold text-gray-700">ตัวอย่างอีเมล</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('desktop')}
+                      className={`text-[11px] px-2 py-1 rounded cursor-pointer ${previewMode === 'desktop' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >
+                      Desktop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('mobile')}
+                      className={`text-[11px] px-2 py-1 rounded cursor-pointer ${previewMode === 'mobile' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >
+                      Mobile
+                    </button>
+                  </div>
+                </div>
+                {/* Mock email meta */}
+                <div className="bg-white border-b border-gray-200 px-4 py-2 text-xs space-y-0.5">
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-12 flex-shrink-0">From:</span>
+                    <span className="text-gray-700 truncate">NextTrip Holiday &lt;noreply@nexttrip.asia&gt;</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-12 flex-shrink-0">To:</span>
+                    <span className="text-gray-700 truncate">subscriber@example.com</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-12 flex-shrink-0">Subject:</span>
+                    <span className="font-semibold text-gray-900 truncate">{subject || <span className="text-gray-400 italic font-normal">(ยังไม่ได้กรอกหัวข้อ)</span>}</span>
+                  </div>
+                </div>
+                {/* Preview body */}
+                <div className="flex-1 overflow-auto p-3 flex justify-center">
+                  <div
+                    className="bg-white shadow-sm transition-all"
+                    style={{ width: previewMode === 'mobile' ? 375 : '100%', maxWidth: previewMode === 'mobile' ? 375 : 640, minHeight: 300 }}
+                  >
+                    {contentHtml.trim() ? (
+                      <iframe
+                        title="newsletter-preview"
+                        srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"><style>body{margin:0;padding:8px;font-family:sans-serif;background:#fff;color:#111;}img{max-width:100%;height:auto;}</style></head><body>${contentHtml}</body></html>`}
+                        sandbox="allow-same-origin"
+                        className="w-full border-0"
+                        style={{ height: 460 }}
+                      />
+                    ) : (
+                      <div className="p-8 text-center text-sm text-gray-400">
+                        กรอกเนื้อหาหรือเลือก Template เพื่อแสดงตัวอย่าง
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            * ตัวอย่างจะถูก render ใน sandbox iframe — JavaScript ในเนื้อหาจะไม่ทำงาน เหมือนกับ email client จริง
+          </p>
         </div>
 
         {/* Recipient Filter */}

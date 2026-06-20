@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Save, Upload, Trash2, Settings, ImageIcon, Eye, Loader2 } from 'lucide-react';
+import { Save, Upload, Trash2, Settings, ImageIcon, Eye, Loader2, Sidebar as SidebarIcon } from 'lucide-react';
 import { blogSettingsApi, BlogPageSettings } from '@/lib/api';
 
 export default function BlogSettingsPage() {
@@ -21,6 +21,20 @@ export default function BlogSettingsPage() {
   const [seoDescription, setSeoDescription] = useState('');
   const [seoKeywords, setSeoKeywords] = useState('');
 
+  // Sidebar state
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [sbAuthor, setSbAuthor] = useState(true);
+  const [sbRelated, setSbRelated] = useState(true);
+  const [sbRecent, setSbRecent] = useState(false);
+  const [sbTours, setSbTours] = useState(true);
+  const [sbBack, setSbBack] = useState(true);
+  const [sbRelatedLimit, setSbRelatedLimit] = useState(5);
+  const [sbRecentLimit, setSbRecentLimit] = useState(5);
+  const [sbToursLimit, setSbToursLimit] = useState(3);
+  const [sbToursTitle, setSbToursTitle] = useState('โปรแกรมทัวร์แนะนำ');
+  const [sbRelatedTitle, setSbRelatedTitle] = useState('บทความที่เกี่ยวข้อง');
+  const [sbRecentTitle, setSbRecentTitle] = useState('บทความท่องเที่ยว');
+
   useEffect(() => {
     loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,6 +52,18 @@ export default function BlogSettingsPage() {
         setSeoTitle(data.seo_title || '');
         setSeoDescription(data.seo_description || '');
         setSeoKeywords(data.seo_keywords || '');
+        setShowSidebar(data.show_sidebar ?? true);
+        setSbAuthor(data.sidebar_show_author ?? true);
+        setSbRelated(data.sidebar_show_related_posts ?? true);
+        setSbRecent(data.sidebar_show_recent_posts ?? false);
+        setSbTours(data.sidebar_show_recommended_tours ?? true);
+        setSbBack(data.sidebar_show_back_button ?? true);
+        setSbRelatedLimit(data.sidebar_related_posts_limit ?? 5);
+        setSbRecentLimit(data.sidebar_recent_posts_limit ?? 5);
+        setSbToursLimit(data.sidebar_recommended_tours_limit ?? 3);
+        setSbToursTitle(data.sidebar_recommended_tours_title || 'โปรแกรมทัวร์แนะนำ');
+        setSbRelatedTitle(data.sidebar_related_posts_title || 'บทความที่เกี่ยวข้อง');
+        setSbRecentTitle(data.sidebar_recent_posts_title || 'บทความท่องเที่ยว');
       }
     } catch {
       showToast('error', 'ไม่สามารถโหลดการตั้งค่าได้');
@@ -61,6 +87,18 @@ export default function BlogSettingsPage() {
         seo_title: seoTitle || null,
         seo_description: seoDescription || null,
         seo_keywords: seoKeywords || null,
+        show_sidebar: showSidebar,
+        sidebar_show_author: sbAuthor,
+        sidebar_show_related_posts: sbRelated,
+        sidebar_show_recent_posts: sbRecent,
+        sidebar_show_recommended_tours: sbTours,
+        sidebar_show_back_button: sbBack,
+        sidebar_related_posts_limit: sbRelatedLimit,
+        sidebar_recent_posts_limit: sbRecentLimit,
+        sidebar_recommended_tours_limit: sbToursLimit,
+        sidebar_recommended_tours_title: sbToursTitle,
+        sidebar_related_posts_title: sbRelatedTitle,
+        sidebar_recent_posts_title: sbRecentTitle,
       } as Partial<BlogPageSettings>);
       const data = ((res as unknown) as { data: BlogPageSettings })?.data;
       if (data) setSettings(data);
@@ -258,6 +296,179 @@ export default function BlogSettingsPage() {
               rows={3}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 resize-none"
             />
+          </div>
+        </div>
+      </div>
+
+      {/* Sidebar Settings */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <SidebarIcon className="w-5 h-5 text-blue-500" />
+            แถบข้าง (Sidebar) หน้าบทความ
+          </h2>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showSidebar}
+              onChange={e => setShowSidebar(e.target.checked)}
+              className="w-4 h-4 rounded text-blue-600"
+            />
+            <span className={showSidebar ? 'text-blue-700 font-medium' : 'text-gray-500'}>
+              {showSidebar ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+            </span>
+          </label>
+        </div>
+        <div className={`p-6 space-y-5 ${!showSidebar ? 'opacity-50 pointer-events-none' : ''}`}>
+          <p className="text-xs text-gray-500">เลือก widget ที่ต้องการแสดงในแถบข้างของหน้าบทความ (/blog/[slug])</p>
+
+          {/* Widget toggles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sbAuthor}
+                onChange={e => setSbAuthor(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">การ์ดผู้เขียน</div>
+                <div className="text-xs text-gray-500">แสดงข้อมูลผู้เขียนบทความ</div>
+              </div>
+            </label>
+
+            <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sbBack}
+                onChange={e => setSbBack(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">ปุ่มกลับไปหน้าบทความ</div>
+                <div className="text-xs text-gray-500">ลิงก์กลับไปยัง /blog</div>
+              </div>
+            </label>
+          </div>
+
+          {/* Related posts widget */}
+          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sbRelated}
+                onChange={e => setSbRelated(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">บทความที่เกี่ยวข้อง</div>
+                <div className="text-xs text-gray-500">บทความล่าสุดจากหมวดหมู่เดียวกัน</div>
+              </div>
+            </label>
+            {sbRelated && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">หัวข้อ Widget</label>
+                  <input
+                    type="text"
+                    value={sbRelatedTitle}
+                    onChange={e => setSbRelatedTitle(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">จำนวนสูงสุด</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={sbRelatedLimit}
+                    onChange={e => setSbRelatedLimit(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recent posts widget */}
+          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sbRecent}
+                onChange={e => setSbRecent(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">บทความท่องเที่ยว (ล่าสุดทั้งหมด)</div>
+                <div className="text-xs text-gray-500">บทความที่เผยแพร่ล่าสุด ไม่จำกัดหมวดหมู่</div>
+              </div>
+            </label>
+            {sbRecent && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">หัวข้อ Widget</label>
+                  <input
+                    type="text"
+                    value={sbRecentTitle}
+                    onChange={e => setSbRecentTitle(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">จำนวนสูงสุด</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={sbRecentLimit}
+                    onChange={e => setSbRecentLimit(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recommended tours widget */}
+          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sbTours}
+                onChange={e => setSbTours(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">โปรแกรมทัวร์แนะนำ</div>
+                <div className="text-xs text-gray-500">ทัวร์ที่เกี่ยวข้องตามประเทศของบทความ (fallback: ทัวร์ยอดนิยม)</div>
+              </div>
+            </label>
+            {sbTours && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">หัวข้อ Widget</label>
+                  <input
+                    type="text"
+                    value={sbToursTitle}
+                    onChange={e => setSbToursTitle(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">จำนวนสูงสุด</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={sbToursLimit}
+                    onChange={e => setSbToursLimit(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

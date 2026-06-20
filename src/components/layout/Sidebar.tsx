@@ -335,6 +335,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     icon: Globe,
   },
   {
+    title: 'แถบข้างหน้าทัวร์ตามประเทศ',
+    href: '/dashboard/website/tours-country-sidebar',
+    icon: Layers,
+  },
+  {
     title: 'ทัวร์ในประเทศ',
     href: '/dashboard/website/domestic-tours',
     icon: MapPin,
