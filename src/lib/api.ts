@@ -3265,6 +3265,50 @@ export interface DashboardStats {
   today_syncs: number;
   success_syncs: number;
   failed_syncs: number;
+  total_views: number;
+  total_members: number;
+}
+
+export interface DashboardBookingStats {
+  total: number;
+  pending: number;
+  confirmed: number;
+  paid: number;
+  completed: number;
+  cancelled: number;
+  this_month: number;
+  revenue: number;
+  from_website: number;
+  from_flash_sale: number;
+}
+
+export interface CountryViewStat {
+  id: number;
+  name: string;
+  flag: string | null;
+  total_views: number;
+  tours_count: number;
+}
+
+export interface CountryBookingStat {
+  id: number;
+  name: string;
+  flag: string | null;
+  bookings_count: number;
+  revenue: number;
+}
+
+export interface RecentBooking {
+  id: number;
+  booking_code: string;
+  customer_name: string;
+  tour_title: string;
+  country: string | null;
+  flag: string | null;
+  total_amount: number;
+  status: string;
+  source: string;
+  created_at: string;
 }
 
 export interface WholesalerStat {
@@ -3294,6 +3338,10 @@ export interface RecentSync {
 
 export interface DashboardSummary {
   stats: DashboardStats;
+  booking_stats: DashboardBookingStats;
+  views_by_country: CountryViewStat[];
+  bookings_by_country: CountryBookingStat[];
+  recent_bookings: RecentBooking[];
   tours_per_wholesaler: WholesalerStat[];
   recent_syncs: RecentSync[];
 }
