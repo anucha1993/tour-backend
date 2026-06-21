@@ -3650,6 +3650,10 @@ export interface InternationalTourSetting {
   sidebar_portfolios_title?: string | null;
   sidebar_popular_tours_mode?: 'popular' | 'latest' | 'manual';
   sidebar_popular_tours_codes?: string | null;
+  detail_country_sidebar_enabled?: boolean;
+  detail_country_sidebar_title?: string | null;
+  detail_country_sidebar_limit?: number;
+  detail_country_sidebar_sort?: 'same_city' | 'popular' | 'price_asc' | 'latest';
   created_at: string;
   updated_at: string;
   country_covers?: InternationalTourCountryCover[];
@@ -4144,6 +4148,12 @@ export interface ReviewPageSettings {
   seo_description: string | null;
   seo_keywords: string | null;
   is_active: boolean;
+  homepage_enabled: boolean;
+  homepage_title: string;
+  homepage_subtitle: string | null;
+  homepage_mode: 'latest' | 'manual';
+  homepage_limit: number;
+  homepage_review_ids: number[] | null;
   created_at: string;
   updated_at: string;
 }

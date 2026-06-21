@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Save, Upload, Trash2, Settings, ImageIcon, Eye, Loader2 } from 'lucide-react';
-import { reviewPageSettingsApi, ReviewPageSettings } from '@/lib/api';
+import { Save, Upload, Trash2, Settings, ImageIcon, Eye, Loader2, Home, Star, Search, Check } from 'lucide-react';
+import { reviewPageSettingsApi, ReviewPageSettings, tourReviewApi, TourReviewAdmin } from '@/lib/api';
 
 export default function ReviewSettingsPage() {
   const [settings, setSettings] = useState<ReviewPageSettings | null>(null);
@@ -20,6 +20,17 @@ export default function ReviewSettingsPage() {
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
   const [seoKeywords, setSeoKeywords] = useState('');
+
+  // Homepage section state
+  const [homepageEnabled, setHomepageEnabled] = useState(true);
+  const [homepageTitle, setHomepageTitle] = useState('');
+  const [homepageSubtitle, setHomepageSubtitle] = useState('');
+  const [homepageMode, setHomepageMode] = useState<'latest' | 'manual'>('latest');
+  const [homepageLimit, setHomepageLimit] = useState(10);
+  const [homepageReviewIds, setHomepageReviewIds] = useState<number[]>([]);
+  const [approvedReviews, setApprovedReviews] = useState<TourReviewAdmin[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewSearch, setReviewSearch] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -38,12 +49,49 @@ export default function ReviewSettingsPage() {
         setSeoTitle(data.seo_title || '');
         setSeoDescription(data.seo_description || '');
         setSeoKeywords(data.seo_keywords || '');
+        setHomepageEnabled(data.homepage_enabled ?? true);
+        setHomepageTitle(data.homepage_title || '');
+        setHomepageSubtitle(data.homepage_subtitle || '');
+        setHomepageMode(data.homepage_mode || 'latest');
+        setHomepageLimit(data.homepage_limit || 10);
+        setHomepageReviewIds(data.homepage_review_ids || []);
       }
     } catch {
       showToast('error', 'ไม่สามารถโหลดการตั้งค่าได้');
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadApprovedReviews = async () => {
+    if (approvedReviews.length > 0 || reviewsLoading) return;
+    setReviewsLoading(true);
+    try {
+      const res = await tourReviewApi.list({
+        status: 'approved',
+        per_page: 100,
+        sort_by: 'created_at',
+        sort_dir: 'desc',
+      });
+      const list = ((res as unknown) as { data?: { data?: TourReviewAdmin[] } })?.data?.data || [];
+      setApprovedReviews(list);
+    } catch {
+      showToast('error', 'ไม่สามารถโหลดรายการรีวิวได้');
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  // Load reviews list when switching to manual mode
+  useEffect(() => {
+    if (homepageMode === 'manual') loadApprovedReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homepageMode]);
+
+  const toggleReviewSelection = (id: number) => {
+    setHomepageReviewIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
   const showToast = (type: 'success' | 'error', message: string) => {
@@ -61,6 +109,12 @@ export default function ReviewSettingsPage() {
         seo_title: seoTitle || null,
         seo_description: seoDescription || null,
         seo_keywords: seoKeywords || null,
+        homepage_enabled: homepageEnabled,
+        homepage_title: homepageTitle,
+        homepage_subtitle: homepageSubtitle || null,
+        homepage_mode: homepageMode,
+        homepage_limit: homepageLimit,
+        homepage_review_ids: homepageMode === 'manual' ? homepageReviewIds : null,
       } as Partial<ReviewPageSettings>);
       const data = ((res as unknown) as { data: ReviewPageSettings })?.data;
       if (data) setSettings(data);
@@ -137,6 +191,164 @@ export default function ReviewSettingsPage() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           บันทึก
         </button>
+      </div>
+
+      {/* Homepage Reviews Section */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Home className="w-5 h-5 text-blue-500" />
+              Section รีวิวหน้าแรก (Homepage)
+            </h2>
+            <p className="text-sm text-gray-500 mt-0.5">กำหนดการแสดงรีวิวในแถบเลื่อนบนหน้าแรก (ใต้ Flash Sale)</p>
+          </div>
+          {/* Enable toggle */}
+          <button
+            type="button"
+            onClick={() => setHomepageEnabled((v) => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${homepageEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+            aria-label="เปิด/ปิด section"
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${homepageEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        {homepageEnabled && (
+          <div className="p-6 space-y-5">
+            {/* Title + Subtitle */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">หัวข้อ</label>
+                <input
+                  type="text"
+                  value={homepageTitle}
+                  onChange={(e) => setHomepageTitle(e.target.value)}
+                  placeholder="รีวิวจากลูกค้า"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">ข้อความรอง</label>
+                <input
+                  type="text"
+                  value={homepageSubtitle}
+                  onChange={(e) => setHomepageSubtitle(e.target.value)}
+                  placeholder="เสียงจากลูกค้าที่ไว้วางใจเดินทางกับเรา"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Mode selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">รูปแบบการแสดง</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setHomepageMode('latest')}
+                  className={`text-left px-4 py-3 rounded-lg border-2 transition ${homepageMode === 'latest' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                >
+                  <div className="font-medium text-gray-900 text-sm">แสดงล่าสุดอัตโนมัติ</div>
+                  <div className="text-xs text-gray-500 mt-0.5">เรียงรีวิวล่าสุดขึ้นก่อนตามจำนวนที่กำหนด</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHomepageMode('manual')}
+                  className={`text-left px-4 py-3 rounded-lg border-2 transition ${homepageMode === 'manual' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                >
+                  <div className="font-medium text-gray-900 text-sm">เลือกรีวิวเอง</div>
+                  <div className="text-xs text-gray-500 mt-0.5">เลือกรีวิวที่ต้องการแสดงโดยเฉพาะ</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Latest mode: limit */}
+            {homepageMode === 'latest' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">จำนวนรีวิวที่แสดง</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={homepageLimit}
+                  onChange={(e) => setHomepageLimit(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+                  className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                />
+                <span className="text-xs text-gray-400 ml-2">รายการ (สูงสุด 30)</span>
+              </div>
+            )}
+
+            {/* Manual mode: review picker */}
+            {homepageMode === 'manual' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">เลือกรีวิว ({homepageReviewIds.length} รายการ)</label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={reviewSearch}
+                      onChange={(e) => setReviewSearch(e.target.value)}
+                      placeholder="ค้นหารีวิว..."
+                      className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto divide-y divide-gray-100">
+                  {reviewsLoading ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                    </div>
+                  ) : approvedReviews.length === 0 ? (
+                    <div className="text-center text-sm text-gray-400 py-10">ไม่มีรีวิวที่อนุมัติแล้ว</div>
+                  ) : (
+                    approvedReviews
+                      .filter((r) => {
+                        if (!reviewSearch.trim()) return true;
+                        const q = reviewSearch.toLowerCase();
+                        return (
+                          r.reviewer_name.toLowerCase().includes(q) ||
+                          r.comment.toLowerCase().includes(q) ||
+                          (r.tour?.title || '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((r) => {
+                        const selected = homepageReviewIds.includes(r.id);
+                        const order = homepageReviewIds.indexOf(r.id) + 1;
+                        return (
+                          <button
+                            type="button"
+                            key={r.id}
+                            onClick={() => toggleReviewSelection(r.id)}
+                            className={`w-full text-left flex items-start gap-3 px-4 py-3 transition ${selected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                          >
+                            <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border ${selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
+                              {selected ? (order > 0 ? <span className="text-[10px] font-bold">{order}</span> : <Check className="w-3.5 h-3.5" />) : null}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm text-gray-900 truncate">{r.reviewer_name}</span>
+                                <span className="flex items-center gap-0.5 text-yellow-500 text-xs flex-shrink-0">
+                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                                  {r.rating}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{r.comment}</p>
+                              {r.tour?.title && (
+                                <p className="text-[11px] text-gray-400 truncate mt-0.5">ทัวร์: {r.tour.title}</p>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">ตัวเลขในช่องคือลำดับการแสดง (เลือกก่อนแสดงก่อน)</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Hero Image Section */}

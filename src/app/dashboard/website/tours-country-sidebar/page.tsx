@@ -16,6 +16,7 @@ import {
   Search,
   X,
   Plus,
+  MapPin,
 } from 'lucide-react';
 import {
   internationalTourSettingsApi,
@@ -43,6 +44,10 @@ type SidebarFields = Partial<
     | 'sidebar_contact_text'
     | 'sidebar_popular_tours_mode'
     | 'sidebar_popular_tours_codes'
+    | 'detail_country_sidebar_enabled'
+    | 'detail_country_sidebar_title'
+    | 'detail_country_sidebar_limit'
+    | 'detail_country_sidebar_sort'
   >
 >;
 
@@ -111,6 +116,10 @@ export default function ToursCountrySidebarPage() {
       sidebar_contact_text: s.sidebar_contact_text || '',
       sidebar_popular_tours_mode: s.sidebar_popular_tours_mode || 'popular',
       sidebar_popular_tours_codes: s.sidebar_popular_tours_codes || '',
+      detail_country_sidebar_enabled: s.detail_country_sidebar_enabled ?? true,
+      detail_country_sidebar_title: s.detail_country_sidebar_title || 'ทัวร์ประเทศเดียวกันที่น่าสนใจ',
+      detail_country_sidebar_limit: s.detail_country_sidebar_limit ?? 8,
+      detail_country_sidebar_sort: s.detail_country_sidebar_sort || 'same_city',
     });
   };
 
@@ -668,6 +677,75 @@ export default function ToursCountrySidebarPage() {
           </Card>
         </>
       )}
+
+      {/* แถบข้างหน้ารายละเอียดทัวร์ (ทัวร์ประเทศเดียวกัน) */}
+      <Card className="p-4 border-purple-100">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.detail_country_sidebar_enabled ?? true}
+            onChange={(e) => setForm({ ...form, detail_country_sidebar_enabled: e.target.checked })}
+            className="w-5 h-5 text-purple-600 rounded mt-0.5"
+          />
+          <div className="flex-1">
+            <div className="flex items-center gap-2 font-medium text-gray-900">
+              <MapPin className="w-4 h-4 text-purple-500" /> แถบข้าง “ทัวร์ประเทศเดียวกัน” (หน้ารายละเอียดทัวร์)
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              แถบข้างทางขวาในหน้า{' '}
+              <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/tours/{'{slug}'}</code>{' '}
+              แสดงทัวร์ประเทศเดียวกันที่น่าสนใจ (จัดอันดับเมืองเดียวกันมากที่สุดก่อน)
+            </p>
+          </div>
+        </label>
+
+        {(form.detail_country_sidebar_enabled ?? true) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 ml-8">
+            <div className="md:col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">หัวข้อแถบข้าง</label>
+              <Input
+                placeholder="เช่น ทัวร์ญี่ปุ่นที่น่าสนใจ"
+                value={form.detail_country_sidebar_title ?? ''}
+                onChange={(e) => setForm({ ...form, detail_country_sidebar_title: e.target.value })}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                เว้นว่างเพื่อใช้ค่าเริ่มต้น (จะใส่ชื่อประเทศให้อัตโนมัติ)
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">จำนวนทัวร์สูงสุด (1–20)</label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={form.detail_country_sidebar_limit ?? 8}
+                onChange={(e) =>
+                  setForm({ ...form, detail_country_sidebar_limit: Number(e.target.value) })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">การจัดเรียง</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={form.detail_country_sidebar_sort ?? 'same_city'}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    detail_country_sidebar_sort: e.target
+                      .value as SidebarFields['detail_country_sidebar_sort'],
+                  })
+                }
+              >
+                <option value="same_city">เมืองเดียวกันมากที่สุดก่อน</option>
+                <option value="popular">ยอดนิยม</option>
+                <option value="price_asc">ราคาต่ำ → สูง</option>
+                <option value="latest">ล่าสุด</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <div className="sticky bottom-0 bg-white border-t border-gray-200 -mx-6 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-gray-500">
