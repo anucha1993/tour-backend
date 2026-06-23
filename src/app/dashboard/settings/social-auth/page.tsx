@@ -53,7 +53,7 @@ const defaultConfig: SocialAuthConfig = {
 
 export default function SocialAuthSettingsPage() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingProvider, setSavingProvider] = useState<'google' | 'facebook' | 'line' | null>(null);
   const [config, setConfig] = useState<SocialAuthConfig>(defaultConfig);
   const [showGoogleSecret, setShowGoogleSecret] = useState(false);
   const [showFacebookSecret, setShowFacebookSecret] = useState(false);
@@ -87,13 +87,36 @@ export default function SocialAuthSettingsPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSaveProvider = async (provider: 'google' | 'facebook' | 'line') => {
     try {
-      setSaving(true);
+      setSavingProvider(provider);
       setMessage(null);
-      const response = await apiClient.put('/settings/social-auth', config);
+
+      let payload: Partial<SocialAuthConfig> = {};
+      if (provider === 'google') {
+        payload = {
+          google_enabled: config.google_enabled,
+          google_client_id: config.google_client_id,
+          google_client_secret: config.google_client_secret,
+        };
+      } else if (provider === 'facebook') {
+        payload = {
+          facebook_enabled: config.facebook_enabled,
+          facebook_app_id: config.facebook_app_id,
+          facebook_app_secret: config.facebook_app_secret,
+        };
+      } else if (provider === 'line') {
+        payload = {
+          line_enabled: config.line_enabled,
+          line_channel_id: config.line_channel_id,
+          line_channel_secret: config.line_channel_secret,
+        };
+      }
+
+      const response = await apiClient.put('/settings/social-auth', payload);
       if (response.success) {
-        setMessage({ type: 'success', text: 'บันทึกการตั้งค่าสำเร็จ' });
+        const providerLabel = provider === 'google' ? 'Google' : provider === 'facebook' ? 'Facebook' : 'LINE';
+        setMessage({ type: 'success', text: `บันทึกการตั้งค่า ${providerLabel} สำเร็จ` });
         await fetchConfig();
       } else {
         setMessage({ type: 'error', text: response.message || 'เกิดข้อผิดพลาด' });
@@ -101,7 +124,7 @@ export default function SocialAuthSettingsPage() {
     } catch {
       setMessage({ type: 'error', text: 'ไม่สามารถบันทึกได้' });
     } finally {
-      setSaving(false);
+      setSavingProvider(null);
     }
   };
 
@@ -238,6 +261,17 @@ export default function SocialAuthSettingsPage() {
               <li>Copy Client ID และ Client Secret มาใส่ด้านบน</li>
             </ol>
           </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => handleSaveProvider('google')}
+              disabled={savingProvider !== null}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {savingProvider === 'google' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              บันทึก Google
+            </button>
+          </div>
         </div>
       </div>
 
@@ -337,6 +371,17 @@ export default function SocialAuthSettingsPage() {
               <li>เพิ่ม Facebook Login product → Settings → Valid OAuth Redirect URIs: <code className="bg-white px-1 rounded">https://nexttrip.asia/auth/facebook/callback</code></li>
               <li>Copy App ID และ App Secret มาใส่ด้านบน</li>
             </ol>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => handleSaveProvider('facebook')}
+              disabled={savingProvider !== null}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {savingProvider === 'facebook' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              บันทึก Facebook
+            </button>
           </div>
         </div>
       </div>
@@ -438,6 +483,17 @@ export default function SocialAuthSettingsPage() {
               <li>Copy Channel ID และ Channel Secret จากแท็บ &quot;Basic settings&quot; มาใส่ด้านบน</li>
             </ol>
           </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => handleSaveProvider('line')}
+              disabled={savingProvider !== null}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {savingProvider === 'line' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              บันทึก LINE
+            </button>
+          </div>
         </div>
       </div>
 
@@ -451,18 +507,6 @@ export default function SocialAuthSettingsPage() {
             จะถูกสร้างบัญชีอัตโนมัติ หากอีเมลตรงกับสมาชิกที่มีอยู่แล้ว ระบบจะเชื่อมบัญชีเข้าด้วยกันโดยอัตโนมัติ
           </p>
         </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          บันทึกการตั้งค่า
-        </button>
       </div>
     </div>
   );
