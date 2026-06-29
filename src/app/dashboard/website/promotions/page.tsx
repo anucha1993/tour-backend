@@ -129,6 +129,7 @@ export default function PromotionsPage() {
       type: 'special',
       discount_value: null,
       is_active: true,
+      show_banner: true,
       sort_order: 0,
       link_url: '',
       start_date: null,
@@ -155,6 +156,7 @@ export default function PromotionsPage() {
       type: promotion.type,
       discount_value: promotion.discount_value,
       is_active: promotion.is_active,
+      show_banner: promotion.show_banner ?? true,
       sort_order: promotion.sort_order,
       link_url: promotion.link_url || '',
       start_date: promotion.start_date,
@@ -502,7 +504,7 @@ export default function PromotionsPage() {
               {editPromotion && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    รูป Banner
+                    รูป Banner <span className="text-xs font-normal text-gray-400">(ไม่บังคับ — ถ้าไม่ใส่จะแสดงเป็น chip badge อย่างเดียว ไม่ขึ้น banner ในหน้าแรก)</span>
                   </label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
                     {tempBannerUrl ? (
@@ -546,6 +548,24 @@ export default function PromotionsPage() {
                       className="hidden"
                     />
                   </div>
+
+                  {/* Show banner toggle (only meaningful when banner exists) */}
+                  {tempBannerUrl && (
+                    <label className="mt-3 flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={formData.show_banner ?? true}
+                        onChange={(e) => setFormData({ ...formData, show_banner: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400 cursor-pointer accent-orange-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        แสดง Banner ในหน้าแรก
+                        <span className="text-xs text-gray-400 ml-1">
+                          (ปิดเพื่อเก็บรูปไว้แต่ซ่อนจากเว็บ — chip badge ยังแสดงปกติ)
+                        </span>
+                      </span>
+                    </label>
+                  )}
                 </div>
               )}
 

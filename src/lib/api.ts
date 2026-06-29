@@ -156,6 +156,7 @@ export interface Promotion {
   is_active: boolean;
   sort_order: number;
   banner_url: string | null;
+  show_banner: boolean;
   cloudflare_id: string | null;
   link_url: string | null;
   start_date: string | null;

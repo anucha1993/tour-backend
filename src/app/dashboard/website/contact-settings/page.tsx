@@ -228,33 +228,47 @@ export default function ContactSettingsPage() {
             <input
               type="text"
               value={form.map_embed_url || ''}
-              onChange={(e) => setForm({ ...form, map_embed_url: e.target.value })}
-              placeholder="https://www.google.com/maps/embed?pb=..."
+              onChange={(e) => {
+                const raw = e.target.value;
+                const srcMatch = raw.match(/src=["']([^"']+)["']/i);
+                const cleaned = srcMatch ? srcMatch[1] : raw.trim();
+                setForm({ ...form, map_embed_url: cleaned });
+              }}
+              placeholder="https://www.google.com/maps/embed?pb=... หรือวาง <iframe> ทั้งก้อน"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <p className="text-xs text-gray-400 mt-1">
-              ไปที่ Google Maps → คลิก &quot;แชร์&quot; → &quot;ฝังแผนที่&quot; → คัดลอก URL จาก src=&quot;...&quot;
+              ไปที่ Google Maps → คลิก &quot;แชร์&quot; → แท็บ &quot;ฝังแผนที่&quot; → คัดลอก HTML ทั้งก้อน (วางได้เลย ระบบจะดึง URL ให้)
             </p>
+            {form.map_embed_url &&
+              !/^https:\/\/(www\.)?google\.com\/maps\/embed/i.test(form.map_embed_url) && (
+                <p className="text-xs text-red-500 mt-1">
+                  ⚠️ URL นี้ไม่ใช่ Embed URL — ต้องเป็นลิงก์จากแท็บ &quot;ฝังแผนที่&quot; (ขึ้นต้นด้วย{' '}
+                  <code className="bg-red-50 px-1 rounded">https://www.google.com/maps/embed?pb=</code>
+                  ) ไม่ใช่ลิงก์แชร์ปกติ (maps.app.goo.gl / maps/place/...)
+                </p>
+              )}
           </div>
 
           {/* Map Preview */}
-          {form.map_embed_url && (
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">ตัวอย่างแผนที่</label>
-              <div className="rounded-lg overflow-hidden border border-gray-200">
-                <iframe
-                  src={form.map_embed_url}
-                  width="100%"
-                  height="300"
-                  style={{ border: 0 }}
-                  allowFullScreen
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  title="Map Preview"
-                />
+          {form.map_embed_url &&
+            /^https:\/\/(www\.)?google\.com\/maps\/embed/i.test(form.map_embed_url) && (
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">ตัวอย่างแผนที่</label>
+                <div className="rounded-lg overflow-hidden border border-gray-200">
+                  <iframe
+                    src={form.map_embed_url}
+                    width="100%"
+                    height="300"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title="Map Preview"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
 
         {/* ══════ Display Options ══════ */}
