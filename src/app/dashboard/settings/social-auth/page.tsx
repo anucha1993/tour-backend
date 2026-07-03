@@ -257,7 +257,7 @@ export default function SocialAuthSettingsPage() {
               <li>ไปที่ <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Cloud Console → Credentials</a></li>
               <li>กด &quot;Create Credentials&quot; → &quot;OAuth client ID&quot;</li>
               <li>เลือก Application type: &quot;Web application&quot;</li>
-              <li>เพิ่ม Authorized redirect URI: <code className="bg-white px-1 rounded">https://nexttrip.asia/auth/google/callback</code></li>
+              <li>เพิ่ม Authorized redirect URI: <code className="bg-white px-1 rounded">https://nexttripholiday.com/auth/google/callback</code></li>
               <li>Copy Client ID และ Client Secret มาใส่ด้านบน</li>
             </ol>
           </div>
@@ -368,7 +368,7 @@ export default function SocialAuthSettingsPage() {
               <li>ไปที่ <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Meta for Developers</a></li>
               <li>กด &quot;Create App&quot; → เลือก &quot;Consumer&quot; หรือ &quot;Business&quot;</li>
               <li>ไปที่ Settings → Basic เพื่อดู App ID และ App Secret</li>
-              <li>เพิ่ม Facebook Login product → Settings → Valid OAuth Redirect URIs: <code className="bg-white px-1 rounded">https://nexttrip.asia/auth/facebook/callback</code></li>
+              <li>เพิ่ม Facebook Login product → Settings → Valid OAuth Redirect URIs: <code className="bg-white px-1 rounded">https://nexttripholiday.com/auth/facebook/callback</code></li>
               <li>Copy App ID และ App Secret มาใส่ด้านบน</li>
             </ol>
           </div>
@@ -478,7 +478,7 @@ export default function SocialAuthSettingsPage() {
             <ol className="list-decimal list-inside space-y-1">
               <li>ไปที่ <a href="https://developers.line.biz/console/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">LINE Developers Console</a></li>
               <li>สร้าง Provider (ถ้ายังไม่มี) → กด &quot;Create a new channel&quot; → เลือก &quot;LINE Login&quot;</li>
-              <li>ตั้งค่า Callback URL: <code className="bg-white px-1 rounded">https://nexttrip.asia/auth/line/callback</code></li>
+              <li>ตั้งค่า Callback URL: <code className="bg-white px-1 rounded">https://nexttripholiday.com/auth/line/callback</code></li>
               <li>เปิดใช้งาน &quot;Email address permission&quot; ในแท็บ &quot;LINE Login&quot;</li>
               <li>Copy Channel ID และ Channel Secret จากแท็บ &quot;Basic settings&quot; มาใส่ด้านบน</li>
             </ol>

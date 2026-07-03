@@ -72,7 +72,7 @@ const defaultConfig: ContactPopupConfig = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.asia/api';
+  process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttripholiday.com/api';
 
 // Keep only digits for tel: links
 function toTel(n: string): string {

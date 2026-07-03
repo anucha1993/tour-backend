@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { subscriberApi, Subscriber, SubscriberStats, NewsletterItem, SubscriberSmtpConfig } from '@/lib/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.asia/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttripholiday.com/api';
 
 type TabType = 'subscribers' | 'newsletters' | 'create-newsletter' | 'smtp';
 
@@ -642,7 +642,7 @@ function NewslettersList() {
             <div className="px-6 py-2.5 border-b border-gray-200 bg-gray-50 text-xs space-y-0.5">
               <div className="flex gap-2">
                 <span className="text-gray-400 w-14 flex-shrink-0">From:</span>
-                <span className="text-gray-700">NextTrip Holiday &lt;noreply@nexttrip.asia&gt;</span>
+                <span className="text-gray-700">NextTrip Holiday &lt;noreply@nexttripholiday.com&gt;</span>
               </div>
               <div className="flex gap-2">
                 <span className="text-gray-400 w-14 flex-shrink-0">Subject:</span>
@@ -993,7 +993,7 @@ function CreateNewsletter({ onCreated }: { onCreated: () => void }) {
       พบกับดีลสุดพิเศษที่คัดสรรมาเพื่อคุณโดยเฉพาะ
     </p>
     <div style="text-align:center;margin:24px 0;">
-      <a href="https://nexttrip.asia/tours" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:600;">ดูทัวร์ทั้งหมด</a>
+      <a href="https://nexttripholiday.com/tours" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:600;">ดูทัวร์ทั้งหมด</a>
     </div>
   </div>
 </div>`);
@@ -1009,7 +1009,7 @@ function CreateNewsletter({ onCreated }: { onCreated: () => void }) {
       อ่านประสบการณ์จริงจากลูกค้าที่ไว้วางใจเรา
     </p>
     <div style="text-align:center;margin:24px 0;">
-      <a href="https://nexttrip.asia/tours" style="display:inline-block;background:#f59e0b;color:#fff;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:600;">ดูรีวิวทั้งหมด</a>
+      <a href="https://nexttripholiday.com/tours" style="display:inline-block;background:#f59e0b;color:#fff;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:600;">ดูรีวิวทั้งหมด</a>
     </div>
   </div>
 </div>`);
@@ -1105,7 +1105,7 @@ function CreateNewsletter({ onCreated }: { onCreated: () => void }) {
                 <div className="bg-white border-b border-gray-200 px-4 py-2 text-xs space-y-0.5">
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-12 flex-shrink-0">From:</span>
-                    <span className="text-gray-700 truncate">NextTrip Holiday &lt;noreply@nexttrip.asia&gt;</span>
+                    <span className="text-gray-700 truncate">NextTrip Holiday &lt;noreply@nexttripholiday.com&gt;</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-12 flex-shrink-0">To:</span>
@@ -1441,7 +1441,7 @@ function SmtpSettings() {
               type="email"
               value={config.from_address}
               onChange={(e) => setConfig({ ...config, from_address: e.target.value })}
-              placeholder="newsletter@nexttrip.asia"
+              placeholder="newsletter@nexttripholiday.com"
             />
           </div>
           <div>
@@ -1481,7 +1481,7 @@ function SmtpSettings() {
             </div>
             <div>
               <p className="font-medium mb-1">DMARC</p>
-              <code className="block bg-white/60 p-2 rounded text-[11px] break-all">v=DMARC1; p=quarantine; rua=mailto:dmarc@nexttrip.asia</code>
+              <code className="block bg-white/60 p-2 rounded text-[11px] break-all">v=DMARC1; p=quarantine; rua=mailto:dmarc@nexttripholiday.com</code>
               <p className="text-amber-700 mt-1">TXT record: _dmarc.yourdomain.com</p>
             </div>
           </div>

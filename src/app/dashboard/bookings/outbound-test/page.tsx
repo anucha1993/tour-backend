@@ -61,7 +61,7 @@ export default function OutboundBookingTestPage() {
   // Customer info
   const [customerFirstName, setCustomerFirstName] = useState('Test');
   const [customerLastName, setCustomerLastName] = useState('User');
-  const [customerEmail, setCustomerEmail] = useState('test@nexttrip.asia');
+  const [customerEmail, setCustomerEmail] = useState('test@nexttripholiday.com');
   const [customerPhone, setCustomerPhone] = useState('0812345678');
 
   // Booking state

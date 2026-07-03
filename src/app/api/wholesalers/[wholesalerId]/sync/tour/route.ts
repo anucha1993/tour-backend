@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const LARAVEL_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttrip.asia/api';
+const LARAVEL_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nexttripholiday.com/api';
 
 export async function POST(
   request: NextRequest,
