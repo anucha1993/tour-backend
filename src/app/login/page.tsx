@@ -122,16 +122,7 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            {/* Demo credentials */}
-            {/* <div className="mt-6 p-4 rounded-lg bg-gray-50 border border-gray-100">
-              <p className="text-xs font-medium text-gray-500 mb-2">Demo Credentials:</p>
-              <p className="text-sm text-gray-600">
-                <span className="font-mono bg-gray-200 px-1.5 py-0.5 rounded">admin@nexttrip.com</span>
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                <span className="font-mono bg-gray-200 px-1.5 py-0.5 rounded">password123</span>
-              </p>
-            </div> */}
+          
           </CardContent>
         </Card>
 
