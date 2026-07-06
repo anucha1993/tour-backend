@@ -6,7 +6,7 @@ import {
   FileText, Zap, Globe, Clock, CheckCircle2,
   XCircle, CreditCard, Package, AlertCircle,
   Eye, ChevronDown, Plus, Edit3, Users, MapPin,
-  Minus, X, Loader2,
+  Minus, X, Loader2, Trash2,
 } from 'lucide-react';
 import { bookingsApi, AdminBooking, BookingStatistics, toursApi, Tour } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,12 +48,14 @@ function SourceBadge({ source }: { source: string }) {
 }
 
 // ─── Booking Detail Modal ───
-function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, canWrite }: {
+function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete, canWrite, canDelete }: {
   booking: AdminBooking;
   onClose: () => void;
   onStatusUpdate: (id: number, status: string, note?: string) => Promise<void>;
   onEdit: () => void;
+  onDelete: () => void;
   canWrite: boolean;
+  canDelete: boolean;
 }) {
   const [newStatus, setNewStatus] = useState(booking.status);
   const [adminNote, setAdminNote] = useState(booking.admin_note || '');
@@ -85,6 +87,12 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, canWrite
               <button onClick={onEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 cursor-pointer">
                 <Edit3 className="w-4 h-4" />
                 แก้ไข
+              </button>
+            )}
+            {canDelete && (
+              <button onClick={onDelete} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 cursor-pointer">
+                <Trash2 className="w-4 h-4" />
+                ลบ
               </button>
             )}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
@@ -1230,6 +1238,20 @@ export default function BookingsPage() {
     }
   };
 
+  const handleDelete = async (b: AdminBooking) => {
+    const ok = confirm(`ต้องการลบใบจอง ${b.booking_code} ของ ${b.first_name} ${b.last_name} หรือไม่?\n\nการลบจะไม่สามารถกู้คืนได้`);
+    if (!ok) return;
+    try {
+      await bookingsApi.delete(b.id);
+      setSelectedBooking(null);
+      fetchBookings();
+      fetchStats();
+    } catch (err) {
+      console.error('Failed to delete booking', err);
+      alert((err as Error).message || 'เกิดข้อผิดพลาดในการลบใบจอง');
+    }
+  };
+
   const formatDate = (d: string) => new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
   const formatDateTime = (d: string) => new Date(d).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -1374,13 +1396,24 @@ export default function BookingsPage() {
                       {formatDateTime(b.created_at)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => setSelectedBooking(b)}
-                        className="p-1.5 hover:bg-gray-100 rounded-lg transition cursor-pointer"
-                        title="ดูรายละเอียด"
-                      >
-                        <Eye className="w-4 h-4 text-gray-400" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => setSelectedBooking(b)}
+                          className="p-1.5 hover:bg-gray-100 rounded-lg transition cursor-pointer"
+                          title="ดูรายละเอียด"
+                        >
+                          <Eye className="w-4 h-4 text-gray-400" />
+                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDelete(b)}
+                            className="p-1.5 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                            title="ลบใบจอง"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1422,6 +1455,8 @@ export default function BookingsPage() {
           onClose={() => setSelectedBooking(null)}
           onStatusUpdate={handleStatusUpdate}
           canWrite={canWrite}
+          canDelete={canDelete}
+          onDelete={() => handleDelete(selectedBooking)}
           onEdit={() => {
             setEditingBooking(selectedBooking);
             setSelectedBooking(null);

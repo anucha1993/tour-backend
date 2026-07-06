@@ -5770,6 +5770,12 @@ export const bookingsApi = {
       { method: 'PATCH', body: JSON.stringify(data) }
     ),
 
+  delete: (id: number) =>
+    apiRequest<{ success: boolean; message: string }>(
+      `/bookings/${id}`,
+      { method: 'DELETE' }
+    ),
+
   statistics: () =>
     apiRequest<BookingStatistics>('/bookings/statistics'),
 };
