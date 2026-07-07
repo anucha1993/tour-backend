@@ -5604,6 +5604,17 @@ export const promotionNotificationsApi = {
 
 // ===================== Bookings (admin) =====================
 
+export interface BookingEvent {
+  id: number;
+  event_type: string;
+  status: 'ok' | 'failed' | 'info' | 'warning';
+  source: string | null;
+  message: string | null;
+  payload: Record<string, unknown> | null;
+  user_id: number | null;
+  created_at: string;
+}
+
 export interface AdminBooking {
   id: number;
   booking_code: string;
@@ -5774,6 +5785,11 @@ export const bookingsApi = {
     apiRequest<{ success: boolean; message: string }>(
       `/bookings/${id}`,
       { method: 'DELETE' }
+    ),
+
+  events: (id: number) =>
+    apiRequest<{ success: boolean; data: BookingEvent[] }>(
+      `/bookings/${id}/events`
     ),
 
   statistics: () =>

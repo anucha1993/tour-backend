@@ -64,8 +64,19 @@ export default function BookingProviderSettings({ integrationId }: Props) {
           setEnabled(cRes.data.booking_enabled);
           setProviderCode(cRes.data.booking_provider ?? '');
           setHoldTtl(cRes.data.booking_hold_ttl_seconds ?? 900);
-          setConfig(cRes.data.booking_config ?? {});
-          if (cRes.data.provider_schema) setActiveSchema(cRes.data.provider_schema);
+
+          // Seed schema defaults into config so displayed defaults are actually persisted on save
+          const loaded = cRes.data.booking_config ?? {};
+          const schema = cRes.data.provider_schema;
+          if (schema) {
+            for (const f of schema.schema) {
+              if (loaded[f.key] === undefined && f.default !== undefined) {
+                loaded[f.key] = f.default;
+              }
+            }
+            setActiveSchema(schema);
+          }
+          setConfig(loaded);
         }
       } catch (e) {
         console.error('Load booking config failed:', e);

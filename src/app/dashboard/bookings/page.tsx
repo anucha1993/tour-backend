@@ -8,7 +8,7 @@ import {
   Eye, ChevronDown, Plus, Edit3, Users, MapPin,
   Minus, X, Loader2, Trash2,
 } from 'lucide-react';
-import { bookingsApi, AdminBooking, BookingStatistics, toursApi, Tour } from '@/lib/api';
+import { bookingsApi, AdminBooking, BookingStatistics, BookingEvent, toursApi, Tour } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -61,6 +61,24 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
   const [adminNote, setAdminNote] = useState(booking.admin_note || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusDropdown, setStatusDropdown] = useState(false);
+  const [events, setEvents] = useState<BookingEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [showEventPayload, setShowEventPayload] = useState<Record<number, boolean>>({});
+
+  // Fetch booking events when modal opens
+  useEffect(() => {
+    let cancelled = false;
+    setEventsLoading(true);
+    bookingsApi.events(booking.id)
+      .then(res => {
+        if (cancelled) return;
+        const raw = res as unknown as { data?: BookingEvent[] };
+        setEvents(Array.isArray(raw.data) ? raw.data : []);
+      })
+      .catch(err => console.error('Failed to fetch booking events', err))
+      .finally(() => { if (!cancelled) setEventsLoading(false); });
+    return () => { cancelled = true; };
+  }, [booking.id]);
 
   const handleUpdate = async () => {
     if (newStatus === booking.status && adminNote === (booking.admin_note || '')) return;
@@ -192,6 +210,69 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
               {booking.special_request && <p className="mt-1"><span className="text-gray-500">คำขอพิเศษ:</span> {booking.special_request}</p>}
             </div>
           )}
+
+          {/* Event Timeline */}
+          <div className="border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-700">Timeline / Events</h3>
+              <span className="text-xs text-gray-400">{events.length} รายการ</span>
+            </div>
+            {eventsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                กำลังโหลด...
+              </div>
+            ) : events.length === 0 ? (
+              <p className="text-xs text-gray-400">ยังไม่มี event สำหรับการจองนี้</p>
+            ) : (
+              <ol className="space-y-2">
+                {events.map(ev => {
+                  const isFailed = ev.status === 'failed';
+                  const isOk = ev.status === 'ok';
+                  const isWarn = ev.status === 'warning';
+                  const colorBar = isFailed ? 'bg-red-500' : isOk ? 'bg-green-500' : isWarn ? 'bg-yellow-500' : 'bg-blue-400';
+                  const StatusIcon = isFailed ? XCircle : isOk ? CheckCircle2 : isWarn ? AlertCircle : Clock;
+                  const statusColor = isFailed ? 'text-red-600' : isOk ? 'text-green-600' : isWarn ? 'text-yellow-700' : 'text-blue-600';
+                  const showPayload = !!showEventPayload[ev.id];
+                  const hasPayload = ev.payload && Object.keys(ev.payload).length > 0;
+                  return (
+                    <li key={ev.id} className="flex gap-3 text-xs">
+                      <div className={`w-1 rounded-full ${colorBar}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <StatusIcon className={`w-3.5 h-3.5 ${statusColor}`} />
+                          <span className="font-semibold text-gray-700">{ev.event_type}</span>
+                          {ev.source && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">{ev.source}</span>
+                          )}
+                          <span className="text-gray-400 ml-auto whitespace-nowrap">
+                            {new Date(ev.created_at).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                        {ev.message && (
+                          <p className={`mt-0.5 ${isFailed ? 'text-red-700' : 'text-gray-600'} break-words`}>{ev.message}</p>
+                        )}
+                        {hasPayload && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEventPayload(s => ({ ...s, [ev.id]: !s[ev.id] }))}
+                            className="mt-1 text-[11px] text-blue-600 hover:underline cursor-pointer"
+                          >
+                            {showPayload ? 'ซ่อน payload' : 'ดู payload'}
+                          </button>
+                        )}
+                        {showPayload && hasPayload && (
+                          <pre className="mt-1 p-2 bg-gray-50 rounded text-[10px] overflow-x-auto text-gray-600">
+                            {JSON.stringify(ev.payload, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
 
           {/* Status update */}
           <div className="border border-gray-200 rounded-xl p-4">
