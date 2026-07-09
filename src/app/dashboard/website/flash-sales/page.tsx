@@ -50,6 +50,20 @@ function formatDateTimeLocal(isoString: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/**
+ * Convert a value from `<input type="datetime-local">` (which has no timezone,
+ * e.g. "2026-07-07T03:20") into a UTC ISO string that the backend can parse
+ * unambiguously. The browser treats the input as LOCAL time, so wrapping in
+ * `new Date(...)` + `.toISOString()` produces the correct UTC representation.
+ * Returns '' for empty input so callers can leave the field unset.
+ */
+function localInputToUtcIso(localDateTime: string): string {
+  if (!localDateTime) return '';
+  const d = new Date(localDateTime);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString();
+}
+
 function formatDateTime(isoString: string): string {
   if (!isoString) return '-';
   return new Date(isoString).toLocaleString('th-TH', {
@@ -210,8 +224,14 @@ export default function FlashSalesPage() {
     if (!form.title || !form.start_date || !form.end_date) return;
     try {
       setSaving(true);
+      // Convert datetime-local strings (no TZ) to UTC ISO so backend stores the intended local time.
+      const payload = {
+        ...form,
+        start_date: localInputToUtcIso(form.start_date),
+        end_date: localInputToUtcIso(form.end_date),
+      };
       if (modalMode === 'create') {
-        const res = await flashSalesApi.create(form);
+        const res = await flashSalesApi.create(payload);
         await fetchFlashSales();
         const newSale = res.data;
         if (newSale?.id) {
@@ -220,7 +240,7 @@ export default function FlashSalesPage() {
           setModalMode(null);
         }
       } else if (modalMode === 'edit' && selectedSale) {
-        await flashSalesApi.update(selectedSale.id, form);
+        await flashSalesApi.update(selectedSale.id, payload);
         setModalMode(null);
         await fetchFlashSales();
       }
@@ -422,7 +442,7 @@ export default function FlashSalesPage() {
         items.push({
           period_id: pid,
           flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
-          flash_end_date: s.flashEndDate || undefined,
+          flash_end_date: s.flashEndDate ? localInputToUtcIso(s.flashEndDate) : undefined,
         });
       }
     }
@@ -663,7 +683,7 @@ export default function FlashSalesPage() {
         if (s.isExisting && s.itemId) {
           await flashSalesApi.updateItem(selectedSale.id, s.itemId, {
             flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
-            flash_end_date: s.flashEndDate || undefined,
+            flash_end_date: s.flashEndDate ? localInputToUtcIso(s.flashEndDate) : undefined,
             quantity_limit: s.quantityLimit ? Number(s.quantityLimit) : undefined,
           });
         }
@@ -675,7 +695,7 @@ export default function FlashSalesPage() {
           newItems.push({
             period_id: Number(pidStr),
             flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
-            flash_end_date: s.flashEndDate || undefined,
+            flash_end_date: s.flashEndDate ? localInputToUtcIso(s.flashEndDate) : undefined,
           });
         }
       }
@@ -739,7 +759,7 @@ export default function FlashSalesPage() {
         payload.discount_value = Number(massDiscountValue);
       }
       if (hasEndDate) {
-        payload.flash_end_date = massFlashEndDate || null;
+        payload.flash_end_date = massFlashEndDate ? localInputToUtcIso(massFlashEndDate) : null;
       }
       await flashSalesApi.massUpdateDiscount(selectedSale.id, payload);
       await fetchItems(selectedSale.id);
