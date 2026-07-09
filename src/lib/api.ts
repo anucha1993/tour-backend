@@ -5667,6 +5667,8 @@ export interface AdminBooking {
     tour_code: string;
     duration_days?: number;
     duration_nights?: number;
+    wholesaler_id?: number | null;
+    wholesaler?: { id: number; name: string; code: string } | null;
   };
   period?: {
     id: number;

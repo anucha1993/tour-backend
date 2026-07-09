@@ -8,7 +8,7 @@ import {
   Eye, ChevronDown, Plus, Edit3, Users, MapPin,
   Minus, X, Loader2, Trash2,
 } from 'lucide-react';
-import { bookingsApi, AdminBooking, BookingStatistics, BookingEvent, toursApi, Tour } from '@/lib/api';
+import { bookingsApi, usersApi, AdminBooking, BookingStatistics, BookingEvent, toursApi, Tour } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -136,8 +136,15 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
           <div className="bg-gray-50 rounded-xl p-4">
             <h3 className="text-sm font-bold text-gray-700 mb-2">ข้อมูลทัวร์</h3>
             <p className="text-sm font-semibold">{booking.tour?.title || '-'}</p>
-            <div className="flex gap-4 mt-1 text-xs text-gray-500">
+            <div className="flex gap-4 mt-1 text-xs text-gray-500 flex-wrap">
               <span>รหัส: {booking.tour?.tour_code}</span>
+              {booking.tour?.wholesaler && (
+                <span>
+                  Wholesaler:{' '}
+                  <span className="font-mono text-blue-600">[{booking.tour.wholesaler.code}]</span>{' '}
+                  <span className="text-gray-600">{booking.tour.wholesaler.name}</span>
+                </span>
+              )}
               {booking.period && (
                 <span>เดินทาง: {formatDate(booking.period.start_date)} - {formatDate(booking.period.end_date)}</span>
               )}
@@ -154,6 +161,30 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
               </div>
             )}
           </div>
+
+          {/* Outbound (Booking API) info */}
+          {(booking.provider || booking.provider_booking_ref) && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold uppercase text-white bg-purple-500 rounded px-1.5 py-0.5">API</span>
+                <h3 className="text-sm font-bold text-purple-800">Booking API (Outbound)</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
+                {booking.provider && (
+                  <div><span className="text-gray-500">Provider:</span> <span className="font-semibold">{booking.provider}</span></div>
+                )}
+                {booking.provider_status && (
+                  <div><span className="text-gray-500">สถานะ:</span> <span className="font-semibold">{booking.provider_status}</span></div>
+                )}
+                {booking.provider_booking_ref && (
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Ref:</span>{' '}
+                    <span className="font-mono font-semibold text-purple-700">{booking.provider_booking_ref}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Customer info */}
           <div className="bg-gray-50 rounded-xl p-4">
@@ -206,7 +237,7 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
           {/* Extras */}
           {(booking.sale_code || booking.special_request) && (
             <div className="bg-gray-50 rounded-xl p-4 text-sm">
-              {booking.sale_code && <p><span className="text-gray-500">Sale Code:</span> {booking.sale_code}</p>}
+              {booking.sale_code && <p><span className="text-gray-500">ผู้ขาย (Sale):</span> {booking.sale_code}</p>}
               {booking.special_request && <p className="mt-1"><span className="text-gray-500">คำขอพิเศษ:</span> {booking.special_request}</p>}
             </div>
           )}
@@ -331,7 +362,7 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
 }
 
 // ─── Create Booking Modal ───
-function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateBookingModal({ onClose, onCreated, salesUsers }: { onClose: () => void; onCreated: () => void; salesUsers: { id: number; name: string }[] }) {
   const [step, setStep] = useState<'tour' | 'form'>('tour');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Tour[]>([]);
@@ -776,9 +807,17 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-xs font-medium text-gray-700">Sale Code</label>
-                        <input type="text" value={saleCode} onChange={e => setSaleCode(e.target.value)}
-                          className="mt-1 w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:border-blue-400 outline-none" />
+                        <label className="text-xs font-medium text-gray-700">ผู้ขาย (Sale)</label>
+                        <select value={saleCode} onChange={e => setSaleCode(e.target.value)}
+                          className="mt-1 w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:border-blue-400 outline-none bg-white cursor-pointer">
+                          <option value="">— ไม่ระบุ —</option>
+                          {salesUsers.map(s => (
+                            <option key={s.id} value={s.name}>{s.name}</option>
+                          ))}
+                          {saleCode && !salesUsers.some(s => s.name === saleCode) && (
+                            <option value={saleCode}>{saleCode} (เดิม)</option>
+                          )}
+                        </select>
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-700">สถานะใบจอง</label>
@@ -849,7 +888,7 @@ function CreateBookingModal({ onClose, onCreated }: { onClose: () => void; onCre
 }
 
 // ─── Edit Booking Modal (Website-style UI) ───
-function EditBookingModal({ booking, onClose, onSaved }: { booking: AdminBooking; onClose: () => void; onSaved: () => void }) {
+function EditBookingModal({ booking, onClose, onSaved, salesUsers }: { booking: AdminBooking; onClose: () => void; onSaved: () => void; salesUsers: { id: number; name: string }[] }) {
   // Form state
   const [firstName, setFirstName] = useState(booking.first_name);
   const [lastName, setLastName] = useState(booking.last_name);
@@ -1152,9 +1191,17 @@ function EditBookingModal({ booking, onClose, onSaved }: { booking: AdminBooking
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs font-medium text-gray-700">Sale Code</label>
-                    <input type="text" value={saleCode} onChange={e => setSaleCode(e.target.value)}
-                      className="mt-1 w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:border-blue-400 outline-none" />
+                    <label className="text-xs font-medium text-gray-700">ผู้ขาย (Sale)</label>
+                    <select value={saleCode} onChange={e => setSaleCode(e.target.value)}
+                      className="mt-1 w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:border-blue-400 outline-none bg-white cursor-pointer">
+                      <option value="">— ไม่ระบุ —</option>
+                      {salesUsers.map(s => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
+                      {saleCode && !salesUsers.some(s => s.name === saleCode) && (
+                        <option value={saleCode}>{saleCode} (เดิม)</option>
+                      )}
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-700">สถานะใบจอง</label>
@@ -1265,6 +1312,26 @@ export default function BookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBooking, setEditingBooking] = useState<AdminBooking | null>(null);
+  const [salesUsers, setSalesUsers] = useState<{ id: number; name: string }[]>([]);
+
+  // Load sales users (role='sale', active) once for booking form dropdowns
+  useEffect(() => {
+    let cancelled = false;
+    usersApi.list({ role: 'sale', is_active: true, per_page: 100 })
+      .then(res => {
+        if (cancelled) return;
+        // UserController wraps as: { success, data: { data: [...], meta: {} } }
+        // apiRequest returns the raw JSON, so users array is at res.data.data
+        const raw = res as unknown as { data?: { data?: { id: number; name: string }[] } | { id: number; name: string }[] };
+        const inner = raw?.data as unknown;
+        const list = Array.isArray(inner)
+          ? inner as { id: number; name: string }[]
+          : ((inner as { data?: { id: number; name: string }[] })?.data ?? []);
+        setSalesUsers(list);
+      })
+      .catch(err => console.error('Failed to fetch sales users:', err));
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
@@ -1436,6 +1503,7 @@ export default function BookingsPage() {
                   <th className="px-4 py-3 text-center">จำนวน</th>
                   <th className="px-4 py-3 text-right">ยอดรวม</th>
                   <th className="px-4 py-3 text-center">ช่องทาง</th>
+                  <th className="px-4 py-3 text-left">ผู้ขาย</th>
                   <th className="px-4 py-3 text-center">สถานะ</th>
                   <th className="px-4 py-3 text-center">วันจอง</th>
                   <th className="px-4 py-3 text-center w-10"></th>
@@ -1445,15 +1513,38 @@ export default function BookingsPage() {
                 {bookings.map(b => (
                   <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="font-mono font-semibold text-blue-600">{b.booking_code}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono font-semibold text-blue-600">{b.booking_code}</span>
+                        {b.provider_booking_ref && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5 self-start"
+                            title={`Provider reference (${b.provider || 'outbound'})`}
+                          >
+                            <Zap className="w-2.5 h-2.5" />
+                            Ref: {b.provider_booking_ref}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-800">{b.first_name} {b.last_name}</div>
                       <div className="text-xs text-gray-400">{b.phone}</div>
                     </td>
-                    <td className="px-4 py-3 max-w-[200px]">
-                      <div className="font-medium text-gray-700 truncate">{b.tour?.title || '-'}</div>
-                      <div className="text-xs text-gray-400">{b.tour?.tour_code} {b.period ? `• ${formatDate(b.period.start_date)}` : ''}</div>
+                    <td className="px-4 py-3 max-w-[220px]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {b.provider && (
+                          <span className="text-[10px] font-semibold uppercase text-white bg-purple-500 rounded px-1.5 py-0.5 flex-shrink-0"
+                            title="Booking API (Outbound)">
+                            API
+                          </span>
+                        )}
+                        <span className="font-medium text-gray-700 truncate">{b.tour?.title || '-'}</span>
+                      </div>
+                      <div className="text-xs text-gray-400 truncate">
+                        {b.tour?.wholesaler?.code && (
+                          <span className="font-mono text-blue-500 mr-1" title={b.tour.wholesaler.name}>[{b.tour.wholesaler.code}]</span>
+                        )}
+                        {b.tour?.tour_code} {b.period ? `• ${formatDate(b.period.start_date)}` : ''}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className="text-gray-700">{b.qty_adult + b.qty_child_bed + b.qty_child_nobed}</span>
@@ -1464,6 +1555,13 @@ export default function BookingsPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <SourceBadge source={b.source} />
+                    </td>
+                    <td className="px-4 py-3 text-left">
+                      {b.sale_code ? (
+                        <span className="text-xs text-gray-700" title={b.sale_code}>{b.sale_code}</span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex flex-col items-center gap-0.5">
@@ -1548,6 +1646,7 @@ export default function BookingsPage() {
       {/* Create Booking Modal */}
       {showCreateModal && (
         <CreateBookingModal
+          salesUsers={salesUsers}
           onClose={() => setShowCreateModal(false)}
           onCreated={() => {
             setShowCreateModal(false);
@@ -1561,6 +1660,7 @@ export default function BookingsPage() {
       {editingBooking && (
         <EditBookingModal
           booking={editingBooking}
+          salesUsers={salesUsers}
           onClose={() => setEditingBooking(null)}
           onSaved={() => {
             setEditingBooking(null);
