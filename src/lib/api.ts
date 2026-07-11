@@ -530,6 +530,9 @@ export interface WebMember {
   last_login_ip: string | null;
   created_at: string;
   updated_at: string;
+  total_points?: number;
+  lifetime_points?: number;
+  lifetime_spending?: number;
   level?: {
     id: number;
     name: string;

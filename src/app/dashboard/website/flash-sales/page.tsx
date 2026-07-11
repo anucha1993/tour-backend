@@ -22,6 +22,7 @@ import {
   Check,
   Loader2,
   Users,
+  GripVertical,
 } from 'lucide-react';
 
 // ─── Types ───
@@ -160,6 +161,39 @@ export default function FlashSalesPage() {
   const [massFlashEndDate, setMassFlashEndDate] = useState('');
   const [massUpdating, setMassUpdating] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
+
+  // Drag & drop reorder
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  const handleReorder = async (fromId: number, toId: number) => {
+    if (fromId === toId || !selectedSale) return;
+    const fromIdx = saleItems.findIndex((i) => i.id === fromId);
+    const toIdx = saleItems.findIndex((i) => i.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    // Optimistic reorder
+    const next = [...saleItems];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setSaleItems(next);
+
+    // Persist to backend
+    try {
+      setSavingOrder(true);
+      await flashSalesApi.reorderItems(
+        selectedSale.id,
+        next.map((it, idx) => ({ id: it.id, sort_order: idx + 1 })),
+      );
+    } catch (err) {
+      console.error('Failed to save order:', err);
+      alert('บันทึกลำดับไม่สำเร็จ ระบบจะโหลดข้อมูลใหม่');
+      await fetchItems(selectedSale.id);
+    } finally {
+      setSavingOrder(false);
+    }
+  };
 
   const fetchFlashSales = useCallback(async () => {
     try {
@@ -1314,10 +1348,27 @@ export default function FlashSalesPage() {
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {/* Reorder tip / saving indicator */}
+            <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-100 text-xs">
+              <div className="flex items-center gap-2 text-orange-700">
+                <GripVertical className="w-3.5 h-3.5" />
+                ลากที่ไอคอน <GripVertical className="inline w-3 h-3" /> ในแต่ละแถวเพื่อจัดลำดับทัวร์ตามใจ (บันทึกอัตโนมัติ)
+              </div>
+              {savingOrder && (
+                <span className="inline-flex items-center gap-1 text-orange-600">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  กำลังบันทึกลำดับ...
+                </span>
+              )}
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-2 py-3 font-medium text-gray-600 w-10" title="ลากเพื่อจัดเรียงลำดับ">
+                      <span className="sr-only">จัดเรียง</span>
+                      ⇅
+                    </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 w-8">#</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">รอบเดินทาง / ทัวร์</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600">ราคาปกติ</th>
@@ -1336,8 +1387,45 @@ export default function FlashSalesPage() {
                     return (
                       <React.Fragment key={item.id}>
                         <tr
-                          className={`hover:bg-gray-50 transition ${!item.is_active ? 'opacity-50 bg-gray-50' : ''} ${isEditingTour ? 'bg-blue-50/40' : ''}`}
+                          draggable={!editingItemId}
+                          onDragStart={(e) => {
+                            setDraggingId(item.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', String(item.id));
+                          }}
+                          onDragEnd={() => { setDraggingId(null); setDragOverId(null); }}
+                          onDragOver={(e) => {
+                            if (draggingId == null || draggingId === item.id) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            if (dragOverId !== item.id) setDragOverId(item.id);
+                          }}
+                          onDragLeave={(e) => {
+                            // only clear if leaving the row itself
+                            if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return;
+                            if (dragOverId === item.id) setDragOverId(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const fromId = Number(e.dataTransfer.getData('text/plain'));
+                            setDragOverId(null);
+                            setDraggingId(null);
+                            if (fromId && fromId !== item.id) handleReorder(fromId, item.id);
+                          }}
+                          className={`hover:bg-gray-50 transition ${!item.is_active ? 'opacity-50 bg-gray-50' : ''} ${isEditingTour ? 'bg-blue-50/40' : ''} ${draggingId === item.id ? 'opacity-40' : ''} ${dragOverId === item.id ? 'ring-2 ring-inset ring-orange-400 bg-orange-50/40' : ''}`}
                         >
+                          {/* Drag handle */}
+                          <td className="px-2 py-3 text-center align-middle">
+                            <button
+                              type="button"
+                              className="p-1 text-gray-300 hover:text-orange-500 cursor-grab active:cursor-grabbing"
+                              title="ลากเพื่อจัดเรียง"
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </button>
+                          </td>
+
                           <td className="px-4 py-3 text-gray-400">{idx + 1}</td>
 
                           {/* Period + Tour (period-centric) */}
@@ -1472,7 +1560,7 @@ export default function FlashSalesPage() {
                         {/* ─── Inline Edit: full-tour periods table ─── */}
                         {isEditTarget && (
                           <tr ref={editPanelRef}>
-                            <td colSpan={9} className="p-0 bg-blue-50/30">
+                            <td colSpan={10} className="p-0 bg-blue-50/30">
                               <div className="border-t-2 border-b-2 border-blue-300">
                                 {editLoading ? (
                                   <div className="flex items-center justify-center py-8">

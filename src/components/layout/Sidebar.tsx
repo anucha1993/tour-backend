@@ -485,6 +485,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
         icon: Shield,
       },
       {
+        title: 'การแสดงรอบเดินทาง',
+        href: '/dashboard/settings/period-display',
+        icon: Calendar,
+      },
+      {
         title: 'Aggregation',
         href: '/dashboard/settings/aggregation',
         icon: Settings,
