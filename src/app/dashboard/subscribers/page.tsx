@@ -171,126 +171,149 @@ function SubscribersList() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg"><Users className="w-5 h-5 text-blue-600" /></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card className="p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">ทั้งหมด</p>
-                <p className="text-xl font-bold">{stats.total}</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">ทั้งหมด</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total.toLocaleString()}</p>
               </div>
+              <div className="p-2.5 bg-blue-50 rounded-lg"><Users className="w-5 h-5 text-blue-600" /></div>
             </div>
           </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+          <Card className="p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">ใช้งาน</p>
-                <p className="text-xl font-bold text-green-600">{stats.active}</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">ใช้งาน</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{stats.active.toLocaleString()}</p>
               </div>
+              <div className="p-2.5 bg-green-50 rounded-lg"><CheckCircle className="w-5 h-5 text-green-600" /></div>
             </div>
           </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-100 rounded-lg"><Clock className="w-5 h-5 text-yellow-600" /></div>
+          <Card className="p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">รอยืนยัน</p>
-                <p className="text-xl font-bold text-yellow-600">{stats.pending}</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">รอยืนยัน</p>
+                <p className="text-2xl font-bold text-yellow-600 mt-1">{stats.pending.toLocaleString()}</p>
               </div>
+              <div className="p-2.5 bg-yellow-50 rounded-lg"><Clock className="w-5 h-5 text-yellow-600" /></div>
             </div>
           </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 rounded-lg"><XCircle className="w-5 h-5 text-gray-500" /></div>
+          <Card className="p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">ยกเลิก</p>
-                <p className="text-xl font-bold text-gray-500">{stats.unsubscribed}</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">ยกเลิก</p>
+                <p className="text-2xl font-bold text-gray-500 mt-1">{stats.unsubscribed.toLocaleString()}</p>
               </div>
+              <div className="p-2.5 bg-gray-100 rounded-lg"><XCircle className="w-5 h-5 text-gray-500" /></div>
             </div>
           </Card>
         </div>
       )}
 
       {/* Filters */}
-      <Card className="p-4">
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <Card className="p-3 border border-gray-200">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex-1 min-w-[240px] relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <Input
               placeholder="ค้นหาอีเมล..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="pl-10"
+              className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="border rounded-lg px-3 py-2 text-sm"
+            className="h-10 border border-gray-200 rounded-lg px-3 text-sm bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           >
             <option value="">สถานะทั้งหมด</option>
             <option value="active">ใช้งาน</option>
             <option value="pending">รอยืนยัน</option>
             <option value="unsubscribed">ยกเลิก</option>
           </select>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-1" /> Export CSV
+          <Button variant="outline" size="sm" onClick={handleExport} className="h-10">
+            <Download className="w-4 h-4 mr-1.5" /> Export CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={fetchData}>
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          <button
+            onClick={fetchData}
+            title="รีเฟรช"
+            className="h-10 w-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </Card>
 
       {/* Table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden border border-gray-200">
         {loading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : subscribers.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <Mail className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>ไม่พบ subscriber</p>
+          <div className="text-center py-20 text-gray-400">
+            <Mail className="w-12 h-12 mx-auto mb-3 opacity-40" />
+            <p className="font-medium text-gray-500">ไม่พบ subscriber</p>
+            <p className="text-sm mt-1">ลองปรับเงื่อนไขการค้นหา หรือรอผู้สมัครใหม่</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">อีเมล</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">แหล่งที่มา</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">ประเทศ</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่สมัคร</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">จัดการ</th>
+                  <th className="text-left px-5 py-3 font-semibold text-xs text-gray-600 uppercase tracking-wide">อีเมล</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs text-gray-600 uppercase tracking-wide">สถานะ</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs text-gray-600 uppercase tracking-wide">แหล่งที่มา</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs text-gray-600 uppercase tracking-wide">ประเทศที่สนใจ</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs text-gray-600 uppercase tracking-wide">วันที่สมัคร</th>
+                  <th className="text-right px-5 py-3 font-semibold text-xs text-gray-600 uppercase tracking-wide">จัดการ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-gray-100">
                 {subscribers.map((sub) => {
                   const statusInfo = STATUS_LABELS[sub.status] || STATUS_LABELS.pending;
                   const StatusIcon = statusInfo.icon;
+                  const dateStr = sub.subscribed_at || sub.created_at;
                   return (
-                    <tr key={sub.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{sub.email}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
+                    <tr key={sub.id} className="hover:bg-blue-50/40 transition-colors group">
+                      <td className="px-5 py-3.5 align-middle">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {sub.email.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-medium text-gray-900 truncate" title={sub.email}>{sub.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
                           <StatusIcon className="w-3 h-3" />
                           {statusInfo.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{sub.source_page || '-'}</td>
-                      <td className="px-4 py-3 text-gray-500">{sub.interest_country || '-'}</td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {sub.subscribed_at ? new Date(sub.subscribed_at).toLocaleDateString('th-TH') : sub.created_at ? new Date(sub.created_at).toLocaleDateString('th-TH') : '-'}
+                      <td className="px-4 py-3.5 align-middle">
+                        {sub.source_page ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-mono">
+                            {sub.source_page}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3.5 align-middle text-gray-700">
+                        {sub.interest_country || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3.5 align-middle text-gray-600 whitespace-nowrap">
+                        {dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-5 py-3.5 text-right align-middle">
                         <button
                           onClick={() => handleDelete(sub.id)}
-                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all p-1.5 rounded"
                           title="ลบ"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -306,30 +329,28 @@ function SubscribersList() {
 
         {/* Pagination */}
         {pagination.last_page > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-            <p className="text-sm text-gray-500">
-              ทั้งหมด {pagination.total} รายการ
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-200 bg-gray-50/70">
+            <p className="text-sm text-gray-600">
+              ทั้งหมด <span className="font-semibold text-gray-900">{pagination.total.toLocaleString()}</span> รายการ
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
+                className="h-8 w-8 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm text-gray-600">
-                {pagination.current_page} / {pagination.last_page}
+              </button>
+              <span className="text-sm text-gray-700 px-2">
+                หน้า <span className="font-semibold">{pagination.current_page}</span> / {pagination.last_page}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 disabled={page >= pagination.last_page}
                 onClick={() => setPage(page + 1)}
+                className="h-8 w-8 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
-              </Button>
+              </button>
             </div>
           </div>
         )}
