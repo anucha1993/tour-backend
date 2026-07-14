@@ -21,6 +21,7 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
+  Filter,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
@@ -48,6 +49,8 @@ interface ContactPopupConfig {
   delay_seconds: number;
   show_close_button: boolean;
   show_on_mobile: boolean;
+  page_filter_mode: 'all' | 'include' | 'exclude';
+  page_patterns: string[];
 }
 
 const defaultConfig: ContactPopupConfig = {
@@ -69,6 +72,8 @@ const defaultConfig: ContactPopupConfig = {
   delay_seconds: 3,
   show_close_button: true,
   show_on_mobile: true,
+  page_filter_mode: 'all',
+  page_patterns: [],
 };
 
 const API_BASE_URL =
@@ -227,7 +232,7 @@ export default function ContactPopupSettingsPage() {
           </Link>{' '}
           / <span className="text-gray-900">Contact Popup</span>
         </nav>
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-start sm:items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <MessageCircle className="w-6 h-6 text-green-600" />
@@ -237,21 +242,27 @@ export default function ContactPopupSettingsPage() {
               ตั้งค่าป๊อปอัพติดต่อแบบลอยที่มุมจอหน้าเว็บ (LINE / QR / เบอร์โทร)
             </p>
           </div>
-          <div className="flex gap-2">
-            <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg cursor-pointer text-sm">
-              <input
-                type="checkbox"
-                checked={config.is_active}
-                onChange={(e) => setConfig({ ...config, is_active: e.target.checked })}
-              />
-              <span className={config.is_active ? 'text-green-700 font-medium' : 'text-gray-500'}>
+          <div className="flex items-center gap-3">
+            {/* Toggle switch */}
+            <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+              <span className={`text-sm font-medium ${config.is_active ? 'text-green-700' : 'text-gray-500'}`}>
                 {config.is_active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+              </span>
+              <span className="relative inline-block">
+                <input
+                  type="checkbox"
+                  checked={config.is_active}
+                  onChange={(e) => setConfig({ ...config, is_active: e.target.checked })}
+                  className="peer sr-only"
+                />
+                <span className="block w-11 h-6 bg-gray-300 rounded-full transition-colors peer-checked:bg-green-500" />
+                <span className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
               </span>
             </label>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 shadow-sm"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               บันทึก
@@ -281,8 +292,8 @@ export default function ContactPopupSettingsPage() {
         {/* Left column: form */}
         <div className="lg:col-span-2 space-y-6">
           {/* Text content */}
-          <section className="bg-white rounded-lg border p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2 pb-2 border-b border-gray-100">
               <Settings className="w-4 h-4" /> ข้อความที่แสดง
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -293,7 +304,7 @@ export default function ContactPopupSettingsPage() {
                   maxLength={100}
                   value={config.heading}
                   onChange={(e) => setConfig({ ...config, heading: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="จองผ่านไลน์"
                 />
               </div>
@@ -304,12 +315,12 @@ export default function ContactPopupSettingsPage() {
                   maxLength={255}
                   value={config.subheading}
                   onChange={(e) => setConfig({ ...config, subheading: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="ติดต่อข่าวสารโปรโมชั่นทัวร์"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 mb-1">
                   <Clock className="w-3 h-3" /> เวลาทำการ (แสดงใต้เบอร์โทร)
                 </label>
                 <textarea
@@ -317,7 +328,7 @@ export default function ContactPopupSettingsPage() {
                   maxLength={255}
                   value={config.hours_text}
                   onChange={(e) => setConfig({ ...config, hours_text: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 whitespace-pre-line"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder={'ทุกวัน\n08.00-20.00 น.'}
                 />
                 <p className="text-[11px] text-gray-500 mt-1">รองรับการขึ้นบรรทัดใหม่</p>
@@ -326,8 +337,8 @@ export default function ContactPopupSettingsPage() {
           </section>
 
           {/* LINE */}
-          <section className="bg-white rounded-lg border p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2 pb-2 border-b border-gray-100">
               <QrCode className="w-4 h-4" /> LINE / QR Code
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -338,7 +349,7 @@ export default function ContactPopupSettingsPage() {
                   maxLength={100}
                   value={config.line_id}
                   onChange={(e) => setConfig({ ...config, line_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="@yourline"
                 />
               </div>
@@ -349,14 +360,14 @@ export default function ContactPopupSettingsPage() {
                   maxLength={500}
                   value={config.line_url}
                   onChange={(e) => setConfig({ ...config, line_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="https://line.me/R/ti/p/@yourline"
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-2">QR Code</label>
                 <div className="flex items-start gap-4">
-                  <div className="w-28 h-28 rounded-lg border bg-gray-50 flex items-center justify-center overflow-hidden relative">
+                  <div className="w-28 h-28 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
                     {config.qr_image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={config.qr_image} alt="QR" className="w-full h-full object-contain" />
@@ -400,12 +411,12 @@ export default function ContactPopupSettingsPage() {
           </section>
 
           {/* Mascot image */}
-          <section className="bg-white rounded-lg border p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2 pb-2 border-b border-gray-100">
               <ImageIcon className="w-4 h-4" /> รูปมาสคอต (ด้านบน)
             </h2>
             <div className="flex items-start gap-4">
-              <div className="w-24 h-28 rounded-lg border bg-gray-50 flex items-center justify-center overflow-hidden relative">
+              <div className="w-24 h-24 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden relative">
                 {config.mascot_image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -477,9 +488,9 @@ export default function ContactPopupSettingsPage() {
           </section>
 
           {/* Phones */}
-          <section className="bg-white rounded-lg border p-5 space-y-4">
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2 pb-2 border-b border-gray-100">
                 <Phone className="w-4 h-4" /> เบอร์โทรศัพท์
               </h2>
               <button
@@ -502,14 +513,14 @@ export default function ContactPopupSettingsPage() {
                     placeholder="แสดงผล เช่น 091-954-9229"
                     value={p.number}
                     onChange={(e) => updatePhone(idx, { number: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <input
                     type="text"
                     placeholder="tel: (ปล่อยว่างเพื่อ auto)"
                     value={p.tel ?? ''}
                     onChange={(e) => updatePhone(idx, { tel: e.target.value })}
-                    className="w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="w-48 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
                   />
                   <button
                     onClick={() => removePhone(idx)}
@@ -524,11 +535,11 @@ export default function ContactPopupSettingsPage() {
           </section>
 
           {/* Social */}
-          <section className="bg-white rounded-lg border p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700">ช่องทางอื่น</h2>
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 pb-2 border-b border-gray-100">ช่องทางอื่น</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 mb-1">
                   <Facebook className="w-3 h-3" /> Facebook URL
                 </label>
                 <input
@@ -536,12 +547,12 @@ export default function ContactPopupSettingsPage() {
                   maxLength={500}
                   value={config.facebook_url}
                   onChange={(e) => setConfig({ ...config, facebook_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="https://facebook.com/..."
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 mb-1">
                   <Mail className="w-3 h-3" /> Email
                 </label>
                 <input
@@ -549,7 +560,7 @@ export default function ContactPopupSettingsPage() {
                   maxLength={255}
                   value={config.email}
                   onChange={(e) => setConfig({ ...config, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="info@example.com"
                 />
               </div>
@@ -557,8 +568,8 @@ export default function ContactPopupSettingsPage() {
           </section>
 
           {/* Display options */}
-          <section className="bg-white rounded-lg border p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700">การแสดงผล</h2>
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 pb-2 border-b border-gray-100">การแสดงผล</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">ตำแหน่ง</label>
@@ -567,7 +578,7 @@ export default function ContactPopupSettingsPage() {
                   onChange={(e) =>
                     setConfig({ ...config, position: e.target.value as ContactPopupConfig['position'] })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="bottom-right">มุมขวาล่าง</option>
                   <option value="bottom-left">มุมซ้ายล่าง</option>
@@ -583,7 +594,7 @@ export default function ContactPopupSettingsPage() {
                       display_frequency: e.target.value as ContactPopupConfig['display_frequency'],
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="always">แสดงตลอด (ไม่จำ)</option>
                   <option value="once_per_session">1 ครั้งต่อ session</option>
@@ -602,7 +613,7 @@ export default function ContactPopupSettingsPage() {
                   onChange={(e) =>
                     setConfig({ ...config, delay_seconds: Math.max(0, Math.min(60, parseInt(e.target.value) || 0)) })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -612,50 +623,142 @@ export default function ContactPopupSettingsPage() {
                     type="color"
                     value={config.theme_color}
                     onChange={(e) => setConfig({ ...config, theme_color: e.target.value })}
-                    className="w-12 h-9 p-0 border border-gray-300 rounded cursor-pointer"
+                    className="w-10 h-10 p-1 border border-gray-200 rounded-lg cursor-pointer bg-white"
                   />
                   <input
                     type="text"
                     value={config.theme_color}
                     onChange={(e) => setConfig({ ...config, theme_color: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={config.show_close_button}
-                  onChange={(e) => setConfig({ ...config, show_close_button: e.target.checked })}
-                />
-                แสดงปุ่มปิด
+            </div>
+
+            {/* Toggle rows separated from grid */}
+            <div className="pt-3 border-t border-gray-100 space-y-2">
+              <label className="flex items-center justify-between gap-2 text-sm py-1 cursor-pointer select-none">
+                <span className="text-gray-700">แสดงปุ่มปิด (X)</span>
+                <span className="relative inline-block">
+                  <input
+                    type="checkbox"
+                    checked={config.show_close_button}
+                    onChange={(e) => setConfig({ ...config, show_close_button: e.target.checked })}
+                    className="peer sr-only"
+                  />
+                  <span className="block w-10 h-6 bg-gray-300 rounded-full transition-colors peer-checked:bg-blue-500" />
+                  <span className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+                </span>
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={config.show_on_mobile}
-                  onChange={(e) => setConfig({ ...config, show_on_mobile: e.target.checked })}
-                />
-                แสดงบน Mobile
+              <label className="flex items-center justify-between gap-2 text-sm py-1 cursor-pointer select-none">
+                <span className="text-gray-700">แสดงบนอุปกรณ์ Mobile</span>
+                <span className="relative inline-block">
+                  <input
+                    type="checkbox"
+                    checked={config.show_on_mobile}
+                    onChange={(e) => setConfig({ ...config, show_on_mobile: e.target.checked })}
+                    className="peer sr-only"
+                  />
+                  <span className="block w-10 h-6 bg-gray-300 rounded-full transition-colors peer-checked:bg-blue-500" />
+                  <span className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+                </span>
               </label>
             </div>
+          </section>
+
+          {/* Page filter — which pages to show on */}
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2 pb-2 border-b border-gray-100 w-full">
+              <Filter className="w-4 h-4" /> จำกัดหน้าที่แสดง
+            </h2>
+
+            <div className="space-y-2">
+              {(['all', 'include', 'exclude'] as const).map((mode) => {
+                const meta = {
+                  all: { label: 'แสดงทุกหน้า', desc: 'ป๊อปอัพจะแสดงบนทุกหน้าของเว็บไซต์', active: 'border-blue-400 bg-blue-50' },
+                  include: { label: 'แสดงเฉพาะบางหน้า', desc: 'แสดงเฉพาะหน้าที่ตรงกับรูปแบบด้านล่าง', active: 'border-green-400 bg-green-50' },
+                  exclude: { label: 'ยกเว้นบางหน้า', desc: 'แสดงทุกหน้ายกเว้นหน้าที่ตรงกับรูปแบบด้านล่าง', active: 'border-red-400 bg-red-50' },
+                }[mode];
+                const active = config.page_filter_mode === mode;
+                return (
+                  <label
+                    key={mode}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition ${
+                      active
+                        ? meta.active
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="page_filter_mode"
+                      className="mt-0.5"
+                      checked={active}
+                      onChange={() => setConfig({ ...config, page_filter_mode: mode })}
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">{meta.label}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{meta.desc}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {config.page_filter_mode !== 'all' && (
+              <div className="pt-2">
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  รายการรูปแบบ URL (1 บรรทัดต่อ 1 รูปแบบ)
+                </label>
+                <textarea
+                  rows={5}
+                  value={(config.page_patterns || []).join('\n')}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      page_patterns: e.target.value.split('\n').map((s) => s.trim()).filter((s) => s.length > 0),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder={'/\n/tours\n/tours/**\n/promotion/*'}
+                />
+                <div className="mt-2 text-[11px] text-gray-500 space-y-1">
+                  <div><span className="font-mono bg-gray-100 px-1 rounded">/</span> = เฉพาะหน้าแรก</div>
+                  <div><span className="font-mono bg-gray-100 px-1 rounded">/tours</span> = เฉพาะ /tours (ตรงเป๊ะ)</div>
+                  <div><span className="font-mono bg-gray-100 px-1 rounded">/tours/*</span> = /tours/xxx (1 ระดับ)</div>
+                  <div><span className="font-mono bg-gray-100 px-1 rounded">/tours/**</span> = /tours และทุกหน้าย่อยภายใต้</div>
+                  <div><span className="font-mono bg-gray-100 px-1 rounded">/promotion/*/detail</span> = ใช้ * ตรงกลาง path ก็ได้</div>
+                </div>
+              </div>
+            )}
           </section>
         </div>
 
         {/* Right column: live preview */}
         <div className="lg:col-span-1">
-          <div className="sticky top-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-700">Preview</h3>
-              <button
-                onClick={() => setPreviewOpen((v) => !v)}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-              >
-                {previewOpen ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                {previewOpen ? 'ซ่อน' : 'แสดง'}
-              </button>
+          <div className="sticky top-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                <h3 className="text-base font-semibold text-gray-800 flex items-center gap-1.5">
+                  <Eye className="w-4 h-4 text-gray-500" />
+                  ตัวอย่าง
+                </h3>
+                <button
+                  onClick={() => setPreviewOpen((v) => !v)}
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  {previewOpen ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {previewOpen ? 'ซ่อน' : 'แสดง'}
+                </button>
+              </div>
+              {previewOpen ? (
+                <div className="bg-gray-50 rounded-lg p-4 flex items-start justify-center">
+                  <PreviewCard config={config} />
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-6">— ปิดตัวอย่าง —</p>
+              )}
             </div>
-            {previewOpen && <PreviewCard config={config} />}
           </div>
         </div>
       </div>
@@ -667,7 +770,7 @@ function PreviewCard({ config }: { config: ContactPopupConfig }) {
   const color = config.theme_color || '#F97316';
   const mascotSize = Math.max(40, Math.min(400, Number(config.mascot_size) || 112));
   return (
-    <div className="w-[240px] mx-auto relative">
+    <div className="w-full max-w-[280px] mx-auto relative">
       {config.mascot_image && (
         <div
           className="flex justify-center relative z-10"

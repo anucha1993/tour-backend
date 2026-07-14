@@ -19,17 +19,49 @@ import {
 } from 'lucide-react';
 import { seoApi, SeoSetting } from '@/lib/api';
 
+// Must sync with SeoSetting::PAGES in tour-api/app/Models/SeoSetting.php
+// and with buildMetadata() calls in each tour-web layout.tsx
 const DEFAULT_PAGES = [
-  { slug: 'global', name: 'ตั้งค่า SEO ทั้งเว็บ', icon: '🌐' },
-  { slug: 'home', name: 'หน้าแรก', icon: '🏠' },
-  { slug: 'tours', name: 'หน้ารวมทัวร์', icon: '✈️' },
-  { slug: 'tours-international', name: 'ทัวร์ต่างประเทศ', icon: '🌍' },
-  { slug: 'tours-domestic', name: 'ทัวร์ในประเทศ', icon: '🗺️' },
-  { slug: 'promotions', name: 'โปรโมชั่น', icon: '🏷️' },
-  { slug: 'blog', name: 'บล็อก', icon: '📝' },
-  { slug: 'about', name: 'เกี่ยวกับเรา', icon: '🏢' },
-  { slug: 'contact', name: 'ติดต่อเรา', icon: '📞' },
+  // Global
+  { slug: 'global', name: 'ตั้งค่า SEO ทั้งเว็บ (Fallback)', icon: '🌐', group: 'global' },
+
+  // Main pages
+  { slug: 'home', name: 'หน้าแรก', icon: '🏠', group: 'main' },
+  { slug: 'about', name: 'เกี่ยวกับเรา', icon: '🏢', group: 'main' },
+  { slug: 'contact', name: 'ติดต่อเรา', icon: '📞', group: 'main' },
+  { slug: 'blog', name: 'บล็อก', icon: '📝', group: 'main' },
+  { slug: 'promotions', name: 'โปรโมชั่น', icon: '🏷️', group: 'main' },
+  { slug: 'reviews', name: 'รีวิวจากลูกค้า', icon: '⭐', group: 'main' },
+
+  // Tours
+  { slug: 'tours-international', name: 'ทัวร์ต่างประเทศ', icon: '🌍', group: 'tours' },
+  { slug: 'tours-domestic', name: 'ทัวร์ในประเทศ', icon: '🗺️', group: 'tours' },
+  { slug: 'tours-festival', name: 'ทัวร์เทศกาล', icon: '🎊', group: 'tours' },
+  { slug: 'tours-packages', name: 'แพ็คเกจทัวร์', icon: '📦', group: 'tours' },
+  { slug: 'tours-group', name: 'รับจัดกรุ๊ปทัวร์', icon: '👥', group: 'tours' },
+
+  // Legal / policy
+  { slug: 'terms', name: 'เงื่อนไขการให้บริการ', icon: '📄', group: 'legal' },
+  { slug: 'privacy-policy', name: 'นโยบายความเป็นส่วนตัว', icon: '🔒', group: 'legal' },
+  { slug: 'cookie-policy', name: 'นโยบายคุกกี้', icon: '🍪', group: 'legal' },
+  { slug: 'data-deletion', name: 'ขอลบข้อมูล', icon: '🗑️', group: 'legal' },
+  { slug: 'payment-channels', name: 'ช่องทางการชำระเงิน', icon: '💳', group: 'legal' },
+  { slug: 'payment-terms', name: 'เงื่อนไขการชำระเงิน', icon: '💰', group: 'legal' },
+
+  // Utility / auth (usually noindex)
+  { slug: 'search', name: 'ค้นหา', icon: '🔍', group: 'utility' },
+  { slug: 'login', name: 'เข้าสู่ระบบ', icon: '🔑', group: 'utility' },
+  { slug: 'register', name: 'สมัครสมาชิก', icon: '📝', group: 'utility' },
+  { slug: 'forgot-password', name: 'ลืมรหัสผ่าน', icon: '❓', group: 'utility' },
 ];
+
+const GROUP_LABELS: Record<string, string> = {
+  global: '🌐 Global',
+  main: '🏠 หน้าหลัก',
+  tours: '✈️ ทัวร์',
+  legal: '📜 นโยบาย / เงื่อนไข',
+  utility: '🔐 Auth / Utility',
+};
 
 export default function SeoSettingsPage() {
   const [seoList, setSeoList] = useState<SeoSetting[]>([]);
@@ -162,29 +194,42 @@ export default function SeoSettingsPage() {
         <div className="col-span-3">
           <Card className="overflow-hidden">
             <div className="p-3 border-b border-gray-300 bg-gray-50">
-              <h3 className="text-sm font-medium text-gray-700">หน้าเว็บไซต์</h3>
+              <h3 className="text-sm font-medium text-gray-700">หน้าเว็บไซต์ ({DEFAULT_PAGES.length})</h3>
             </div>
-            <div className="divide-y">
-              {DEFAULT_PAGES.map((page) => (
-                <button
-                  key={page.slug}
-                  onClick={() => setSelectedSlug(page.slug)}
-                  className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
-                    selectedSlug === page.slug
-                      ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-500'
-                      : 'hover:bg-gray-50 text-gray-700 border-gray-300'
-                  }`}
-                >
-                  <span className="text-lg">{page.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{page.name}</div>
-                    <div className="text-xs text-gray-400">{page.slug}</div>
+            <div className="max-h-[75vh] overflow-y-auto">
+              {(['global', 'main', 'tours', 'legal', 'utility'] as const).map((group) => {
+                const pages = DEFAULT_PAGES.filter((p) => p.group === group);
+                if (pages.length === 0) return null;
+                return (
+                  <div key={group}>
+                    <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-y border-gray-200">
+                      {GROUP_LABELS[group] || group}
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {pages.map((page) => (
+                        <button
+                          key={page.slug}
+                          onClick={() => setSelectedSlug(page.slug)}
+                          className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${
+                            selectedSlug === page.slug
+                              ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-500'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <span className="text-base flex-shrink-0">{page.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{page.name}</div>
+                            <div className="text-[11px] text-gray-400 truncate">{page.slug}</div>
+                          </div>
+                          {hasSeoData(page.slug) && (
+                            <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="มีข้อมูล SEO" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  {hasSeoData(page.slug) && (
-                    <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                  )}
-                </button>
-              ))}
+                );
+              })}
             </div>
           </Card>
         </div>

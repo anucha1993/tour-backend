@@ -17,6 +17,7 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  MousePointerClick,
 } from 'lucide-react';
 import { heroSlidesApi, HeroSlide, HeroSlideStatistics } from '@/lib/api';
 
@@ -519,34 +520,62 @@ export default function HeroSlidesPage() {
                       {slide.title || slide.filename}
                     </h3>
                     {slide.is_active ? (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full whitespace-nowrap">
                         เปิดใช้งาน
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full whitespace-nowrap">
                         ปิดใช้งาน
                       </span>
                     )}
                   </div>
+                  {slide.subtitle && (
+                    <p className="text-sm text-gray-600 truncate mb-0.5">{slide.subtitle}</p>
+                  )}
                   {slide.alt && (
-                    <p className="text-sm text-gray-600 truncate">
-                      <span className="text-gray-400">Alt:</span> {slide.alt}
+                    <p className="text-xs text-gray-500 truncate">
+                      <span className="font-medium text-gray-400">Alt:</span> {slide.alt}
                     </p>
                   )}
-                  {slide.subtitle && (
-                    <p className="text-sm text-gray-500 truncate">{slide.subtitle}</p>
+
+                  {/* Button preview (if defined) */}
+                  {(slide.button_text || slide.button_link) && (
+                    <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                      {slide.button_text && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded border border-purple-200 font-medium">
+                          <MousePointerClick className="w-3 h-3" />
+                          {slide.button_text}
+                        </span>
+                      )}
+                      {slide.button_link && (
+                        <a
+                          href={slide.button_link.startsWith('/') || slide.button_link.startsWith('http') ? slide.button_link : `/${slide.button_link}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded border border-blue-200 font-mono max-w-[420px] truncate hover:bg-blue-100 hover:underline"
+                          title={`เปิดในแท็บใหม่: ${slide.button_link}`}
+                        >
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{decodeURIComponent(slide.button_link)}</span>
+                        </a>
+                      )}
+                      {slide.button_link && !slide.button_link.startsWith('/') && !slide.button_link.startsWith('http') && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded border border-amber-200"
+                          title="ลิงก์นี้ไม่มี / นำหน้า จะทำงานเป็น relative URL อาจทำงานผิดหน้าเว็บ"
+                        >
+                          ⚠ ไม่มี / นำหน้า
+                        </span>
+                      )}
+                    </div>
                   )}
+
                   <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
                     <span>
                       {slide.width}x{slide.height}
                     </span>
                     <span>{(slide.file_size / 1024).toFixed(1)} KB</span>
-                    {slide.button_link && (
-                      <span className="flex items-center gap-1 text-blue-500">
-                        <ExternalLink className="w-3 h-3" />
-                        มีปุ่มลิงก์
-                      </span>
-                    )}
                   </div>
                 </div>
 

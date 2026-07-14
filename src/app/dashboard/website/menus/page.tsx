@@ -24,6 +24,15 @@ import {
   Headphones,
   AlertTriangle,
   MessageCircle,
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  Star,
+  Heart,
+  Award,
+  CheckCircle,
+  Globe,
 } from 'lucide-react';
 import { menusApi, MenuItem, footerSettingsApi, FooterConfig, FooterFeature } from '@/lib/api';
 import Image from 'next/image';
@@ -43,9 +52,10 @@ const LOCATION_TABS = [
   { key: 'footer_settings', label: 'ตั้งค่า Footer' },
 ];
 
-// Icon mapping for features preview
+// Icon mapping for admin previews (must match ICON_MAP in tour-web Footer.tsx)
 const FEATURE_ICONS: Record<string, React.ElementType> = {
-  Shield, CreditCard, Headphones,
+  Shield, CreditCard, Headphones, Phone, Mail, MapPin, Clock, MessageCircle,
+  Star, Heart, Award, CheckCircle, Globe,
 };
 
 const ICON_OPTIONS = [
@@ -853,6 +863,44 @@ export default function MenuManagementPage() {
             {activeLocation.startsWith('footer') && ' — เมนูด้านล่างของเว็บไซต์'}
           </div>
 
+          {/* Warning: auto-overridden submenus */}
+          {activeLocation === 'header' && (() => {
+            const overridden = menus.filter((m) => {
+              const url = (m.url || '').toLowerCase();
+              const isAuto = url.includes('international') || url.includes('domestic') || url.includes('festival');
+              return isAuto && (m.all_children?.length || 0) > 0;
+            });
+            if (overridden.length === 0) return null;
+            return (
+              <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800 flex gap-2">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+                <div className="space-y-1">
+                  <p className="font-semibold">Submenu ต่อไปนี้ถูก override โดยหน้าเว็บ:</p>
+                  <ul className="list-disc ml-5 space-y-0.5">
+                    {overridden.map((m) => (
+                      <li key={m.id}>
+                        <span className="font-medium">{m.title}</span>
+                        {' '}
+                        <span className="font-mono text-xs text-amber-700 bg-amber-100 px-1 rounded">{m.url}</span>
+                        {' — '}
+                        <span className="text-amber-700">
+                          หน้าเว็บใช้ข้อมูลจริงจากฐานข้อมูล
+                          {(m.url || '').toLowerCase().includes('international') && ' (ประเทศ + Mega-menu)'}
+                          {(m.url || '').toLowerCase().includes('domestic') && ' (จังหวัด/เมืองในไทย)'}
+                          {(m.url || '').toLowerCase().includes('festival') && ' (Festival list)'}
+                          {' แทน submenu ที่กำหนดไว้'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-amber-700 mt-2">
+                    Submenu ({overridden.reduce((s, m) => s + (m.all_children?.length || 0), 0)} รายการ) ยังบันทึกได้ปกติ แต่จะไม่แสดงบนหน้าเว็บ
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Menu List */}
           <Card className="overflow-hidden">
             {loading ? (
@@ -910,19 +958,35 @@ export default function MenuManagementPage() {
                       <select
                         value={formTarget}
                         onChange={(e) => setFormTarget(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm h-10"
                       >
                         <option value="_self">หน้าเดียวกัน</option>
                         <option value="_blank">แท็บใหม่</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">ไอคอน</label>
-                      <Input
+                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                        ไอคอน
+                        {formIcon && FEATURE_ICONS[formIcon] && (() => {
+                          const IconPreview = FEATURE_ICONS[formIcon];
+                          return <IconPreview className="w-4 h-4 text-blue-600" />;
+                        })()}
+                      </label>
+                      <select
                         value={formIcon}
                         onChange={(e) => setFormIcon(e.target.value)}
-                        placeholder="ชื่อไอคอน (ไม่บังคับ)"
-                      />
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm h-10 bg-white"
+                      >
+                        <option value="">— ไม่ใช้ไอคอน —</option>
+                        {ICON_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {activeLocation === 'header' && (
+                        <p className="text-[11px] text-amber-600 mt-1">
+                          ⚠ ไอคอนแสดงเฉพาะเมนู Footer เท่านั้น
+                        </p>
+                      )}
                     </div>
                   </div>
                   {activeLocation === 'header' && (
