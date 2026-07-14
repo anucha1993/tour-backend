@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, Button } from '@/components/ui';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, countriesApi, Country } from '@/lib/api';
 import { 
   Search, 
   Filter, 
@@ -116,56 +116,23 @@ interface BookingTarget {
   period: Period;
 }
 
-// Country list with Thai names
-const COUNTRY_OPTIONS = [
-  { value: '', label: 'ทั้งหมด', labelTh: 'ทั้งหมด' },
-  { value: 'CHINA', label: 'จีน (China)', labelTh: 'จีน' },
-  { value: 'JAPAN', label: 'ญี่ปุ่น (Japan)', labelTh: 'ญี่ปุ่น' },
-  { value: 'KOREA', label: 'เกาหลี (Korea)', labelTh: 'เกาหลี' },
-  { value: 'TAIWAN', label: 'ไต้หวัน (Taiwan)', labelTh: 'ไต้หวัน' },
-  { value: 'VIETNAM', label: 'เวียดนาม (Vietnam)', labelTh: 'เวียดนาม' },
-  { value: 'THAILAND', label: 'ไทย (Thailand)', labelTh: 'ไทย' },
-  { value: 'SINGAPORE', label: 'สิงคโปร์ (Singapore)', labelTh: 'สิงคโปร์' },
-  { value: 'MALAYSIA', label: 'มาเลเซีย (Malaysia)', labelTh: 'มาเลเซีย' },
-  { value: 'INDONESIA', label: 'อินโดนีเซีย (Indonesia)', labelTh: 'อินโดนีเซีย' },
-  { value: 'INDIA', label: 'อินเดีย (India)', labelTh: 'อินเดีย' },
-  { value: 'NEPAL', label: 'เนปาล (Nepal)', labelTh: 'เนปาล' },
-  { value: 'BHUTAN', label: 'ภูฏาน (Bhutan)', labelTh: 'ภูฏาน' },
-  { value: 'MALDIVES', label: 'มัลดีฟส์ (Maldives)', labelTh: 'มัลดีฟส์' },
-  { value: 'SRI LANKA', label: 'ศรีลังกา (Sri Lanka)', labelTh: 'ศรีลังกา' },
-  { value: 'TURKEY', label: 'ตุรกี (Turkey)', labelTh: 'ตุรกี' },
-  { value: 'GEORGIA', label: 'จอร์เจีย (Georgia)', labelTh: 'จอร์เจีย' },
-  { value: 'AZERBAIJAN', label: 'อาเซอร์ไบจาน (Azerbaijan)', labelTh: 'อาเซอร์ไบจาน' },
-  { value: 'UZBEKISTAN', label: 'อุซเบกิสถาน (Uzbekistan)', labelTh: 'อุซเบกิสถาน' },
-  { value: 'KAZAKHSTAN', label: 'คาซัคสถาน (Kazakhstan)', labelTh: 'คาซัคสถาน' },
-  { value: 'RUSSIA', label: 'รัสเซีย (Russia)', labelTh: 'รัสเซีย' },
-  { value: 'MONGOLIA', label: 'มองโกเลีย (Mongolia)', labelTh: 'มองโกเลีย' },
-  { value: 'EUROPE', label: 'ยุโรป (Europe)', labelTh: 'ยุโรป' },
-  { value: 'FRANCE', label: 'ฝรั่งเศส (France)', labelTh: 'ฝรั่งเศส' },
-  { value: 'ITALY', label: 'อิตาลี (Italy)', labelTh: 'อิตาลี' },
-  { value: 'SWITZERLAND', label: 'สวิตเซอร์แลนด์ (Switzerland)', labelTh: 'สวิตเซอร์แลนด์' },
-  { value: 'GERMANY', label: 'เยอรมนี (Germany)', labelTh: 'เยอรมนี' },
-  { value: 'ENGLAND', label: 'อังกฤษ (England)', labelTh: 'อังกฤษ' },
-  { value: 'SPAIN', label: 'สเปน (Spain)', labelTh: 'สเปน' },
-  { value: 'PORTUGAL', label: 'โปรตุเกส (Portugal)', labelTh: 'โปรตุเกส' },
-  { value: 'GREECE', label: 'กรีซ (Greece)', labelTh: 'กรีซ' },
-  { value: 'CROATIA', label: 'โครเอเชีย (Croatia)', labelTh: 'โครเอเชีย' },
-  { value: 'ICELAND', label: 'ไอซ์แลนด์ (Iceland)', labelTh: 'ไอซ์แลนด์' },
-  { value: 'NORWAY', label: 'นอร์เวย์ (Norway)', labelTh: 'นอร์เวย์' },
-  { value: 'FINLAND', label: 'ฟินแลนด์ (Finland)', labelTh: 'ฟินแลนด์' },
-  { value: 'SWEDEN', label: 'สวีเดน (Sweden)', labelTh: 'สวีเดน' },
-  { value: 'DENMARK', label: 'เดนมาร์ก (Denmark)', labelTh: 'เดนมาร์ก' },
-  { value: 'AUSTRALIA', label: 'ออสเตรเลีย (Australia)', labelTh: 'ออสเตรเลีย' },
-  { value: 'NEW ZEALAND', label: 'นิวซีแลนด์ (New Zealand)', labelTh: 'นิวซีแลนด์' },
-  { value: 'USA', label: 'สหรัฐอเมริกา (USA)', labelTh: 'สหรัฐอเมริกา' },
-  { value: 'CANADA', label: 'แคนาดา (Canada)', labelTh: 'แคนาดา' },
-  { value: 'EGYPT', label: 'อียิปต์ (Egypt)', labelTh: 'อียิปต์' },
-  { value: 'MOROCCO', label: 'โมร็อกโก (Morocco)', labelTh: 'โมร็อกโก' },
-  { value: 'SOUTH AFRICA', label: 'แอฟริกาใต้ (South Africa)', labelTh: 'แอฟริกาใต้' },
-  { value: 'DUBAI', label: 'ดูไบ (Dubai)', labelTh: 'ดูไบ' },
-  { value: 'JORDAN', label: 'จอร์แดน (Jordan)', labelTh: 'จอร์แดน' },
-  { value: 'ISRAEL', label: 'อิสราเอล (Israel)', labelTh: 'อิสราเอล' },
-];
+// Country dropdown option type — populated dynamically from the `countries` DB table
+// via countriesApi.list({ is_active: 'true' }) inside the component
+interface CountryOption {
+  value: string;    // sent to backend filter (name_en uppercase) — matches
+                    // UnifiedSearchService::expandCountrySearch() by iso2/iso3/name_en/name_th
+  label: string;    // display: "จีน (China)" or "China" if no Thai name
+  labelTh: string;  // Thai label for searching
+  iso2?: string;    // 2-letter ISO code for searching (e.g. "MM" = Myanmar)
+  iso3?: string;    // 3-letter ISO code for searching (e.g. "MMR" = Myanmar)
+  flag?: string;    // flag emoji (optional)
+}
+
+const ALL_COUNTRIES_OPTION: CountryOption = {
+  value: '',
+  label: 'ทั้งหมด',
+  labelTh: 'ทั้งหมด',
+};
 
 export default function SalesSearchPage() {
   const [loading, setLoading] = useState(false);
@@ -175,7 +142,7 @@ export default function SalesSearchPage() {
   const [showFilters, setShowFilters] = useState(true);
   const [expandedTour, setExpandedTour] = useState<number | null>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [countries, setCountries] = useState<string[]>([]);
+  const [countryOptions, setCountryOptions] = useState<CountryOption[]>([ALL_COUNTRIES_OPTION]);
   const [countrySearch, setCountrySearch] = useState('');
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [searchTime, setSearchTime] = useState<number | null>(null);
@@ -256,14 +223,47 @@ export default function SalesSearchPage() {
           // Auto-select first wholesaler (required)
           setFilters(prev => ({ ...prev, integration_id: data.integrations[0].id }));
         }
-        if (data.countries) {
-          setCountries(data.countries);
-        }
       } catch (error) {
         console.error('Failed to load filters:', error);
       }
     };
+
+    // Load real countries from the countries table
+    const loadCountries = async () => {
+      try {
+        const res = await countriesApi.list({ is_active: 'true', per_page: '500' });
+        if (res.success && Array.isArray(res.data)) {
+          // Sort: Thai countries first alphabetically (by name_th), then rest by name_en
+          const sorted: Country[] = [...res.data].sort((a, b) => {
+            const aTh = a.name_th ?? '';
+            const bTh = b.name_th ?? '';
+            if (aTh && bTh) return aTh.localeCompare(bTh, 'th');
+            if (aTh) return -1;
+            if (bTh) return 1;
+            return a.name_en.localeCompare(b.name_en);
+          });
+          const options: CountryOption[] = [
+            ALL_COUNTRIES_OPTION,
+            ...sorted.map<CountryOption>((c) => ({
+              // Send name_en (uppercase) so the backend's expandCountrySearch()
+              // can match against iso2/iso3/name_en/name_th
+              value: c.name_en.toUpperCase(),
+              label: c.name_th ? `${c.name_th} (${c.name_en})` : c.name_en,
+              labelTh: c.name_th ?? c.name_en,
+              iso2: c.iso2 ?? undefined,
+              iso3: c.iso3 ?? undefined,
+              flag: c.flag_emoji ?? undefined,
+            })),
+          ];
+          setCountryOptions(options);
+        }
+      } catch (error) {
+        console.error('Failed to load countries:', error);
+      }
+    };
+
     loadFilters();
+    loadCountries();
   }, []);
 
   // Lookup tour codes from our database by wholesaler_tour_code (preferred) or external_id
@@ -1362,7 +1362,7 @@ export default function SalesSearchPage() {
                   <input
                     type="text"
                     placeholder="พิมพ์ค้นหา..."
-                    value={countryDropdownOpen ? countrySearch : (COUNTRY_OPTIONS.find(c => c.value === filters.country)?.labelTh || filters.country || '')}
+                    value={countryDropdownOpen ? countrySearch : (countryOptions.find(c => c.value === filters.country)?.labelTh || filters.country || '')}
                     onChange={(e) => {
                       setCountrySearch(e.target.value);
                       setCountryDropdownOpen(true);
@@ -1389,52 +1389,44 @@ export default function SalesSearchPage() {
                 {/* Dropdown List */}
                 {countryDropdownOpen && (
                   <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {COUNTRY_OPTIONS
+                    {countryOptions
                       .filter(opt => {
                         if (!countrySearch) return true;
                         const search = countrySearch.toLowerCase();
                         return (
                           opt.label.toLowerCase().includes(search) ||
                           opt.value.toLowerCase().includes(search) ||
-                          opt.labelTh.toLowerCase().includes(search)
+                          opt.labelTh.toLowerCase().includes(search) ||
+                          (opt.iso2 ?? '').toLowerCase().includes(search) ||
+                          (opt.iso3 ?? '').toLowerCase().includes(search)
                         );
                       })
                       .map((opt) => (
                         <button
-                          key={opt.value}
+                          key={opt.value || '__all__'}
                           onClick={() => {
                             setFilters(prev => ({ ...prev, country: opt.value }));
                             setCountrySearch('');
                             setCountryDropdownOpen(false);
                           }}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between ${
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 flex items-center justify-between gap-2 ${
                             filters.country === opt.value ? 'bg-blue-50 text-blue-700' : ''
                           }`}
                         >
-                          <span>{opt.label}</span>
-                          {filters.country === opt.value && (
-                            <span className="text-blue-600">✓</span>
-                          )}
-                        </button>
-                      ))
-                    }
-                    {/* Show API countries not in predefined list */}
-                    {countries
-                      .filter(c => !COUNTRY_OPTIONS.some(opt => opt.value === c))
-                      .filter(c => !countrySearch || c.toLowerCase().includes(countrySearch.toLowerCase()))
-                      .map(c => (
-                        <button
-                          key={c}
-                          onClick={() => {
-                            setFilters(prev => ({ ...prev, country: c }));
-                            setCountrySearch('');
-                            setCountryDropdownOpen(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${
-                            filters.country === c ? 'bg-blue-50 text-blue-700' : ''
-                          }`}
-                        >
-                          {c}
+                          <span className="flex items-center gap-2 min-w-0 flex-1">
+                            {opt.flag && <span className="text-base leading-none">{opt.flag}</span>}
+                            <span className="truncate">{opt.label}</span>
+                          </span>
+                          <span className="flex items-center gap-1.5 flex-shrink-0">
+                            {opt.iso2 && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 uppercase">
+                                {opt.iso2}
+                              </span>
+                            )}
+                            {filters.country === opt.value && (
+                              <span className="text-blue-600">✓</span>
+                            )}
+                          </span>
                         </button>
                       ))
                     }

@@ -473,12 +473,20 @@ export default function IntegrationSettingsPage() {
           break;
         case 'custom':
           // Convert headers array to object format
+          // RFC 7230 token: !#$%&'*+-.^_`|~ + alphanumerics. Reject @ (email), spaces, etc.
+          // eslint-disable-next-line no-useless-escape
+          const HDR_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
           const headersObj: Record<string, string> = {};
-          formData.auth_headers
-            .filter(h => h.key.trim())
-            .forEach(h => {
-              headersObj[h.key] = h.value;
-            });
+          for (const h of formData.auth_headers) {
+            const key = h.key.trim();
+            if (!key) continue;
+            if (!HDR_NAME_RE.test(key)) {
+              throw new Error(
+                `ชื่อ HTTP Header ไม่ถูกต้อง: "${key}" — ห้ามมีตัวอักษร @ ช่องว่าง หรือสัญลักษณ์พิเศษอื่นๆ (ใช้ได้เฉพาะ A-Z a-z 0-9 และ ! # $ % & ' * + - . ^ _ \` | ~) เช่น X-API-Key, Authorization, itravels-secret`
+              );
+            }
+            headersObj[key] = h.value;
+          }
           authCredentials.headers = headersObj;
           break;
       }
@@ -1105,6 +1113,10 @@ export default function IntegrationSettingsPage() {
                               type="text"
                               placeholder="Header Name (e.g. itravels-secret)"
                               value={header.key}
+                              autoComplete="off"
+                              name={`hdr-key-${index}-${Math.random().toString(36).slice(2, 8)}`}
+                              data-lpignore="true"
+                              data-1p-ignore="true"
                               onChange={(e) => {
                                 const updated = [...formData.auth_headers];
                                 updated[index] = { ...updated[index], key: e.target.value };
@@ -1116,6 +1128,10 @@ export default function IntegrationSettingsPage() {
                               type="password"
                               placeholder="Value"
                               value={header.value}
+                              autoComplete="new-password"
+                              name={`hdr-val-${index}-${Math.random().toString(36).slice(2, 8)}`}
+                              data-lpignore="true"
+                              data-1p-ignore="true"
                               onChange={(e) => {
                                 const updated = [...formData.auth_headers];
                                 updated[index] = { ...updated[index], value: e.target.value };
@@ -1202,6 +1218,10 @@ export default function IntegrationSettingsPage() {
                             type="text"
                             placeholder="Header Name (e.g. X-API-Key)"
                             value={header.key}
+                            autoComplete="off"
+                            name={`hdr2-key-${index}-${Math.random().toString(36).slice(2, 8)}`}
+                            data-lpignore="true"
+                            data-1p-ignore="true"
                             onChange={(e) => {
                               const newHeaders = [...formData.auth_headers];
                               newHeaders[index].key = e.target.value;
@@ -1215,6 +1235,10 @@ export default function IntegrationSettingsPage() {
                             type="text"
                             placeholder="Value"
                             value={header.value}
+                            autoComplete="off"
+                            name={`hdr2-val-${index}-${Math.random().toString(36).slice(2, 8)}`}
+                            data-lpignore="true"
+                            data-1p-ignore="true"
                             onChange={(e) => {
                               const newHeaders = [...formData.auth_headers];
                               newHeaders[index].value = e.target.value;
