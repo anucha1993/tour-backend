@@ -593,6 +593,7 @@ export default function EditTourPage() {
   const [deletingCity, setDeletingCity] = useState<number | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [removingApiPdf, setRemovingApiPdf] = useState(false);
   const [uploadingCustomImage, setUploadingCustomImage] = useState(false);
   const [uploadingCustomPdf, setUploadingCustomPdf] = useState(false);
   const [mediaInfo, setMediaInfo] = useState<{
@@ -1180,6 +1181,32 @@ export default function EditTourPage() {
       alert('เกิดข้อผิดพลาดในการอัปโหลด PDF');
     } finally {
       setUploadingPdf(false);
+    }
+  };
+
+  const handleRemoveApiPdf = async () => {
+    if (!tour) return;
+    if (!confirm('ต้องการลบ PDF จาก API หรือไม่?\nระบบจะซิงค์ PDF ใหม่อัตโนมัติในการซิงค์ครั้งถัดไป (กรณีไม่มีไฟล์)')) return;
+
+    setRemovingApiPdf(true);
+    try {
+      const result = await toursApi.removeApiPdf(tour.id);
+      if (result.success) {
+        setFormData(prev => ({ ...prev, pdf_url: '' }));
+        setTour(prev => prev ? { ...prev, pdf_url: null } : null);
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          api_pdf_url: null,
+          effective_pdf_url: result.data?.effective_pdf_url ?? null,
+        } : null);
+      } else {
+        alert(result.message || 'ลบ PDF จาก API ล้มเหลว');
+      }
+    } catch (error) {
+      console.error('Remove API PDF error:', error);
+      alert('เกิดข้อผิดพลาดในการลบ PDF');
+    } finally {
+      setRemovingApiPdf(false);
     }
   };
 
@@ -4298,11 +4325,16 @@ export default function EditTourPage() {
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">PDF จาก API</p>
               {(formData.pdf_url || tour?.pdf_url) ? (
-                <a href={formData.pdf_url || tour?.pdf_url || ''} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors mb-2">
-                  <FileText className="w-6 h-6 text-red-500 flex-shrink-0" />
-                  <span className="flex-1 truncate text-sm text-gray-700">โปรแกรมทัวร์</span>
-                  <Eye className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                </a>
+                <div className="relative group mb-2">
+                  <a href={formData.pdf_url || tour?.pdf_url || ''} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                    <FileText className="w-6 h-6 text-red-500 flex-shrink-0" />
+                    <span className="flex-1 truncate text-sm text-gray-700">โปรแกรมทัวร์</span>
+                    <Eye className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  </a>
+                  <button onClick={handleRemoveApiPdf} disabled={removingApiPdf} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-100" title="ลบ PDF จาก API (ระบบจะซิงค์ใหม่กรณีไม่มีไฟล์)">
+                    {removingApiPdf ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                  </button>
+                </div>
               ) : (
                 <div className="flex items-center justify-center px-4 py-4 rounded-lg border border-dashed border-gray-200 mb-2 text-sm text-gray-400">ยังไม่มี PDF</div>
               )}

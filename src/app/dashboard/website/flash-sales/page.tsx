@@ -121,12 +121,13 @@ export default function FlashSalesPage() {
 
   // Period selection for adding (batch)
   const [selectedTour, setSelectedTour] = useState<FlashSaleTourSearch | null>(null);
-  // Per-period settings: periodId → { checked, flashPrice, discountPercent, discountType, flashEndDate }
+  // Per-period settings: periodId → { checked, flashPrice, discountPercent, discountType, quantityLimit, flashEndDate }
   const [periodSettings, setPeriodSettings] = useState<Record<number, {
     checked: boolean;
     flashPrice: string;
     discountPercent: string;
     discountType: 'percent' | 'amount';
+    quantityLimit: string;
     flashEndDate: string;
     originalPrice: number;
   }>>({});
@@ -194,6 +195,32 @@ export default function FlashSalesPage() {
       setSavingOrder(false);
     }
   };
+
+  // Hide expired periods toggle (persisted in localStorage)
+  const [hideExpiredPeriods, setHideExpiredPeriods] = useState<boolean>(true);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('flashSales.hideExpiredPeriods');
+    if (stored !== null) setHideExpiredPeriods(stored === '1');
+  }, []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('flashSales.hideExpiredPeriods', hideExpiredPeriods ? '1' : '0');
+  }, [hideExpiredPeriods]);
+
+  // Filtered items honoring the hide-expired toggle. `end_date` is a date string
+  // like "2026-07-14"; new Date() puts it at midnight UTC — fine for a rough
+  // "is this period in the past?" check for the admin listing.
+  const isPeriodExpired = (endDate?: string | null) => {
+    if (!endDate) return false;
+    const t = new Date(endDate).getTime();
+    if (Number.isNaN(t)) return false;
+    return t < Date.now();
+  };
+  const visibleSaleItems = hideExpiredPeriods
+    ? saleItems.filter((it) => !isPeriodExpired(it.period?.end_date))
+    : saleItems;
+  const expiredHiddenCount = saleItems.length - visibleSaleItems.length;
 
   const fetchFlashSales = useCallback(async () => {
     try {
@@ -332,11 +359,15 @@ export default function FlashSalesPage() {
     const settings: typeof periodSettings = {};
     for (const p of tour.periods) {
       const origPrice = p.price_adult || tour.min_price || 0;
+      // Suggest a default quantity_limit for sold_out periods so admins remember
+      // that flash sale seats are independent from the wholesaler pool.
+      const isSoldOut = p.status === 'sold_out';
       settings[p.id] = {
         checked: false,
         flashPrice: origPrice ? String(origPrice) : '',
         discountPercent: '',
         discountType: 'percent',
+        quantityLimit: isSoldOut ? '5' : '',
         flashEndDate: selectedSale ? formatDateTimeLocal(selectedSale.end_date) : '',
         originalPrice: origPrice,
       };
@@ -419,6 +450,15 @@ export default function FlashSalesPage() {
     });
   };
 
+  // Per-period quantity limit change (Flash Sale seats, independent from wholesaler)
+  const handlePeriodQuantityLimitChange = (periodId: number, val: string) => {
+    setPeriodSettings((prev) => {
+      const s = prev[periodId];
+      if (!s) return prev;
+      return { ...prev, [periodId]: { ...s, quantityLimit: val } };
+    });
+  };
+
   // Apply global discount to all checked periods (supports % and amount)
   const handleApplyGlobalDiscount = () => {
     if (!globalDiscountValue) return;
@@ -469,14 +509,17 @@ export default function FlashSalesPage() {
       period_id: number;
       flash_price?: number;
       flash_end_date?: string;
+      quantity_limit?: number;
     }> = [];
     for (const [pidStr, s] of Object.entries(periodSettings)) {
       const pid = Number(pidStr);
       if (s.checked && !existingPeriodIds.has(pid)) {
+        const qtyLimit = s.quantityLimit ? Number(s.quantityLimit) : undefined;
         items.push({
           period_id: pid,
           flash_price: s.flashPrice ? Number(s.flashPrice) : undefined,
           flash_end_date: s.flashEndDate ? localInputToUtcIso(s.flashEndDate) : undefined,
+          quantity_limit: qtyLimit && qtyLimit > 0 ? qtyLimit : undefined,
         });
       }
     }
@@ -860,7 +903,7 @@ export default function FlashSalesPage() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => handleSearchInput(e.target.value)}
-                  placeholder="ค้นหาด้วยชื่อทัวร์หรือรหัสทัวร์..."
+                  placeholder="ค้นหาด้วยชื่อทัวร์ / รหัสทัวร์ / รหัสโฮลเซลล์..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
                   autoFocus
                 />
@@ -871,7 +914,7 @@ export default function FlashSalesPage() {
 
               {/* Step 1: Tour Search Results */}
               {searchResults.length > 0 && !selectedTour && (
-                <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-lg divide-y">
+                <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
                   {searchResults.map((tour) => (
                     <button
                       key={tour.id}
@@ -895,7 +938,14 @@ export default function FlashSalesPage() {
                           {tour.title}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {tour.tour_code} • {tour.periods?.length || 0} รอบเปิดจอง
+                          <span className="font-medium">{tour.tour_code}</span>
+                          {tour.wholesaler_tour_code && (
+                            <span className="ml-1 text-gray-400">• รหัส WS: <span className="text-purple-600 font-medium">{tour.wholesaler_tour_code}</span></span>
+                          )}
+                          {tour.wholesaler?.code && (
+                            <span className="ml-1 text-gray-400">({tour.wholesaler.code})</span>
+                          )}
+                          <span className="ml-1">• {tour.periods?.length || 0} รอบเปิดจอง</span>
                         </p>
                       </div>
                     </button>
@@ -987,7 +1037,7 @@ export default function FlashSalesPage() {
                       {/* Periods Table */}
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                          <thead className="bg-gray-50 border-b">
+                          <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
                               <th className="px-3 py-2 text-left w-10">
                                 <input
@@ -1006,10 +1056,11 @@ export default function FlashSalesPage() {
                               <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">ราคาปกติ</th>
                               <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">ส่วนลด</th>
                               <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">ราคา Flash</th>
+                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500" title="จำนวนที่นั่งที่ Nexttrip จัดสรรเฉพาะสำหรับ Flash Sale นี้">จำกัดที่นั่ง Flash</th>
                               <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">หมดเวลา Flash</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y">
+                          <tbody className="divide-y divide-gray-100">
                             {selectedTour.periods.map((period) => {
                               const existingIds = new Set(saleItems.map((i) => i.period_id));
                               const alreadyAdded = existingIds.has(period.id);
@@ -1035,7 +1086,12 @@ export default function FlashSalesPage() {
                                     {formatDate(period.start_date)} - {formatDate(period.end_date)}
                                   </td>
                                   <td className="px-3 py-2 text-center text-gray-600">
-                                    {period.available}/{period.capacity}
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span>{period.available}/{period.capacity}</span>
+                                      {period.status === 'sold_out' && (
+                                        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">เต็ม</span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-3 py-2 text-right text-gray-700 font-medium whitespace-nowrap">
                                     {s?.originalPrice ? `฿${s.originalPrice.toLocaleString()}` : '-'}
@@ -1043,7 +1099,7 @@ export default function FlashSalesPage() {
                                   <td className="px-3 py-2">
                                     {!alreadyAdded && (
                                       <div className="flex items-center gap-1">
-                                        <div className="flex rounded overflow-hidden border border-orange-200 flex-shrink-0">
+                                        <div className="flex rounded overflow-hidden border border-gray-200 flex-shrink-0">
                                           <button
                                             onClick={() => handlePeriodDiscountTypeChange(period.id, 'percent')}
                                             className={`px-1.5 py-0.5 text-[10px] font-medium transition ${s?.discountType === 'percent' ? 'bg-orange-500 text-white' : 'bg-white text-gray-400 hover:bg-orange-50'}`}
@@ -1073,6 +1129,23 @@ export default function FlashSalesPage() {
                                         onChange={(e) => handlePeriodFlashPriceChange(period.id, e.target.value)}
                                         placeholder="ราคา"
                                         className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {!alreadyAdded && (
+                                      <input
+                                        type="number"
+                                        value={s?.quantityLimit || ''}
+                                        onChange={(e) => handlePeriodQuantityLimitChange(period.id, e.target.value)}
+                                        placeholder={period.status === 'sold_out' ? 'ต้องระบุ' : 'ไม่จำกัด'}
+                                        min="1"
+                                        title="จำนวนที่นั่งที่ Nexttrip จัดสรรเฉพาะสำหรับ Flash Sale นี้ — เว้นว่างคือไม่จำกัด"
+                                        className={`w-20 px-2 py-1 border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-orange-500 ${
+                                          period.status === 'sold_out'
+                                            ? 'border-red-300 bg-red-50/40 placeholder:text-red-400'
+                                            : 'border-gray-300'
+                                        }`}
                                       />
                                     )}
                                   </td>
@@ -1135,7 +1208,7 @@ export default function FlashSalesPage() {
         {saleItems.length > 0 && (
           <div className="mb-4">
             <button
-              onClick={() => { setShowMassUpdate(!showMassUpdate); if (!showMassUpdate) setSelectedItemIds(new Set(saleItems.map(i => i.id))); }}
+              onClick={() => { setShowMassUpdate(!showMassUpdate); if (!showMassUpdate) setSelectedItemIds(new Set(visibleSaleItems.map(i => i.id))); }}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition"
             >
               <Zap className="w-4 h-4" />
@@ -1148,7 +1221,7 @@ export default function FlashSalesPage() {
                   <h3 className="font-semibold text-orange-800">
                     อัปเดตรอบเดินทาง
                     <span className="ml-1 text-sm font-normal text-orange-600">
-                      (เลือก {selectedItemIds.size}/{saleItems.length} รอบ)
+                      (เลือก {selectedItemIds.size}/{visibleSaleItems.length} รอบ)
                     </span>
                   </h3>
                   <button
@@ -1164,10 +1237,10 @@ export default function FlashSalesPage() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={selectedItemIds.size === saleItems.length}
+                      checked={visibleSaleItems.length > 0 && selectedItemIds.size === visibleSaleItems.length}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedItemIds(new Set(saleItems.map(i => i.id)));
+                          setSelectedItemIds(new Set(visibleSaleItems.map(i => i.id)));
                         } else {
                           setSelectedItemIds(new Set());
                         }
@@ -1180,7 +1253,7 @@ export default function FlashSalesPage() {
 
                 {/* Item Checkboxes - period-centric display */}
                 <div className="max-h-48 overflow-y-auto space-y-1 bg-white/60 rounded-lg p-2 border border-orange-100">
-                  {saleItems.map((item) => {
+                  {visibleSaleItems.map((item) => {
                     const isChecked = selectedItemIds.has(item.id);
                     const origPrice = Number(item.original_price) || 0;
                     const discVal = Number(massDiscountValue) || 0;
@@ -1354,12 +1427,28 @@ export default function FlashSalesPage() {
                 <GripVertical className="w-3.5 h-3.5" />
                 ลากที่ไอคอน <GripVertical className="inline w-3 h-3" /> ในแต่ละแถวเพื่อจัดลำดับทัวร์ตามใจ (บันทึกอัตโนมัติ)
               </div>
-              {savingOrder && (
-                <span className="inline-flex items-center gap-1 text-orange-600">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  กำลังบันทึกลำดับ...
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 hover:text-orange-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={hideExpiredPeriods}
+                    onChange={(e) => setHideExpiredPeriods(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-orange-500"
+                  />
+                  <span>ซ่อนรอบที่หมดเวลาแล้ว</span>
+                  {expiredHiddenCount > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-medium">
+                      ซ่อน {expiredHiddenCount} รายการ
+                    </span>
+                  )}
+                </label>
+                {savingOrder && (
+                  <span className="inline-flex items-center gap-1 text-orange-600">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    กำลังบันทึกลำดับ...
+                  </span>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1381,7 +1470,7 @@ export default function FlashSalesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {saleItems.map((item, idx) => {
+                  {visibleSaleItems.map((item, idx) => {
                     const isEditTarget = editingItemId === item.id;
                     const isEditingTour = editTourData?.id === item.tour_id;
                     return (
@@ -1445,8 +1534,14 @@ export default function FlashSalesPage() {
                               )}
                               <div className="min-w-0">
                                 {item.period ? (
-                                  <p className="text-sm font-semibold text-orange-700">
-                                    {formatDate(item.period.start_date)} - {formatDate(item.period.end_date)}
+                                  <p className="text-sm font-semibold text-orange-700 flex items-center gap-1.5 flex-wrap">
+                                    <span>{formatDate(item.period.start_date)} - {formatDate(item.period.end_date)}</span>
+                                    {item.period.status === 'sold_out' && (
+                                      <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap" title="รอบนี้เต็ม (ที่นั่ง wholesaler หมด) — Flash Sale ใช้ที่นั่งของ Nexttrip เอง">เต็ม</span>
+                                    )}
+                                    {item.period.status === 'closed' && (
+                                      <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">ปิด</span>
+                                    )}
                                   </p>
                                 ) : (
                                   <p className="text-sm text-gray-400">ไม่ระบุรอบ</p>
@@ -1454,6 +1549,9 @@ export default function FlashSalesPage() {
                                 <p className="text-[11px] text-gray-500 truncate max-w-[250px]">
                                   {item.tour?.title || `Tour #${item.tour_id}`}
                                   <span className="text-gray-400 ml-1">{item.tour?.tour_code}</span>
+                                  {item.tour?.wholesaler_tour_code && (
+                                    <span className="ml-1 text-purple-600">WS: {item.tour.wholesaler_tour_code}</span>
+                                  )}
                                 </p>
                               </div>
                             </div>
@@ -1495,9 +1593,12 @@ export default function FlashSalesPage() {
                                 <span className="text-gray-400">ไม่จำกัด</span>
                               )}
                               {item.period && (
-                                <p className="text-[10px] text-gray-400 flex items-center justify-center gap-0.5 mt-0.5">
+                                <p className={`text-[10px] flex items-center justify-center gap-0.5 mt-0.5 ${
+                                  item.period.status === 'sold_out' ? 'text-red-500 font-medium' : 'text-gray-400'
+                                }`}>
                                   <Users className="w-3 h-3" />
                                   {item.period.available}/{item.period.capacity}
+                                  {item.period.status === 'sold_out' && <span className="ml-1">(เต็ม)</span>}
                                 </p>
                               )}
                             </div>
@@ -1643,7 +1744,7 @@ export default function FlashSalesPage() {
                                     {/* Periods sub-table */}
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-sm">
-                                        <thead className="bg-gray-50/80 border-b">
+                                        <thead className="bg-gray-50/80 border-b border-gray-200">
                                           <tr>
                                             <th className="px-3 py-1.5 text-left w-10">
                                               <input
@@ -1680,7 +1781,12 @@ export default function FlashSalesPage() {
                                                   )}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-gray-800 whitespace-nowrap text-sm">
-                                                  {formatDate(period.start_date)} - {formatDate(period.end_date)}
+                                                  <div className="flex items-center gap-1.5">
+                                                    <span>{formatDate(period.start_date)} - {formatDate(period.end_date)}</span>
+                                                    {period.status === 'sold_out' && (
+                                                      <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold" title="รอบนี้ wholesaler บอกเต็ม — Flash Sale ใช้ที่นั่งของ Nexttrip เอง">เต็ม</span>
+                                                    )}
+                                                  </div>
                                                 </td>
                                                 <td className="px-3 py-1.5 text-center text-gray-600 text-xs">
                                                   {period.available}/{period.capacity}

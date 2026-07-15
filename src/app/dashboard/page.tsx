@@ -39,7 +39,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { dashboardApi, DashboardSummary } from '@/lib/api';
+import { dashboardApi, DashboardSummary, DashboardPeriodKey } from '@/lib/api';
 
 const STATUS_CHART = [
   { key: 'pending', label: 'รอดำเนินการ', color: '#f59e0b' },
@@ -54,15 +54,35 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
+  // Period filter state. `all` mirrors the original behavior; the other keys
+  // scope everything time-sensitive on the backend (see DashboardController).
+  const [period, setPeriod] = useState<DashboardPeriodKey>('all');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
 
-  const fetchDashboard = async () => {
+  useEffect(() => {
+    // Only auto-fetch for the built-in ranges; custom waits for a valid range.
+    if (period === 'custom') {
+      if (customFrom && customTo && customFrom <= customTo) {
+        fetchDashboard({ period, from: customFrom, to: customTo });
+      }
+      return;
+    }
+    fetchDashboard({ period });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, customFrom, customTo]);
+
+  const fetchDashboard = async (
+    params?: { period?: DashboardPeriodKey; from?: string; to?: string },
+  ) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardApi.getSummary();
+      const response = await dashboardApi.getSummary(
+        params ?? (period === 'custom'
+          ? (customFrom && customTo ? { period, from: customFrom, to: customTo } : { period: 'all' })
+          : { period }),
+      );
       if (response.success && response.data) {
         setData(response.data);
       } else {
@@ -89,7 +109,9 @@ export default function DashboardPage() {
     return `${Math.floor(diffHr / 24)} วันที่แล้ว`;
   };
 
-  if (loading) {
+  // Only show the full-screen spinner during the very first fetch. Subsequent
+  // period changes keep the previous data visible with a small overlay.
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
@@ -102,7 +124,7 @@ export default function DashboardPage() {
     return (
       <div className="text-center py-12">
         <p className="text-red-500 mb-4">{error}</p>
-        <button onClick={fetchDashboard} className="text-blue-600 hover:underline">
+        <button onClick={() => fetchDashboard()} className="text-blue-600 hover:underline">
           ลองใหม่
         </button>
       </div>
@@ -171,50 +193,136 @@ export default function DashboardPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur text-xs font-medium mb-3">
               <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
               ข้อมูลเรียลไทม์
+              {loading && data && (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">ภาพรวมสถิติ</h1>
-            <p className="text-blue-100 mt-1 text-sm">สถิติผู้เข้าชมเว็บไซต์และการจองทัวร์</p>
+            <p className="text-blue-100 mt-1 text-sm">
+              สถิติผู้เข้าชมเว็บไซต์และการจองทัวร์
+              {data?.period && data.period.key !== 'all' && data.period.from && data.period.to && (
+                <span className="ml-2 text-blue-50/90">
+                  ({new Date(data.period.from).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {' - '}
+                  {new Date(data.period.to).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })})
+                </span>
+              )}
+            </p>
           </div>
-          <button
-            onClick={fetchDashboard}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur text-sm font-medium transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            รีเฟรช
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Period Filter */}
+            <div className="inline-flex rounded-xl bg-white/15 backdrop-blur p-1 text-xs font-medium">
+              {([
+                { key: 'day', label: 'วันนี้' },
+                { key: 'week', label: '7 วัน' },
+                { key: 'month', label: '30 วัน' },
+                { key: 'all', label: 'ทั้งหมด' },
+                { key: 'custom', label: 'กำหนดเอง' },
+              ] as { key: DashboardPeriodKey; label: string }[]).map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setPeriod(opt.key)}
+                  className={`px-3 py-1.5 rounded-lg transition-colors ${
+                    period === opt.key
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-white hover:bg-white/10'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {period === 'custom' && (
+              <div className="inline-flex items-center gap-1 rounded-xl bg-white/15 backdrop-blur px-2 py-1 text-xs">
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={e => setCustomFrom(e.target.value)}
+                  max={customTo || undefined}
+                  className="bg-transparent text-white border-0 outline-none text-xs px-1 py-1 [color-scheme:dark]"
+                />
+                <span className="text-white/60">-</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={e => setCustomTo(e.target.value)}
+                  min={customFrom || undefined}
+                  className="bg-transparent text-white border-0 outline-none text-xs px-1 py-1 [color-scheme:dark]"
+                />
+              </div>
+            )}
+            <button
+              onClick={() => fetchDashboard()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur text-sm font-medium transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              รีเฟรช
+            </button>
+          </div>
         </div>
       </div>
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="ยอดเข้าชมทัวร์ทั้งหมด"
-          value={formatNumber(stats.total_views ?? 0)}
-          hint={`${formatNumber(stats.published_tours ?? 0)} ทัวร์เผยแพร่`}
-          icon={<Eye className="w-6 h-6" />}
-          color="blue"
-        />
-        <KpiCard
-          label="การจองทั้งหมด"
-          value={formatNumber(booking_stats.total)}
-          hint={`${formatNumber(booking_stats.this_month)} รายการเดือนนี้`}
-          icon={<ShoppingCart className="w-6 h-6" />}
-          color="orange"
-        />
-        <KpiCard
-          label="รายได้ (ยืนยัน/ชำระแล้ว)"
-          value={formatMoney(booking_stats.revenue)}
-          hint={`${formatNumber(booking_stats.paid + booking_stats.completed)} รายการสำเร็จ`}
-          icon={<Wallet className="w-6 h-6" />}
-          color="green"
-        />
-        <KpiCard
-          label="สมาชิกเว็บไซต์"
-          value={formatNumber(stats.total_members ?? 0)}
-          hint={`${formatNumber(booking_stats.from_website)} จองผ่านเว็บ`}
-          icon={<Users className="w-6 h-6" />}
-          color="purple"
-        />
+        {(() => {
+          // Helper: label suffix shown when the period filter is active. Keeps
+          // it obvious which numbers reflect the chosen window and which are
+          // always all-time (views are cumulative in the DB, so unavoidable).
+          const isFiltered = period !== 'all';
+          const periodLabels: Record<DashboardPeriodKey, string> = {
+            all: 'ทั้งหมด',
+            day: 'วันนี้',
+            week: '7 วัน',
+            month: '30 วัน',
+            custom: 'ช่วงที่เลือก',
+          };
+          const periodLabel = periodLabels[period];
+          const newMembers = data?.stats?.new_members_in_period ?? 0;
+          return (
+            <>
+              <KpiCard
+                label="ยอดเข้าชมทัวร์"
+                badge={isFiltered ? periodLabel : 'ทั้งหมด'}
+                value={formatNumber(isFiltered ? (stats.views_in_period ?? 0) : (stats.total_views ?? 0))}
+                hint={`${formatNumber(stats.published_tours ?? 0)} ทัวร์เผยแพร่`}
+                icon={<Eye className="w-6 h-6" />}
+                color="blue"
+              />
+              <KpiCard
+                label={isFiltered ? 'การจองในช่วงนี้' : 'การจองทั้งหมด'}
+                badge={periodLabel}
+                value={formatNumber(booking_stats.total)}
+                hint={
+                  isFiltered
+                    ? `${formatNumber(booking_stats.pending)} รอดำเนินการ`
+                    : `${formatNumber(booking_stats.this_month)} รายการเดือนนี้`
+                }
+                icon={<ShoppingCart className="w-6 h-6" />}
+                color="orange"
+              />
+              <KpiCard
+                label="รายได้ (ยืนยัน/ชำระแล้ว)"
+                badge={periodLabel}
+                value={formatMoney(booking_stats.revenue)}
+                hint={`${formatNumber(booking_stats.paid + booking_stats.completed)} รายการสำเร็จ`}
+                icon={<Wallet className="w-6 h-6" />}
+                color="green"
+              />
+              <KpiCard
+                label="สมาชิกเว็บไซต์"
+                badge={isFiltered ? `+${formatNumber(newMembers)} ${periodLabel}` : 'ทั้งหมด'}
+                value={formatNumber(stats.total_members ?? 0)}
+                hint={
+                  isFiltered
+                    ? `สมาชิกใหม่ในช่วงนี้ ${formatNumber(newMembers)} คน`
+                    : `${formatNumber(booking_stats.from_website)} จองผ่านเว็บ`
+                }
+                icon={<Users className="w-6 h-6" />}
+                color="purple"
+              />
+            </>
+          );
+        })()}
       </div>
 
       {/* Booking status donut + KPI summary */}
@@ -529,12 +637,14 @@ function KpiCard({
   hint,
   icon,
   color,
+  badge,
 }: {
   label: string;
   value: string;
   hint: string;
   icon: React.ReactNode;
   color: 'blue' | 'orange' | 'green' | 'purple';
+  badge?: string;
 }) {
   const colorMap: Record<string, { grad: string; glow: string; text: string }> = {
     blue: { grad: 'from-blue-500 to-cyan-500', glow: 'shadow-blue-500/30', text: 'text-blue-50' },
@@ -548,8 +658,15 @@ function KpiCard({
       {/* Decorative circle */}
       <div className="absolute -top-8 -right-8 w-28 h-28 bg-white/10 rounded-full transition-transform duration-500 group-hover:scale-125" />
       <div className="relative flex items-start justify-between">
-        <div className="min-w-0">
-          <p className={`text-sm font-medium ${c.text}`}>{label}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={`text-sm font-medium ${c.text}`}>{label}</p>
+            {badge && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-white/25 backdrop-blur rounded-full px-2 py-0.5 whitespace-nowrap">
+                {badge}
+              </span>
+            )}
+          </div>
           <p className="text-3xl font-bold mt-1.5 truncate tracking-tight">{value}</p>
           <p className={`text-xs mt-2 flex items-center gap-1 ${c.text}`}>
             <TrendingUp className="w-3 h-3" />

@@ -46,17 +46,43 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountryList, setShowCountryList] = useState(false);
 
+  /**
+   * datetime-local <-> UTC helpers.
+   *
+   * The Laravel API runs with `app.timezone = 'UTC'`. When the browser sends a
+   * raw `datetime-local` string like `"2026-07-14T16:21"`, Laravel parses it as
+   * UTC — which shifts a Bangkok-intended time 7 hours into the future and
+   * hides the post behind the `published_at <= now()` public filter.
+   *
+   * We convert on both ends so the input always shows Bangkok wall-clock time
+   * to the editor and the server always stores an unambiguous UTC instant.
+   */
+  const utcToLocalInput = (utcIso: string | null | undefined): string => {
+    if (!utcIso) return '';
+    const d = new Date(utcIso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const localInputToUtc = (localStr: string): string | null => {
+    if (!localStr) return null;
+    const d = new Date(localStr); // parsed in the browser's local timezone
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString(); // outputs a `Z`-suffixed UTC string
+  };
+
   // Fetch categories + countries
   useEffect(() => {
     blogCategoriesApi.list().then(res => {
       const d = ((res as unknown) as { data: BlogCategory[] })?.data;
       if (d) setCategories(d);
     });
-    countriesApi.list({ is_active: 'true', per_page: '200' }).then(res => {
+    countriesApi.list({ is_active: 'true', per_page: '500' }).then(res => {
       const d = Array.isArray(res) ? res : (res as unknown as { data: Country[] })?.data;
       if (d) setCountries(d);
     });
-    citiesApi.list({ per_page: '500', is_active: 'true' }).then(res => {
+    // NOTE: DB has ~5,848 cities. Use a generous per_page to avoid truncation.
+    citiesApi.list({ per_page: '10000', is_active: 'true' }).then(res => {
       const d = Array.isArray(res) ? res : (res as unknown as { data: City[] })?.data;
       if (d) setCities(d);
     });
@@ -79,7 +105,7 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
             author_name: d.author_name || 'Admin',
             status: d.status,
             is_featured: d.is_featured,
-            published_at: d.published_at ? d.published_at.slice(0, 16) : '',
+            published_at: utcToLocalInput(d.published_at),
             seo_title: d.seo_title || '',
             seo_description: d.seo_description || '',
             seo_keywords: d.seo_keywords || '',
@@ -101,7 +127,7 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
         category_id: form.category_id || null,
         country_ids: form.country_ids.length > 0 ? form.country_ids : null,
         city_ids: form.city_ids.length > 0 ? form.city_ids : null,
-        published_at: form.published_at || null,
+        published_at: localInputToUtc(form.published_at),
         tags: form.tags.length > 0 ? form.tags : null,
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
@@ -109,12 +135,27 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
       };
 
       if (postId) {
-        await blogPostsApi.update(postId, payload);
+        const res = await blogPostsApi.update(postId, payload);
+        const d = ((res as unknown) as { data: BlogPost })?.data;
+        // Sync server-generated fields (e.g. slug regenerated if empty)
+        if (d) {
+          setForm(f => ({
+            ...f,
+            slug: d.slug ?? f.slug,
+            published_at: utcToLocalInput(d.published_at),
+          }));
+        }
       } else {
         const res = await blogPostsApi.create(payload);
         const d = ((res as unknown) as { data: BlogPost })?.data;
         if (d) {
           setPostId(d.id);
+          // Sync server-generated fields (slug auto-generated from title, published_at, etc.)
+          setForm(f => ({
+            ...f,
+            slug: d.slug ?? f.slug,
+            published_at: utcToLocalInput(d.published_at),
+          }));
           // Update URL without full reload
           window.history.replaceState(null, '', `/dashboard/blog/posts/${d.id}`);
         }
@@ -281,10 +322,10 @@ export default function BlogPostEditor({ params }: { params: Promise<{ id: strin
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่เผยแพร่</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่เผยแพร่ <span className="text-xs font-normal text-gray-400">(เวลาเครื่องคุณ)</span></label>
               <input type="datetime-local" value={form.published_at} onChange={e => setForm({ ...form, published_at: e.target.value })}
                 className="w-full px-3 py-2 border-1 border-solid border-gray-300 rounded-lg" />
-              <p className="text-xs text-gray-400 mt-1">ถ้าไม่กรอก จะใช้เวลาปัจจุบัน</p>
+              <p className="text-xs text-gray-400 mt-1">ถ้าไม่กรอก จะใช้เวลาปัจจุบันตอนกดบันทึก</p>
             </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.is_featured} onChange={e => setForm({ ...form, is_featured: e.target.checked })} className="rounded" />

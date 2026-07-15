@@ -1179,6 +1179,13 @@ export const toursApi = {
       effective_pdf_url: string;
     }>(`/tours/${id}/custom-pdf`, { method: 'DELETE' }),
 
+  /** Delete the API-synced PDF; next sync re-downloads it from the wholesaler source. */
+  removeApiPdf: (id: number) =>
+    apiRequest<{
+      pdf_url: string | null;
+      effective_pdf_url: string | null;
+    }>(`/tours/${id}/api-pdf`, { method: 'DELETE' }),
+
   /** Get URL for realtime PDF preview (opens in browser) */
   getGeneratePdfUrl: (id: number): string => {
     return `${API_BASE_URL}/tours/${id}/generate-pdf`;
@@ -3275,7 +3282,9 @@ export interface DashboardStats {
   success_syncs: number;
   failed_syncs: number;
   total_views: number;
+  views_in_period?: number;
   total_members: number;
+  new_members_in_period?: number;
 }
 
 export interface DashboardBookingStats {
@@ -3346,6 +3355,11 @@ export interface RecentSync {
 }
 
 export interface DashboardSummary {
+  period?: {
+    key: 'all' | 'day' | 'week' | 'month' | 'custom';
+    from: string | null;
+    to: string | null;
+  };
   stats: DashboardStats;
   booking_stats: DashboardBookingStats;
   views_by_country: CountryViewStat[];
@@ -3355,9 +3369,17 @@ export interface DashboardSummary {
   recent_syncs: RecentSync[];
 }
 
+export type DashboardPeriodKey = 'all' | 'day' | 'week' | 'month' | 'custom';
+
 export const dashboardApi = {
-  getSummary: () =>
-    apiRequest<DashboardSummary>('/dashboard/summary'),
+  getSummary: (params?: { period?: DashboardPeriodKey; from?: string; to?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.period) sp.append('period', params.period);
+    if (params?.from) sp.append('from', params.from);
+    if (params?.to) sp.append('to', params.to);
+    const qs = sp.toString();
+    return apiRequest<DashboardSummary>(`/dashboard/summary${qs ? `?${qs}` : ''}`);
+  },
 };
 
 // ============================================================
@@ -5153,6 +5175,8 @@ export interface FlashSaleItem {
     title: string;
     slug: string;
     tour_code: string;
+    wholesaler_tour_code?: string | null;
+    wholesaler?: { id: number; code: string; name: string } | null;
     cover_image_url: string | null;
     min_price: number | null;
     price_adult: number | null;
@@ -5191,6 +5215,8 @@ export interface FlashSaleTourSearch {
   title: string;
   slug: string;
   tour_code: string;
+  wholesaler_tour_code?: string | null;
+  wholesaler?: { id: number; code: string; name: string } | null;
   cover_image_url: string | null;
   min_price: number | null;
   price_adult: number | null;

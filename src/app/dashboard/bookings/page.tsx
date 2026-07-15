@@ -164,22 +164,43 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
 
           {/* Outbound (Booking API) info */}
           {(booking.provider || booking.provider_booking_ref) && (
-            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <div className={`border rounded-xl p-4 ${
+              booking.provider_status === 'failed'
+                ? 'bg-red-50 border-red-300'
+                : 'bg-purple-50 border-purple-200'
+            }`}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[10px] font-bold uppercase text-white bg-purple-500 rounded px-1.5 py-0.5">API</span>
-                <h3 className="text-sm font-bold text-purple-800">Booking API (Outbound)</h3>
+                <span className={`text-[10px] font-bold uppercase text-white rounded px-1.5 py-0.5 ${
+                  booking.provider_status === 'failed' ? 'bg-red-500' : 'bg-purple-500'
+                }`}>API</span>
+                <h3 className={`text-sm font-bold ${
+                  booking.provider_status === 'failed' ? 'text-red-800' : 'text-purple-800'
+                }`}>Booking API (Outbound)</h3>
+                {booking.provider_status === 'failed' && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 border border-red-300 rounded-full px-2 py-0.5">
+                    <XCircle className="w-3 h-3" />
+                    เชื่อมต่อล้มเหลว
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
                 {booking.provider && (
                   <div><span className="text-gray-500">Provider:</span> <span className="font-semibold">{booking.provider}</span></div>
                 )}
                 {booking.provider_status && (
-                  <div><span className="text-gray-500">สถานะ:</span> <span className="font-semibold">{booking.provider_status}</span></div>
+                  <div>
+                    <span className="text-gray-500">สถานะ:</span>{' '}
+                    <span className={`font-semibold ${booking.provider_status === 'failed' ? 'text-red-700' : ''}`}>
+                      {booking.provider_status}
+                    </span>
+                  </div>
                 )}
                 {booking.provider_booking_ref && (
                   <div className="col-span-2">
                     <span className="text-gray-500">Ref:</span>{' '}
-                    <span className="font-mono font-semibold text-purple-700">{booking.provider_booking_ref}</span>
+                    <span className={`font-mono font-semibold ${
+                      booking.provider_status === 'failed' ? 'text-red-700' : 'text-purple-700'
+                    }`}>{booking.provider_booking_ref}</span>
                   </div>
                 )}
               </div>
@@ -1515,8 +1536,20 @@ export default function BookingsPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-mono font-semibold text-blue-600">{b.booking_code}</span>
+                        {b.provider_status === 'failed' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 border border-red-300 rounded px-1.5 py-0.5 self-start"
+                            title={`Outbound API เชื่อมล้มเหลว (${b.provider || 'outbound'})`}
+                          >
+                            <XCircle className="w-2.5 h-2.5" />
+                            OUTBOUND FAILED
+                          </span>
+                        )}
                         {b.provider_booking_ref && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5 self-start"
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-mono border rounded px-1.5 py-0.5 self-start ${
+                            b.provider_status === 'failed'
+                              ? 'text-red-700 bg-red-50 border-red-200'
+                              : 'text-purple-700 bg-purple-50 border-purple-200'
+                          }`}
                             title={`Provider reference (${b.provider || 'outbound'})`}
                           >
                             <Zap className="w-2.5 h-2.5" />
@@ -1532,9 +1565,11 @@ export default function BookingsPage() {
                     <td className="px-4 py-3 max-w-[220px]">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {b.provider && (
-                          <span className="text-[10px] font-semibold uppercase text-white bg-purple-500 rounded px-1.5 py-0.5 flex-shrink-0"
-                            title="Booking API (Outbound)">
-                            API
+                          <span className={`text-[10px] font-semibold uppercase text-white rounded px-1.5 py-0.5 flex-shrink-0 ${
+                            b.provider_status === 'failed' ? 'bg-red-500' : 'bg-purple-500'
+                          }`}
+                            title={b.provider_status === 'failed' ? 'Booking API (Outbound) - FAILED' : 'Booking API (Outbound)'}>
+                            {b.provider_status === 'failed' ? 'API ✗' : 'API'}
                           </span>
                         )}
                         <span className="font-medium text-gray-700 truncate">{b.tour?.title || '-'}</span>
