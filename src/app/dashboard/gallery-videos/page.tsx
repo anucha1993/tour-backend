@@ -34,6 +34,11 @@ function getYouTubeThumbnail(url: string): string | null {
   return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
+/** Detect orientation from YouTube URL: /shorts/ → portrait, else landscape */
+function detectOrientationFromUrl(url: string): 'landscape' | 'portrait' {
+  return url.includes('/shorts/') ? 'portrait' : 'landscape';
+}
+
 export default function VideoGalleryPage() {
   const [videos, setVideos] = useState<GalleryVideo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +54,7 @@ export default function VideoGalleryPage() {
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [addVideoUrl, setAddVideoUrl] = useState('');
+  const [addOrientation, setAddOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [addTitle, setAddTitle] = useState('');
   const [addDescription, setAddDescription] = useState('');
   const [addThumbnail, setAddThumbnail] = useState<File | null>(null);
@@ -61,6 +67,7 @@ export default function VideoGalleryPage() {
   // Edit modal
   const [editVideo, setEditVideo] = useState<GalleryVideo | null>(null);
   const [editVideoUrl, setEditVideoUrl] = useState('');
+  const [editOrientation, setEditOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editThumbnail, setEditThumbnail] = useState<File | null>(null);
@@ -183,6 +190,7 @@ export default function VideoGalleryPage() {
 
   const resetAddForm = () => {
     setAddVideoUrl('');
+    setAddOrientation('landscape');
     setAddTitle('');
     setAddDescription('');
     setAddThumbnail(null);
@@ -198,6 +206,7 @@ export default function VideoGalleryPage() {
       const tags = addTags.split(',').map(t => t.trim()).filter(Boolean);
       const response = await galleryVideoApi.create({
         video_url: addVideoUrl,
+        orientation: addOrientation,
         title: addTitle,
         description: addDescription || undefined,
         thumbnail: addThumbnail || undefined,
@@ -225,6 +234,7 @@ export default function VideoGalleryPage() {
   const openEdit = (video: GalleryVideo) => {
     setEditVideo(video);
     setEditVideoUrl(video.video_url);
+    setEditOrientation(video.orientation || 'landscape');
     setEditTitle(video.title);
     setEditDescription(video.description || '');
     setEditThumbnail(null);
@@ -240,6 +250,7 @@ export default function VideoGalleryPage() {
       const tags = editTags.split(',').map(t => t.trim()).filter(Boolean);
       const response = await galleryVideoApi.update(editVideo.id, {
         video_url: editVideoUrl,
+        orientation: editOrientation,
         title: editTitle,
         description: editDescription || null,
         thumbnail: editThumbnail || undefined,
@@ -469,6 +480,13 @@ export default function VideoGalleryPage() {
                       </div>
                     </div>
 
+                    {/* Orientation badge */}
+                    {video.orientation === 'portrait' && (
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500 text-white shadow">
+                        📱 Shorts
+                      </span>
+                    )}
+
                     {!video.is_active && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <span className="text-white text-sm">ปิดใช้งาน</span>
@@ -563,9 +581,14 @@ export default function VideoGalleryPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">URL วิดีโอ *</label>
                 <Input
-                  placeholder="https://www.youtube.com/watch?v=..."
+                  placeholder="https://www.youtube.com/watch?v=... หรือ /shorts/..."
                   value={addVideoUrl}
-                  onChange={(e) => setAddVideoUrl(e.target.value)}
+                  onChange={(e) => {
+                    const url = e.target.value;
+                    setAddVideoUrl(url);
+                    // Auto-detect orientation on URL change
+                    if (url) setAddOrientation(detectOrientationFromUrl(url));
+                  }}
                 />
                 {addVideoUrl && getYouTubeThumbnail(addVideoUrl) && (
                   <div className="mt-2">
@@ -578,6 +601,38 @@ export default function VideoGalleryPage() {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Orientation */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รูปแบบการแสดง</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddOrientation('landscape')}
+                    className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                      addOrientation === 'landscape'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    📺 แนวนอน 16:9 (ปกติ)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddOrientation('portrait')}
+                    className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                      addOrientation === 'portrait'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    📱 แนวตั้ง 9:16 (Shorts)
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  ระบบตรวจจับอัตโนมัติจาก URL — แก้ไขได้ถ้าไม่ตรง
+                </p>
               </div>
 
               {/* Title */}
@@ -722,7 +777,43 @@ export default function VideoGalleryPage() {
               {/* Video URL */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">URL วิดีโอ</label>
-                <Input value={editVideoUrl} onChange={(e) => setEditVideoUrl(e.target.value)} />
+                <Input
+                  value={editVideoUrl}
+                  onChange={(e) => {
+                    const url = e.target.value;
+                    setEditVideoUrl(url);
+                    if (url) setEditOrientation(detectOrientationFromUrl(url));
+                  }}
+                />
+              </div>
+
+              {/* Orientation */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รูปแบบการแสดง</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditOrientation('landscape')}
+                    className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                      editOrientation === 'landscape'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    📺 แนวนอน 16:9 (ปกติ)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditOrientation('portrait')}
+                    className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                      editOrientation === 'portrait'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    📱 แนวตั้ง 9:16 (Shorts)
+                  </button>
+                </div>
               </div>
 
               {/* Title */}

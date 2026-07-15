@@ -1524,6 +1524,7 @@ export const galleryApi = {
 export interface GalleryVideo {
   id: number;
   video_url: string;
+  orientation: 'landscape' | 'portrait';
   thumbnail_cloudflare_id: string | null;
   thumbnail_url: string | null;
   title: string;
@@ -1564,6 +1565,7 @@ export const galleryVideoApi = {
 
   create: async (data: {
     video_url: string;
+    orientation?: 'landscape' | 'portrait';
     title: string;
     description?: string;
     thumbnail?: File;
@@ -1573,6 +1575,7 @@ export const galleryVideoApi = {
   }) => {
     const formData = new FormData();
     formData.append('video_url', data.video_url);
+    if (data.orientation) formData.append('orientation', data.orientation);
     formData.append('title', data.title);
     if (data.description) formData.append('description', data.description);
     if (data.thumbnail) formData.append('thumbnail', data.thumbnail);
@@ -1593,6 +1596,7 @@ export const galleryVideoApi = {
 
   update: async (id: number, data: {
     video_url?: string;
+    orientation?: 'landscape' | 'portrait';
     title?: string;
     description?: string | null;
     thumbnail?: File;
@@ -1605,6 +1609,7 @@ export const galleryVideoApi = {
     const formData = new FormData();
     formData.append('_method', 'PUT');
     if (data.video_url !== undefined) formData.append('video_url', data.video_url);
+    if (data.orientation !== undefined) formData.append('orientation', data.orientation);
     if (data.title !== undefined) formData.append('title', data.title);
     if (data.description !== undefined) formData.append('description', data.description ?? '');
     if (data.thumbnail) formData.append('thumbnail', data.thumbnail);

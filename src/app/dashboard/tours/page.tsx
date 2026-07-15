@@ -510,49 +510,81 @@ export default function ToursPage() {
   };
 
   // ─── Copy Functions ─────────────────────────────────────────────
+  // ใช้ฟอร์แมตเดียวกับหน้า /dashboard/sales/search (ฝั่ง API)
   const formatTourForCopy = (tour: Tour): string => {
     const code = tour.tour_code || '';
     const title = tour.title || '';
     const days = tour.duration_days || '';
     const nights = tour.duration_nights || '';
-    
-    // Build airline info from transports
-    const airlineNames = tour.transports
+
+    // สายการบิน (unique) จาก transports
+    const airline = tour.transports
       ?.map(t => t.transport?.name || t.transport_name)
-      .filter((v, i, a) => a.indexOf(v) === i) // unique
+      .filter((v, i, a) => v && a.indexOf(v) === i)
       .join(', ') || '';
-    
-    const formatFullDate = (date: Date) => date.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
-    
-    // Get periods for date range
-    const periods = tour.periods || [];
-    let dateRange = '';
-    if (periods.length > 0) {
-      const dates = periods
-        .map(p => p.start_date ? new Date(p.start_date) : null)
-        .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
-      if (dates.length > 0) {
-        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-        dateRange = `${formatFullDate(minDate)} - ${formatFullDate(maxDate)}`;
-      }
-    }
-    
-    // Get price
-    const price = tour.display_price || tour.min_price || '';
-    
-    // Get PDF URL
+
+    const formatShortDate = (d: Date) =>
+      d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+
+    const formatPrice = (n: number) => new Intl.NumberFormat('th-TH').format(Math.round(n));
+
+    // Filter periods: upcoming + ที่นั่งว่าง > 0 (เหมือน getFilteredPeriods)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const periodsWithDates = (tour.periods || [])
+      .map(p => {
+        const start = p.start_date ? new Date(p.start_date) : null;
+        let end: Date | null = p.end_date ? new Date(p.end_date) : null;
+        const seats = Number(p.available ?? 0);
+
+        if (start && (!end || isNaN(end.getTime())) && days) {
+          end = new Date(start);
+          end.setDate(end.getDate() + Number(days) - 1);
+        }
+        return { p, startDate: start, endDate: end, seats };
+      })
+      .filter(x => x.startDate !== null && !isNaN(x.startDate.getTime()) && x.startDate >= today)
+      .filter(x => x.seats > 0)
+      .sort((a, b) => a.startDate!.getTime() - b.startDate!.getTime());
+
+    // PDF URL
     const pdfUrl = tour.pdf_url || '';
-    
+
+    // ── Build text ─────────────────────────────────
     let text = `รหัสทัวร์ : ${code}\n`;
     text += `${title} (${days} วัน ${nights} คืน)\n`;
-    if (dateRange) text += `ช่วงเดินทาง : ${dateRange}\n`;
-    if (airlineNames) text += `สายการบิน : ${airlineNames}\n`;
-    if (price) text += `ราคาเริ่มต้นที่ : ${new Intl.NumberFormat('th-TH').format(Number(price))}\n`;
-    if (pdfUrl) {
-      text += `รายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
+    if (airline) text += `สายการบิน : ${airline}\n`;
+
+    if (periodsWithDates.length > 0) {
+      text += `ช่วงเดินทาง :\n`;
+      for (const { p, startDate, endDate, seats } of periodsWithDates) {
+        const depStr = formatShortDate(startDate!);
+        const retStr = endDate ? formatShortDate(endDate) : '';
+
+        let line = `${depStr}`;
+        if (retStr) line += `→${retStr}`;
+
+        const offer = p.offer;
+        const priceAdult = Number(offer?.price_adult ?? 0);
+        const discountAdult = Number(offer?.discount_adult ?? 0);
+
+        if (discountAdult > 0 && priceAdult > 0) {
+          const salePrice = priceAdult - discountAdult;
+          line += ` ราคา ฿${formatPrice(priceAdult)} ลดเหลือ ฿${formatPrice(salePrice)}`;
+        } else if (priceAdult > 0) {
+          line += ` ฿${formatPrice(priceAdult)}`;
+        }
+
+        line += ` เหลือ ${seats} ที่นั่ง`;
+        text += `${line}\n`;
+      }
     }
-    
+
+    if (pdfUrl) {
+      text += `\nรายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
+    }
+
     return text;
   };
 
@@ -594,7 +626,7 @@ export default function ToursPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {selectedTours.size > 0 && canDelete && (
+          {selectedTours.size > 0 && (
             <>
               <Button
                 variant="outline"
@@ -606,14 +638,16 @@ export default function ToursPage() {
                 {copiedSelected ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 {copiedSelected ? 'คัดลอกแล้ว!' : `คัดลอกที่เลือก (${selectedTours.size})`}
               </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setMassDeleteConfirm(true)}
-              >
-                <Trash2 className="w-4 h-4" />
-                ลบที่เลือก ({selectedTours.size})
-              </Button>
+              {canDelete && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setMassDeleteConfirm(true)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  ลบที่เลือก ({selectedTours.size})
+                </Button>
+              )}
             </>
           )}
           <Button variant="outline" size="sm" onClick={() => { fetchTours(); fetchCounts(); }}>
