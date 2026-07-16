@@ -8,7 +8,7 @@ import {
   Eye, ChevronDown, Plus, Edit3, Users, MapPin,
   Minus, X, Loader2, Trash2,
 } from 'lucide-react';
-import { bookingsApi, usersApi, AdminBooking, BookingStatistics, BookingEvent, toursApi, Tour } from '@/lib/api';
+import { bookingsApi, usersApi, AdminBooking, BookingStatistics, BookingEvent, toursApi, Tour, webMembersApi, WebMember } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -48,15 +48,21 @@ function SourceBadge({ source }: { source: string }) {
 }
 
 // ─── Booking Detail Modal ───
-function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete, canWrite, canDelete }: {
+function BookingDetailModal({ booking: bookingProp, onClose, onStatusUpdate, onEdit, onDelete, onRefresh, canWrite, canDelete }: {
   booking: AdminBooking;
   onClose: () => void;
   onStatusUpdate: (id: number, status: string, note?: string) => Promise<void>;
   onEdit: () => void;
   onDelete: () => void;
+  onRefresh?: () => void;
   canWrite: boolean;
   canDelete: boolean;
 }) {
+  // Local mirror of the booking so we can update the visible details after a
+  // successful "retry outbound" without waiting for the parent to re-fetch.
+  const [booking, setBooking] = useState<AdminBooking>(bookingProp);
+  useEffect(() => { setBooking(bookingProp); }, [bookingProp]);
+
   const [newStatus, setNewStatus] = useState(booking.status);
   const [adminNote, setAdminNote] = useState(booking.admin_note || '');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -64,6 +70,37 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
   const [events, setEvents] = useState<BookingEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [showEventPayload, setShowEventPayload] = useState<Record<number, boolean>>({});
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetryOutbound = async () => {
+    if (isRetrying) return;
+    if (!confirm('ยิง API ไปที่ provider อีกครั้ง?')) return;
+    setIsRetrying(true);
+    try {
+      // Backend returns the outbound fields at top level (not wrapped in `data`),
+      // so cast to `any` to read them without fighting the generic ApiResponse<T> typing.
+      const res = await bookingsApi.retryOutbound(booking.id) as unknown as {
+        success: boolean;
+        message?: string;
+        is_confirmed_by_provider?: boolean;
+        booking?: AdminBooking;
+      };
+      if (res.booking) setBooking(res.booking);
+      onRefresh?.();
+      // Reload timeline events too
+      try {
+        const evRes = await bookingsApi.events(booking.id) as unknown as { data?: BookingEvent[] };
+        setEvents(Array.isArray(evRes.data) ? evRes.data : []);
+      } catch { /* ignore */ }
+      alert(res.message || (res.is_confirmed_by_provider ? 'ยิง API สำเร็จ' : 'ยิง API แล้ว'));
+    } catch (err) {
+      console.error('Retry outbound failed', err);
+      const msg = err instanceof Error ? err.message : 'ยิง API ไม่สำเร็จ';
+      alert(msg);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   // Fetch booking events when modal opens
   useEffect(() => {
@@ -182,6 +219,21 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
                     เชื่อมต่อล้มเหลว
                   </span>
                 )}
+                {canWrite && booking.provider_status === 'failed' && (
+                  <button
+                    onClick={handleRetryOutbound}
+                    disabled={isRetrying}
+                    className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed rounded-md px-2.5 py-1 transition cursor-pointer"
+                    title="ยิง API ไปที่ provider อีกครั้ง"
+                  >
+                    {isRetrying ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    {isRetrying ? 'กำลังยิง...' : 'ยิง API ใหม่'}
+                  </button>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
                 {booking.provider && (
@@ -201,6 +253,24 @@ function BookingDetailModal({ booking, onClose, onStatusUpdate, onEdit, onDelete
                     <span className={`font-mono font-semibold ${
                       booking.provider_status === 'failed' ? 'text-red-700' : 'text-purple-700'
                     }`}>{booking.provider_booking_ref}</span>
+                  </div>
+                )}
+                {booking.hold_expires_at && (
+                  <div className="col-span-2">
+                    <span className="text-gray-500">วันที่ตัด :</span>{' '}
+                    <span className={`font-semibold ${
+                      new Date(booking.hold_expires_at).getTime() < Date.now()
+                        ? 'text-red-700'
+                        : 'text-purple-700'
+                    }`}>
+                      {new Date(booking.hold_expires_at).toLocaleString('th-TH', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })} น.
+                    </span>
                   </div>
                 )}
               </div>
@@ -396,6 +466,12 @@ function CreateBookingModal({ onClose, onCreated, salesUsers }: { onClose: () =>
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // Optional link to an existing web member (from /dashboard/members).
+  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [memberResults, setMemberResults] = useState<WebMember[]>([]);
+  const [memberSearching, setMemberSearching] = useState(false);
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [qtyAdult, setQtyAdult] = useState(1);
   const [qtyAdultSingle, setQtyAdultSingle] = useState(0);
   const [qtyChildBed, setQtyChildBed] = useState(0);
@@ -416,16 +492,29 @@ function CreateBookingModal({ onClose, onCreated, salesUsers }: { onClose: () =>
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Calculate total - single room adults pay priceAdult + priceSingle (supplement)
-  const totalAdultRegular = qtyAdult * priceAdult;
-  const totalAdultSingle = qtyAdultSingle * (priceAdult + priceSingle); // Adult price + single supplement
-  const totalAmount = totalAdultRegular + totalAdultSingle + (qtyChildBed * priceChildBed) + (qtyChildNoBed * priceChildNoBed) + (qtyInfant * priceInfant);
+  // Calculate total.
+  //
+  // Semantic (updated 2026-07-16):
+  //   qty_adult         = total number of adults on the trip
+  //   qty_adult_single  = subset of qty_adult who want a single room (each
+  //                       adds priceSingle as supplement, NOT another adult
+  //                       price). Previously this was mis-interpreted as an
+  //                       "extra adult in single room" and priced as
+  //                       priceAdult + priceSingle, which caused inflated
+  //                       totals (e.g. 1 adult + 1 single = 8888+8888+4000).
+  //   So an adult paying single supplement now costs priceAdult + priceSingle
+  //   TOTAL (not 2×priceAdult + priceSingle).
+  const totalAdult = qtyAdult * priceAdult;
+  const totalSingleSupplement = qtyAdultSingle * priceSingle;
+  const totalAmount = totalAdult + totalSingleSupplement + (qtyChildBed * priceChildBed) + (qtyChildNoBed * priceChildNoBed) + (qtyInfant * priceInfant);
 
-  // Calculate total passengers and rooms for validation
-  // 1 person can use max 1 room (TWIN/DOUBLE fits 1-2, TRIPLE fits 1-3, SINGLE fits 1)
-  const totalPassengers = qtyAdult + qtyAdultSingle + qtyChildBed + qtyChildNoBed;
+  // Passenger + room counts for validation.
+  // qty_adult already includes those getting single supplement, so we DON'T
+  // add qty_adult_single here (that would double-count).
+  const totalPassengers = qtyAdult + qtyChildBed + qtyChildNoBed;
   const totalRooms = qtyTriple + qtyTwin + qtyDouble + qtyAdultSingle;
   const isRoomOverCount = totalRooms > totalPassengers;
+  const isSingleOverAdults = qtyAdultSingle > qtyAdult;
 
   // Auto search with debounce
   useEffect(() => {
@@ -448,6 +537,50 @@ function CreateBookingModal({ onClose, onCreated, salesUsers }: { onClose: () =>
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Auto search web members with debounce (2+ chars)
+  useEffect(() => {
+    if (!memberSearchQuery.trim() || memberSearchQuery.trim().length < 2) {
+      setMemberResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setMemberSearching(true);
+      try {
+        const res = await webMembersApi.list({ search: memberSearchQuery, per_page: 10 });
+        // Backend wraps the paginated payload as:
+        //   { success, data: { current_page, data: WebMember[], ... } }
+        // so the actual members array lives at `res.data.data`, NOT `res.data`
+        // (which is the whole pagination object).
+        const paged = (res as unknown as { data?: { data?: WebMember[] } }).data;
+        const list = paged?.data ?? [];
+        setMemberResults(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error('Member search error:', err);
+        setMemberResults([]);
+      } finally {
+        setMemberSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [memberSearchQuery]);
+
+  // Pre-fill customer fields from an existing member and remember the link.
+  const handleSelectMember = (m: WebMember) => {
+    setSelectedMemberId(m.id);
+    setFirstName(m.first_name || '');
+    setLastName(m.last_name || '');
+    setEmail(m.email || '');
+    setPhone(m.phone || '');
+    setMemberSearchQuery(m.full_name || `${m.first_name} ${m.last_name}`.trim());
+    setShowMemberDropdown(false);
+  };
+
+  const handleClearMember = () => {
+    setSelectedMemberId(null);
+    setMemberSearchQuery('');
+    setMemberResults([]);
+  };
 
   // Select tour and set default prices from first period offer
   const handleSelectTour = (tour: Tour) => {
@@ -486,6 +619,7 @@ function CreateBookingModal({ onClose, onCreated, salesUsers }: { onClose: () =>
       const res = await bookingsApi.create({
         tour_id: selectedTour.id,
         period_id: selectedPeriodId,
+        web_member_id: selectedMemberId,
         first_name: firstName,
         last_name: lastName,
         email,
@@ -800,7 +934,74 @@ function CreateBookingModal({ onClose, onCreated, salesUsers }: { onClose: () =>
                 {/* ===== LEFT: ข้อมูลลูกค้า ===== */}
                 <div className="px-4 py-3 lg:border-r border-gray-200">
                   <h3 className="text-sm font-bold text-gray-800 mb-2">ข้อมูลลูกค้า</h3>
-                  
+
+                  {/* Member picker — search existing web member and auto-fill fields */}
+                  <div className="relative mb-2">
+                    <label className="text-xs font-medium text-gray-700">
+                      เลือกจากสมาชิก (ไม่บังคับ)
+                      {selectedMemberId && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                          ผูกสมาชิก #{selectedMemberId}
+                          <button
+                            type="button"
+                            onClick={handleClearMember}
+                            className="hover:text-emerald-900 cursor-pointer"
+                            title="ยกเลิกการผูกสมาชิก"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative mt-1">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={memberSearchQuery}
+                        onChange={e => {
+                          setMemberSearchQuery(e.target.value);
+                          if (selectedMemberId) setSelectedMemberId(null);
+                          setShowMemberDropdown(true);
+                        }}
+                        onFocus={() => setShowMemberDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowMemberDropdown(false), 150)}
+                        placeholder="ค้นหาชื่อ / อีเมล / เบอร์โทร (2 ตัวขึ้นไป)"
+                        className="w-full pl-8 pr-2.5 py-1.5 border border-gray-300 rounded text-sm focus:border-blue-400 outline-none"
+                      />
+                      {memberSearching && (
+                        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />
+                      )}
+                    </div>
+                    {showMemberDropdown && memberSearchQuery.trim().length >= 2 && memberResults.length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                        {memberResults.map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => handleSelectMember(m)}
+                            className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-0 cursor-pointer"
+                          >
+                            <div className="font-medium text-sm text-gray-800 truncate">
+                              {m.full_name || `${m.first_name} ${m.last_name}`.trim()}
+                              <span className="ml-1 text-[11px] text-gray-400">#{m.id}</span>
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {m.email}
+                              {m.phone && <span className="mx-1">·</span>}
+                              {m.phone}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showMemberDropdown && memberSearchQuery.trim().length >= 2 && !memberSearching && memberResults.length === 0 && (
+                      <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs text-gray-500">
+                        ไม่พบสมาชิก — พิมพ์ข้อมูลลูกค้าด้านล่างได้เลย
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -936,16 +1137,18 @@ function EditBookingModal({ booking, onClose, onSaved, salesUsers }: { booking: 
   const [error, setError] = useState('');
   const [statusDropdown, setStatusDropdown] = useState(false);
 
-  // Calculate total - single room adults pay priceAdult + priceSingle (supplement)
-  const totalAdultRegular = qtyAdult * priceAdult;
-  const totalAdultSingle = qtyAdultSingle * (priceAdult + priceSingle); // Adult price + single supplement
-  const totalAmount = totalAdultRegular + totalAdultSingle + (qtyChildBed * priceChildBed) + (qtyChildNoBed * priceChildNoBed) + (qtyInfant * priceInfant);
+  // Calculate total (see CreateBookingModal above for the semantic change).
+  const totalAdult = qtyAdult * priceAdult;
+  const totalSingleSupplement = qtyAdultSingle * priceSingle;
+  const totalAmount = totalAdult + totalSingleSupplement + (qtyChildBed * priceChildBed) + (qtyChildNoBed * priceChildNoBed) + (qtyInfant * priceInfant);
 
   // Calculate total passengers and rooms for validation
-  // 1 person can use max 1 room (TWIN/DOUBLE fits 1-2, TRIPLE fits 1-3, SINGLE fits 1)
-  const totalPassengers = qtyAdult + qtyAdultSingle + qtyChildBed + qtyChildNoBed;
+  // qty_adult already includes those getting single supplement, so we DON'T
+  // add qty_adult_single here (that would double-count).
+  const totalPassengers = qtyAdult + qtyChildBed + qtyChildNoBed;
   const totalRooms = qtyTriple + qtyTwin + qtyDouble + qtyAdultSingle;
   const isRoomOverCount = totalRooms > totalPassengers;
+  const isSingleOverAdults = qtyAdultSingle > qtyAdult;
 
   // Compact Stepper
   const Stepper = ({ value, onChange, min = 0, max = 99 }: {
@@ -1671,6 +1874,7 @@ export default function BookingsPage() {
           canWrite={canWrite}
           canDelete={canDelete}
           onDelete={() => handleDelete(selectedBooking)}
+          onRefresh={() => { fetchBookings(); fetchStats(); }}
           onEdit={() => {
             setEditingBooking(selectedBooking);
             setSelectedBooking(null);

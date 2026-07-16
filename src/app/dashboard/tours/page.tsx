@@ -255,6 +255,12 @@ export default function ToursPage() {
       const params: Record<string, string> = {
         page: currentPage.toString(),
         per_page: '20',
+        // Include full offer data (prices, discounts) on each period so that
+        // the Copy button can build a complete text with per-period pricing.
+        // Without this, TourController::index only returns id/period_id on
+        // periods.offer, leaving prices blank in the copied text — especially
+        // painful for manually-created tours that admins expect to be complete.
+        with_periods: 'true',
         ...activeTabDef.params,
       };
       if (search) params.search = search;
@@ -528,7 +534,8 @@ export default function ToursPage() {
 
     const formatPrice = (n: number) => new Intl.NumberFormat('th-TH').format(Math.round(n));
 
-    // Filter periods: upcoming + ที่นั่งว่าง > 0 (เหมือน getFilteredPeriods)
+    // Filter periods: upcoming only. Keep sold-out rounds so admins see the
+    // full schedule (marks them as "เต็ม" instead of hiding them).
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -545,11 +552,24 @@ export default function ToursPage() {
         return { p, startDate: start, endDate: end, seats };
       })
       .filter(x => x.startDate !== null && !isNaN(x.startDate.getTime()) && x.startDate >= today)
-      .filter(x => x.seats > 0)
+      // Include closed/cancelled rounds too so the admin can see the full plan.
+      // Only skip rows without any valid start date.
       .sort((a, b) => a.startDate!.getTime() - b.startDate!.getTime());
 
-    // PDF URL
-    const pdfUrl = tour.pdf_url || '';
+    // Build the public-website link for this tour. Falls back to the same
+    // default we use elsewhere in the dashboard when NEXT_PUBLIC_WEB_URL is
+    // unset (see e.g. blog posts page).
+    const webBase = (process.env.NEXT_PUBLIC_WEB_URL || 'https://www.nexttripholiday.com').replace(/\/$/, '');
+    const tourUrl = tour.slug ? `${webBase}/tours/${tour.slug}` : '';
+
+    // PDF URL — prefer custom PDF override if set (matches website behaviour).
+    const tourWithMedia = tour as Tour & { custom_pdf_url?: string | null; pdf_source?: string | null };
+    const pdfUrl = tourWithMedia.pdf_source === 'custom' && tourWithMedia.custom_pdf_url
+      ? tourWithMedia.custom_pdf_url
+      : (tour.pdf_url || '');
+
+    // Total seats across upcoming periods (sanity check for admins).
+    const totalSeats = periodsWithDates.reduce((sum, x) => sum + x.seats, 0);
 
     // ── Build text ─────────────────────────────────
     let text = `รหัสทัวร์ : ${code}\n`;
@@ -557,7 +577,7 @@ export default function ToursPage() {
     if (airline) text += `สายการบิน : ${airline}\n`;
 
     if (periodsWithDates.length > 0) {
-      text += `ช่วงเดินทาง :\n`;
+      text += `ช่วงเดินทาง (${periodsWithDates.length} รอบ · ที่นั่งว่างรวม ${totalSeats}) :\n`;
       for (const { p, startDate, endDate, seats } of periodsWithDates) {
         const depStr = formatShortDate(startDate!);
         const retStr = endDate ? formatShortDate(endDate) : '';
@@ -574,15 +594,29 @@ export default function ToursPage() {
           line += ` ราคา ฿${formatPrice(priceAdult)} ลดเหลือ ฿${formatPrice(salePrice)}`;
         } else if (priceAdult > 0) {
           line += ` ฿${formatPrice(priceAdult)}`;
+        } else {
+          // No offer data (e.g. manually-created tour without an offer row) —
+          // avoid the "฿0" that would otherwise be printed.
+          line += ` (ราคา: ติดต่อฝ่ายขาย)`;
         }
 
-        line += ` เหลือ ${seats} ที่นั่ง`;
+        if (seats <= 0) {
+          line += ` — เต็ม`;
+        } else {
+          line += ` เหลือ ${seats} ที่นั่ง`;
+        }
         text += `${line}\n`;
       }
+    } else {
+      text += `ช่วงเดินทาง : ยังไม่มีรอบเดินทางในอนาคต\n`;
     }
 
-    if (pdfUrl) {
-      text += `\nรายละเอียดโปรแกรม (PDF)\n${pdfUrl}`;
+    // Links section — website link (always if we have a slug) + PDF if present.
+    const links: string[] = [];
+    if (tourUrl) links.push(`โปรแกรมทัวร์ : ${tourUrl}`);
+    if (pdfUrl) links.push(`รายละเอียดโปรแกรม (PDF) : ${pdfUrl}`);
+    if (links.length > 0) {
+      text += `\n${links.join('\n')}`;
     }
 
     return text;

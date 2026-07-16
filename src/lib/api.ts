@@ -5684,6 +5684,8 @@ export interface AdminBooking {
   provider?: string | null;
   provider_status?: string | null;
   provider_booking_ref?: string | null;
+  /** Provider-side cut-off before the seat is auto-released (ISO 8601, UTC). */
+  hold_expires_at?: string | null;
   created_at: string;
   updated_at: string;
   member?: {
@@ -5753,6 +5755,8 @@ export const bookingsApi = {
   create: (data: {
     tour_id: number;
     period_id: number;
+    /** Link the booking to an existing web member (from /dashboard/members). */
+    web_member_id?: number | null;
     first_name: string;
     last_name: string;
     email: string;
@@ -5827,6 +5831,18 @@ export const bookingsApi = {
     apiRequest<{ success: boolean; data: BookingEvent[] }>(
       `/bookings/${id}/events`
     ),
+
+  /**
+   * Re-run the outbound (wholesaler) booking API for a booking whose previous
+   * attempt failed. Returns the refreshed booking so the UI can update.
+   */
+  retryOutbound: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      is_confirmed_by_provider?: boolean;
+      booking: AdminBooking;
+    }>(`/bookings/${id}/outbound/retry`, { method: 'POST' }),
 
   statistics: () =>
     apiRequest<BookingStatistics>('/bookings/statistics'),
