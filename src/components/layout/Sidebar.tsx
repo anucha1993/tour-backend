@@ -53,6 +53,7 @@ import {
   Award,
   Bell,
   Share2,
+  Activity,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -513,6 +514,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
         title: 'Social Login',
         href: '/dashboard/settings/social-auth',
         icon: Share2,
+      },
+      {
+        title: 'Google Tag / Pixel',
+        href: '/dashboard/settings/tracking',
+        icon: Activity,
       },
     ],
   },

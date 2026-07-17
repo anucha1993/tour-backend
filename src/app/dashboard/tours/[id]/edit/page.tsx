@@ -594,6 +594,7 @@ export default function EditTourPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [removingApiPdf, setRemovingApiPdf] = useState(false);
+  const [removingApiCover, setRemovingApiCover] = useState(false);
   const [uploadingCustomImage, setUploadingCustomImage] = useState(false);
   const [uploadingCustomPdf, setUploadingCustomPdf] = useState(false);
   const [mediaInfo, setMediaInfo] = useState<{
@@ -1207,6 +1208,34 @@ export default function EditTourPage() {
       alert('เกิดข้อผิดพลาดในการลบ PDF');
     } finally {
       setRemovingApiPdf(false);
+    }
+  };
+
+  const handleRemoveApiCoverImage = async () => {
+    if (!tour) return;
+    if (!confirm('ต้องการลบรูปปกจาก API หรือไม่?\nรูปจะถูกลบจาก Cloudflare Images ด้วย\nระบบจะซิงค์รูปใหม่อัตโนมัติในการซิงค์ครั้งถัดไป (กรณีไม่มีรูป)')) return;
+
+    setRemovingApiCover(true);
+    try {
+      const result = await toursApi.removeApiCoverImage(tour.id);
+      if (result.success) {
+        setFormData(prev => ({ ...prev, cover_image_url: '', cover_image_alt: '' }));
+        setTour(prev => prev ? { ...prev, cover_image_url: null, cover_image_alt: null } : null);
+        setMediaInfo(prev => prev ? {
+          ...prev,
+          api_cover_image_url: null,
+          api_cover_image_alt: null,
+          effective_cover_image_url: result.data?.effective_cover_image_url ?? null,
+          effective_cover_image_alt: result.data?.effective_cover_image_alt ?? null,
+        } : null);
+      } else {
+        alert(result.message || 'ลบรูปปกจาก API ล้มเหลว');
+      }
+    } catch (error) {
+      console.error('Remove API cover image error:', error);
+      alert('เกิดข้อผิดพลาดในการลบรูปปก');
+    } finally {
+      setRemovingApiCover(false);
     }
   };
 
@@ -4215,9 +4244,19 @@ export default function EditTourPage() {
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">รูปจาก API</p>
               <div className="flex items-start gap-4">
-                <div className="w-32 h-32 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex-shrink-0">
+                <div className="w-32 h-32 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex-shrink-0 relative group">
                   {(formData.cover_image_url || tour?.cover_image_url) ? (
-                    <img src={formData.cover_image_url || tour?.cover_image_url || ''} alt="API" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <>
+                      <img src={formData.cover_image_url || tour?.cover_image_url || ''} alt="API" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <button
+                        onClick={handleRemoveApiCoverImage}
+                        disabled={removingApiCover}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                        title="ลบรูป API (ระบบจะซิงค์ใหม่ในการซิงค์ครั้งถัดไป)"
+                      >
+                        {removingApiCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                      </button>
+                    </>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
                       <ImageIcon className="w-8 h-8" />

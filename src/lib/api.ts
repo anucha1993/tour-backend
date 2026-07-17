@@ -1186,6 +1186,15 @@ export const toursApi = {
       effective_pdf_url: string | null;
     }>(`/tours/${id}/api-pdf`, { method: 'DELETE' }),
 
+  /** Delete the API-synced cover image; next sync re-uploads it from the wholesaler source. */
+  removeApiCoverImage: (id: number) =>
+    apiRequest<{
+      cover_image_url: string | null;
+      cover_image_alt: string | null;
+      effective_cover_image_url: string | null;
+      effective_cover_image_alt: string | null;
+    }>(`/tours/${id}/api-cover-image`, { method: 'DELETE' }),
+
   /** Get URL for realtime PDF preview (opens in browser) */
   getGeneratePdfUrl: (id: number): string => {
     return `${API_BASE_URL}/tours/${id}/generate-pdf`;
@@ -1662,6 +1671,10 @@ export const galleryVideoApi = {
     });
     return response.json() as Promise<ApiResponse<GalleryVideo>>;
   },
+
+  /** Delete the custom thumbnail; falls back to auto-derived YouTube thumbnail. */
+  removeThumbnail: (id: number) =>
+    apiRequest<GalleryVideo>(`/gallery-videos/${id}/thumbnail`, { method: 'DELETE' }),
 };
 
 // ================== Integrations API ==================

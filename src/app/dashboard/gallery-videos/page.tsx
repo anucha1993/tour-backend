@@ -76,6 +76,7 @@ export default function VideoGalleryPage() {
   const [editTags, setEditTags] = useState('');
   const [editCities, setEditCities] = useState<City[]>([]);
   const [editSaving, setEditSaving] = useState(false);
+  const [removingThumb, setRemovingThumb] = useState(false);
 
   // Preview
   const [previewVideo, setPreviewVideo] = useState<GalleryVideo | null>(null);
@@ -270,6 +271,29 @@ export default function VideoGalleryPage() {
       alert('บันทึกไม่สำเร็จ: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleRemoveThumbnail = async () => {
+    if (!editVideo) return;
+    if (!confirm('ต้องการลบภาพปก Custom หรือไม่?\nระบบจะใช้ภาพปกอัตโนมัติจาก YouTube แทน (ถ้ามี)')) return;
+    setRemovingThumb(true);
+    try {
+      const response = await galleryVideoApi.removeThumbnail(editVideo.id);
+      if (!response.success) {
+        throw new Error(response.message || 'Remove failed');
+      }
+      // Update local state so the preview updates without closing the modal
+      if (response.data) {
+        setEditVideo(response.data);
+      }
+      setEditThumbnail(null);
+      fetchVideos();
+    } catch (error) {
+      console.error('Failed to remove thumbnail:', error);
+      alert('ลบภาพปกไม่สำเร็จ: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setRemovingThumb(false);
     }
   };
 
@@ -758,7 +782,7 @@ export default function VideoGalleryPage() {
 
             <div className="space-y-4">
               {/* Current thumbnail */}
-              <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
+              <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative group">
                 {getThumbnail(editVideo) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={getThumbnail(editVideo)!} alt={editVideo.title} className="w-full h-full object-cover" />
@@ -772,6 +796,19 @@ export default function VideoGalleryPage() {
                     <Play className="w-5 h-5 text-white ml-0.5" />
                   </div>
                 </div>
+                {/* Remove custom thumbnail button — only shown when a custom
+                    thumbnail was uploaded (not for auto-derived YouTube one). */}
+                {editVideo.thumbnail_url && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveThumbnail}
+                    disabled={removingThumb}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg transition cursor-pointer"
+                    title="ลบภาพปก Custom (จะกลับไปใช้ภาพจาก YouTube อัตโนมัติ)"
+                  >
+                    {removingThumb ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                  </button>
+                )}
               </div>
 
               {/* Video URL */}
