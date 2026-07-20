@@ -773,7 +773,7 @@ export default function EditTourPage() {
           toursApi.get(parseInt(tourId)),
           countriesApi.list({ is_active: 'true', per_page: '250' }),
           wholesalersApi.list({ is_active: 'true', per_page: '1000' }),
-          transportsApi.list({ status: 'on', per_page: '100' }),
+          transportsApi.list({ status: 'on', per_page: '1000' }),
         ]);
         
         if (transportsRes.success && transportsRes.data) {
