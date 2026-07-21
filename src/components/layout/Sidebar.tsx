@@ -79,8 +79,19 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
   },
   {
     title: 'Integrations',
-    href: '/dashboard/integrations',
     icon: Plug,
+    children: [
+      {
+        title: 'รายการเชื่อมต่อ',
+        href: '/dashboard/integrations',
+        icon: Plug,
+      },
+      {
+        title: 'คู่มือเชื่อมต่อ API',
+        href: '/dashboard/integrations/manual',
+        icon: BookOpen,
+      },
+    ],
   },
   {
     title: 'ขาย',

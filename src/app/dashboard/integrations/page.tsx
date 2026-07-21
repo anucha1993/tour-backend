@@ -20,6 +20,7 @@ import {
   Globe,
   XCircle,
   Timer,
+  BookOpen,
 } from 'lucide-react';
 import Link from 'next/link';
 import { integrationsApi, IntegrationWithStats } from '@/lib/api';
@@ -357,12 +358,20 @@ export default function IntegrationsPage() {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">เชื่อมต่อ Wholesaler</h1>
           <p className="text-gray-500 text-xs sm:text-sm">จัดการการเชื่อมต่อ API กับ Wholesaler ภายนอก เพื่อดึงข้อมูลทัวร์อัตโนมัติ</p>
         </div>
-        <Link href="/dashboard/integrations/new" className="flex-shrink-0">
-          <Button className="w-full sm:w-auto">
-            <Plus className="w-4 h-4" />
-            เพิ่ม Integration
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link href="/dashboard/integrations/manual">
+            <Button variant="outline" className="w-full sm:w-auto">
+              <BookOpen className="w-4 h-4" />
+              คู่มือเชื่อมต่อ
+            </Button>
+          </Link>
+          <Link href="/dashboard/integrations/new">
+            <Button className="w-full sm:w-auto">
+              <Plus className="w-4 h-4" />
+              เพิ่ม Integration
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}
