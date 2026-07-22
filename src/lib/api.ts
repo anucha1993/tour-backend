@@ -877,6 +877,9 @@ export interface Tour {
   cover_image_url: string | null;
   cover_image_alt: string | null;
   pdf_url: string | null;
+  // Media change-detection tags (set when wholesaler replaces the file after first import)
+  pdf_updated_at: string | null;
+  cover_image_updated_at: string | null;
   themes: string[] | null;
   suitable_for: string[] | null;
   departure_airports: string[] | null;
@@ -3416,6 +3419,7 @@ export interface SyncSettings {
   never_sync_fields: string[];
   skip_past_periods: boolean;
   skip_disabled_tours: boolean;
+  media_change_detection: boolean;
 }
 
 export interface AutoCloseSettings {

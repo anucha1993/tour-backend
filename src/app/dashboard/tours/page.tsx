@@ -90,6 +90,35 @@ function resolveTab(searchParams: URLSearchParams): TabKey {
   return 'all';
 }
 
+/**
+ * Media "recently updated" tag helper.
+ * Returns a fresh flag + Thai relative label when the wholesaler replaced the
+ * file within the last `RECENT_DAYS` days (so the tag auto-expires and stays useful).
+ */
+const RECENT_MEDIA_DAYS = 14;
+function mediaUpdatedInfo(iso: string | null | undefined): { show: boolean; label: string; title: string } {
+  if (!iso) return { show: false, label: '', title: '' };
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return { show: false, label: '', title: '' };
+  const diffMs = Date.now() - then;
+  const diffDays = Math.floor(diffMs / 86_400_000);
+  const show = diffDays >= 0 && diffDays <= RECENT_MEDIA_DAYS;
+  let label: string;
+  if (diffDays <= 0) {
+    const diffHours = Math.floor(diffMs / 3_600_000);
+    label = diffHours <= 0 ? 'เมื่อสักครู่' : `${diffHours} ชม.ก่อน`;
+  } else if (diffDays === 1) {
+    label = 'เมื่อวาน';
+  } else {
+    label = `${diffDays} วันก่อน`;
+  }
+  const title = new Date(iso).toLocaleString('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  return { show, label, title };
+}
+
 export default function ToursPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -1576,6 +1605,34 @@ export default function ToursPage() {
                           )}
                         </div>
                         <div className="font-medium text-gray-900 line-clamp-2 max-w-xs">{tour.title}</div>
+                        {/* Media update tags — แจ้งเตือนเมื่อ wholesaler เปลี่ยนไฟล์ใหม่ */}
+                        {(() => {
+                          const pdfInfo = mediaUpdatedInfo(tour.pdf_updated_at);
+                          const coverInfo = mediaUpdatedInfo(tour.cover_image_updated_at);
+                          if (!pdfInfo.show && !coverInfo.show) return null;
+                          return (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {pdfInfo.show && (
+                                <span
+                                  title={`อัปเดต PDF: ${pdfInfo.title}`}
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  อัปเดต PDF · {pdfInfo.label}
+                                </span>
+                              )}
+                              {coverInfo.show && (
+                                <span
+                                  title={`อัปเดตรูปปก: ${coverInfo.title}`}
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded"
+                                >
+                                  <RefreshCw className="w-3 h-3" />
+                                  อัปเดตรูป · {coverInfo.label}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {/* Hashtags */}
                         {tour.hashtags && (Array.isArray(tour.hashtags) ? tour.hashtags : []).length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">

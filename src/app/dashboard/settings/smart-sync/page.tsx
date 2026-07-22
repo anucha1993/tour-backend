@@ -32,6 +32,7 @@ export default function SmartSyncSettingsPage() {
     never_sync_fields: [],
     skip_past_periods: true,
     skip_disabled_tours: true,
+    media_change_detection: true,
   });
 
   // Auto-Close Settings
@@ -354,6 +355,36 @@ export default function SmartSyncSettingsPage() {
                       className="sr-only peer"
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Media Change Detection */}
+            <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+              <h3 className="font-medium text-emerald-800 mb-4">ตรวจจับไฟล์สื่อ (PDF / รูปปก) เปลี่ยนแปลง</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="pr-4">
+                    <p className="font-medium text-sm">ตรวจจับไฟล์สื่อเปลี่ยนอัตโนมัติ</p>
+                    <p className="text-xs text-gray-500">
+                      แต่ละรอบ Sync จะตรวจไฟล์ต้นทางของ wholesaler (ชื่อ/ขนาด/ETag) — ถ้ามีการเปลี่ยนจะดึงไฟล์ใหม่มาแทน ลบไฟล์เก่า และติด Tag “อัปเดต PDF/รูป” ในหน้าจัดการทัวร์
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      วิธีตรวจสอบ: ระบบยิงคำขอแบบ HEAD ไปยัง URL ต้นทาง (ไม่ดาวน์โหลดไฟล์เต็ม จึงเร็วและไม่กินแบนด์วิดท์) แล้วนำ ชื่อไฟล์ + ขนาด (byte) + ETag + Last-Modified มาเทียบกับ “ลายนิ้วมือ” ของไฟล์ที่เก็บไว้จากรอบก่อน หากค่าใดค่าหนึ่งต่างไป ถือว่าไฟล์ถูกเปลี่ยน แม้ชื่อไฟล์/URL เดิมก็ตาม
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      หมายเหตุ: Tag จะติดเฉพาะทัวร์ “ที่มีอยู่แล้ว” และตรวจพบว่าไฟล์เปลี่ยนจริงเท่านั้น (ไม่ติดตอนนำเข้าครั้งแรก) และบางต้นทางที่ไม่ส่งข้อมูล metadata กลับมา (เช่น ลิงก์ Google Drive) จะตรวจการเปลี่ยนแปลงได้เฉพาะตอน Sync แบบ Full
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={syncSettings.media_change_detection}
+                      onChange={(e) => setSyncSettings(prev => ({ ...prev, media_change_detection: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                   </label>
                 </div>
               </div>
