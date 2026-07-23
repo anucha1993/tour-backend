@@ -397,6 +397,11 @@ const buildMenuItems = (counts?: TourCounts, newInquiryCount?: number, newContac
     href: '/dashboard/website/seo',
     icon: Search,
   },
+  {
+    title: 'องค์กร & Schema',
+    href: '/dashboard/website/organization',
+    icon: Building2,
+  },
 
    {
     title: 'ติดต่อเรา',

@@ -5337,6 +5337,39 @@ export const contactSettingsApi = {
     apiRequest<{ data: ContactPageSettings }>('/contact-settings/hero-image', { method: 'DELETE' }),
 };
 
+// ─── Organization / Schema Settings (TravelAgency + FAQ JSON-LD) ───
+
+export interface OrganizationFaq {
+  question: string;
+  answer: string;
+}
+
+export interface OrganizationSettings {
+  id: number;
+  legal_name: string | null;
+  description: string | null;
+  price_range: string | null;
+  area_served: string[] | null;
+  languages: string[] | null;
+  founding_date: string | null;
+  rating_enabled: boolean;
+  rating_value: string | number | null;
+  rating_count: number | null;
+  faq_enabled: boolean;
+  faqs: OrganizationFaq[] | null;
+  is_active: boolean;
+}
+
+export const organizationSettingsApi = {
+  get: () =>
+    apiRequest<{ data: OrganizationSettings }>('/organization-settings'),
+  update: (data: Partial<OrganizationSettings>) =>
+    apiRequest<{ data: OrganizationSettings }>('/organization-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
 export const contactMessagesApi = {
   list: (params?: { status?: string; search?: string; page?: number; per_page?: number }) => {
     const sp = new URLSearchParams();
